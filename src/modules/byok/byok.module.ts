@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BYOKKey } from '../../database/entities/byok-key.entity';
 import { BYOKKeyService } from './services/byok-key.service';
+import { ApiKeyValidatorService } from './services/api-key-validator.service';
 import { BYOKKeyController } from './controllers/byok-key.controller';
 import { EncryptionModule } from '../../shared/encryption/encryption.module';
 import { AuditModule } from '../../shared/audit/audit.module';
@@ -15,7 +16,7 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
     AuditModule,
     RateLimiterModule,
   ],
-  providers: [BYOKKeyService],
+  providers: [BYOKKeyService, ApiKeyValidatorService],
   controllers: [BYOKKeyController],
   exports: [BYOKKeyService],
 })

@@ -62,6 +62,7 @@ export class AuditController {
 
   @Get('export')
   async exportAuditLogs(
+    @Res() res: Response,
     @Param('workspaceId') workspaceId: string,
     @Query('userId') userId?: string,
     @Query('userEmail') userEmail?: string,
@@ -70,7 +71,6 @@ export class AuditController {
     @Query('resourceId') resourceId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Res() res: Response,
   ) {
     const filters = {
       userId,

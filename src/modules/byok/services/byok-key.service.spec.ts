@@ -8,6 +8,7 @@ import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
 import { AuditService } from '../../../shared/audit/audit.service';
 import { RateLimiterService } from '../../../shared/cache/rate-limiter.service';
+import { ApiKeyValidatorService } from './api-key-validator.service';
 
 describe('BYOKKeyService', () => {
   let service: BYOKKeyService;
@@ -39,6 +40,10 @@ describe('BYOKKeyService', () => {
     get: jest.fn((key: string, defaultValue?: any) => defaultValue),
   };
 
+  const mockApiKeyValidatorService = {
+    validateApiKey: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -63,6 +68,10 @@ describe('BYOKKeyService', () => {
           provide: ConfigService,
           useValue: mockConfigService,
         },
+        {
+          provide: ApiKeyValidatorService,
+          useValue: mockApiKeyValidatorService,
+        },
       ],
     }).compile();
 
@@ -85,6 +94,12 @@ describe('BYOKKeyService', () => {
         apiKey: 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz',
       };
 
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: true,
+      });
+
+      mockRepository.find.mockResolvedValue([]);
+
       mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
         encryptedData: 'encrypted',
         iv: 'iv123',
@@ -102,12 +117,20 @@ describe('BYOKKeyService', () => {
         keyName: dto.keyName,
         provider: dto.provider,
         createdAt: new Date(),
+        encryptedKey: 'encrypted',
+        keyPrefix: 'sk-ant-',
+        keySuffix: 'wxyz',
       });
 
       const result = await service.createKey(workspaceId, userId, dto);
 
       expect(result).toBeDefined();
       expect(result.keyName).toBe(dto.keyName);
+      expect(result.maskedKey).toBe('sk-ant-...wxyz');
+      expect(mockApiKeyValidatorService.validateApiKey).toHaveBeenCalledWith(
+        dto.provider,
+        dto.apiKey,
+      );
       expect(mockEncryptionService.encryptWithWorkspaceKey).toHaveBeenCalledWith(
         workspaceId,
         dto.apiKey,
@@ -122,6 +145,58 @@ describe('BYOKKeyService', () => {
         provider: KeyProvider.ANTHROPIC,
         apiKey: 'invalid-key',
       };
+
+      await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject API key that fails live validation', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Test Key',
+        provider: KeyProvider.ANTHROPIC,
+        apiKey: 'sk-ant-api03-invalid-key-1234567890abcdefghijklmnopqrstuvwxyz',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: false,
+        error: 'Invalid API key',
+      });
+
+      await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject duplicate API key', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Test Key',
+        provider: KeyProvider.ANTHROPIC,
+        apiKey: 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: true,
+      });
+
+      mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
+        encryptedData: 'encrypted',
+        iv: 'iv123',
+      });
+
+      mockRepository.find.mockResolvedValue([
+        {
+          id: 'existing-key-123',
+          encryptedKey: 'encrypted',
+          encryptionIV: 'iv123',
+        },
+      ]);
+
+      mockEncryptionService.decryptWithWorkspaceKey.mockReturnValue(dto.apiKey);
 
       await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
         BadRequestException,
@@ -162,7 +237,7 @@ describe('BYOKKeyService', () => {
   });
 
   describe('getWorkspaceKeys', () => {
-    it('should return all active keys for workspace', async () => {
+    it('should return all active keys for workspace with masked keys', async () => {
       const workspaceId = 'workspace-123';
       const mockKeys = [
         {
@@ -171,6 +246,7 @@ describe('BYOKKeyService', () => {
           provider: KeyProvider.ANTHROPIC,
           createdAt: new Date(),
           isActive: true,
+          encryptedKey: 'encrypted1',
         },
         {
           id: 'key-2',
@@ -178,6 +254,7 @@ describe('BYOKKeyService', () => {
           provider: KeyProvider.OPENAI,
           createdAt: new Date(),
           isActive: true,
+          encryptedKey: 'encrypted2',
         },
       ];
 
@@ -187,6 +264,42 @@ describe('BYOKKeyService', () => {
 
       expect(result).toHaveLength(2);
       expect(result[0].keyName).toBe('Key 1');
+      expect(result[0].maskedKey).toBeDefined();
+      expect(result[0].maskedKey).toContain('...');
+    });
+  });
+
+  describe('extractKeyParts and buildMaskedKey', () => {
+    it('should extract and mask Anthropic API key correctly', () => {
+      const key = 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz';
+      const { prefix, suffix } = (service as any).extractKeyParts(key);
+      expect(prefix).toBe('sk-ant-');
+      expect(suffix).toBe('wxyz');
+
+      const masked = (service as any).buildMaskedKey(prefix, suffix);
+      expect(masked).toBe('sk-ant-...wxyz');
+    });
+
+    it('should extract and mask OpenAI API key correctly', () => {
+      const key = 'sk-proj-test-key-1234567890abcdefghijklmnopqrstuvwxyz';
+      const { prefix, suffix } = (service as any).extractKeyParts(key);
+      expect(prefix).toBe('sk-proj-');
+      expect(suffix).toBe('wxyz');
+
+      const masked = (service as any).buildMaskedKey(prefix, suffix);
+      expect(masked).toBe('sk-proj-...wxyz');
+    });
+
+    it('should handle short keys', () => {
+      const key = 'sk-test';
+      const { prefix, suffix } = (service as any).extractKeyParts(key);
+      const masked = (service as any).buildMaskedKey(prefix, suffix);
+      expect(masked).toBe('sk-...test');
+    });
+
+    it('should handle missing prefix/suffix', () => {
+      const masked = (service as any).buildMaskedKey(undefined, undefined);
+      expect(masked).toBe('***...**');
     });
   });
 });

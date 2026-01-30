@@ -16,6 +16,7 @@ import {
   sanitizeLogData,
   sanitizeForAudit,
 } from '../../../shared/logging/log-sanitizer';
+import { ApiKeyValidatorService } from './api-key-validator.service';
 
 export interface CreateBYOKKeyDto {
   keyName: string;
@@ -30,6 +31,7 @@ export interface BYOKKeyResponse {
   createdAt: Date;
   lastUsedAt?: Date;
   isActive: boolean;
+  maskedKey: string;
 }
 
 @Injectable()
@@ -45,6 +47,7 @@ export class BYOKKeyService {
     private readonly auditService: AuditService,
     private readonly rateLimiter: RateLimiterService,
     private readonly configService: ConfigService,
+    private readonly apiKeyValidator: ApiKeyValidatorService,
   ) {
     // Load rate limit configuration from environment (with sensible defaults)
     this.decryptRateLimit = this.configService.get<number>(
@@ -69,6 +72,21 @@ export class BYOKKeyService {
       // Validate API key format based on provider
       this.validateApiKey(dto.provider, dto.apiKey);
 
+      // Perform live API validation
+      const validationResult = await this.apiKeyValidator.validateApiKey(
+        dto.provider,
+        dto.apiKey,
+      );
+
+      if (!validationResult.isValid) {
+        throw new BadRequestException(
+          `API key validation failed: ${validationResult.error || 'Invalid API key'}`,
+        );
+      }
+
+      // Check for duplicate keys in the workspace
+      await this.checkDuplicateKey(workspaceId, dto.apiKey);
+
       // Encrypt the API key with workspace-specific encryption
       const { encryptedData, iv } =
         this.encryptionService.encryptWithWorkspaceKey(
@@ -76,12 +94,17 @@ export class BYOKKeyService {
           dto.apiKey,
         );
 
+      // Extract key prefix and suffix for masked display
+      const { prefix, suffix } = this.extractKeyParts(dto.apiKey);
+
       const byokKey = this.byokKeyRepository.create({
         workspaceId,
         keyName: dto.keyName,
         provider: dto.provider,
         encryptedKey: encryptedData,
         encryptionIV: iv,
+        keyPrefix: prefix,
+        keySuffix: suffix,
         createdByUserId: userId,
         isActive: true,
       });
@@ -123,6 +146,8 @@ export class BYOKKeyService {
         'createdAt',
         'lastUsedAt',
         'isActive',
+        'keyPrefix',
+        'keySuffix',
       ],
       order: { createdAt: 'DESC' },
     });
@@ -146,6 +171,8 @@ export class BYOKKeyService {
         'createdAt',
         'lastUsedAt',
         'isActive',
+        'keyPrefix',
+        'keySuffix',
       ],
     });
 
@@ -322,6 +349,79 @@ export class BYOKKeyService {
   }
 
   /**
+   * Check if an API key already exists in the workspace
+   */
+  private async checkDuplicateKey(
+    workspaceId: string,
+    apiKey: string,
+  ): Promise<void> {
+    const existingKeys = await this.byokKeyRepository.find({
+      where: { workspaceId, isActive: true },
+    });
+
+    for (const existingKey of existingKeys) {
+      try {
+        const decryptedKey = this.encryptionService.decryptWithWorkspaceKey(
+          workspaceId,
+          existingKey.encryptedKey,
+          existingKey.encryptionIV,
+        );
+
+        if (decryptedKey === apiKey) {
+          throw new BadRequestException(
+            'This API key already exists in your workspace',
+          );
+        }
+      } catch (error) {
+        // If decryption fails, skip this key
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        this.logger.warn(
+          `Failed to decrypt key ${existingKey.id} during duplicate check`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Extract key prefix and suffix for masked display
+   */
+  private extractKeyParts(apiKey: string): { prefix: string; suffix: string } {
+    let prefix = '';
+
+    if (apiKey.length <= 8) {
+      prefix = apiKey.substring(0, 3);
+    } else {
+      // Find the prefix (everything before the first long random string)
+      let prefixEnd = apiKey.indexOf('-');
+      if (prefixEnd !== -1) {
+        // For keys like 'sk-ant-...' or 'sk-proj-...', keep the full prefix
+        const secondDash = apiKey.indexOf('-', prefixEnd + 1);
+        if (secondDash !== -1 && secondDash < 15) {
+          prefixEnd = secondDash;
+        }
+      } else {
+        prefixEnd = 3; // Default to first 3 chars if no dash
+      }
+      prefix = apiKey.substring(0, prefixEnd + 1);
+    }
+
+    const suffix = apiKey.slice(-4);
+    return { prefix, suffix };
+  }
+
+  /**
+   * Build masked key from prefix and suffix
+   */
+  private buildMaskedKey(prefix?: string, suffix?: string): string {
+    if (!prefix || !suffix) {
+      return '***...**';
+    }
+    return `${prefix}...${suffix}`;
+  }
+
+  /**
    * Convert entity to response DTO (excluding sensitive data)
    */
   private toResponse(key: BYOKKey): BYOKKeyResponse {
@@ -332,6 +432,7 @@ export class BYOKKeyService {
       createdAt: key.createdAt,
       lastUsedAt: key.lastUsedAt,
       isActive: key.isActive,
+      maskedKey: this.buildMaskedKey(key.keyPrefix, key.keySuffix),
     };
   }
 }

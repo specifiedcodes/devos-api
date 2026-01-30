@@ -45,6 +45,12 @@ export class BYOKKey {
   @IsNotEmpty()
   encryptionIV!: string;
 
+  @Column({ type: 'varchar', length: 20, name: 'key_prefix', nullable: true })
+  keyPrefix?: string;
+
+  @Column({ type: 'varchar', length: 4, name: 'key_suffix', nullable: true })
+  keySuffix?: string;
+
   @Column({ type: 'uuid', name: 'created_by_user_id' })
   @IsUUID()
   createdByUserId!: string;

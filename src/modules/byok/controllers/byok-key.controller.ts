@@ -73,4 +73,32 @@ export class BYOKKeyController {
     const userId = req.user.userId;
     await this.byokKeyService.deleteKey(keyId, workspaceId, userId);
   }
+
+  /**
+   * Get usage statistics for a specific BYOK key
+   * Stub endpoint for Story 3.3
+   */
+  @Get(':keyId/usage')
+  async getKeyUsage(
+    @Param('workspaceId') workspaceId: string,
+    @Param('keyId') keyId: string,
+  ) {
+    // Verify the key exists and belongs to the workspace
+    await this.byokKeyService.getKeyById(keyId, workspaceId);
+
+    // Return stub data for now - will be implemented in Story 3.3
+    return {
+      keyId,
+      workspaceId,
+      totalRequests: 0,
+      totalTokens: 0,
+      estimatedCost: 0,
+      lastUsedAt: null,
+      period: {
+        start: new Date(),
+        end: new Date(),
+      },
+      message: 'Usage tracking will be available in Story 3.3',
+    };
+  }
 }
