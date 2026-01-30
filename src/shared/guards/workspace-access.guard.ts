@@ -3,8 +3,11 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
+import { AuditService, AuditAction } from '../audit/audit.service';
 
 /**
  * Guard to validate that authenticated user has access to the requested workspace
@@ -17,6 +20,10 @@ import { Observable } from 'rxjs';
  */
 @Injectable()
 export class WorkspaceAccessGuard implements CanActivate {
+  constructor(
+    @Inject(forwardRef(() => AuditService))
+    private readonly auditService: AuditService,
+  ) {}
   canActivate(
     context: ExecutionContext,
   ): boolean | Promise<boolean> | Observable<boolean> {
@@ -38,6 +45,24 @@ export class WorkspaceAccessGuard implements CanActivate {
     // Validate user has access to this workspace
     // Option 1: User belongs to a single workspace
     if (user.workspaceId && user.workspaceId !== workspaceIdParam) {
+      // Log permission denied (Task 6.1)
+      this.auditService
+        .log(
+          workspaceIdParam,
+          user.sub || user.id,
+          AuditAction.PERMISSION_DENIED,
+          'workspace',
+          workspaceIdParam,
+          {
+            reason: 'User does not belong to workspace',
+            attemptedWorkspaceId: workspaceIdParam,
+            userWorkspaceId: user.workspaceId,
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+          },
+        )
+        .catch(() => {}); // Don't fail main operation
+
       throw new ForbiddenException(
         'Access denied: You do not have permission to access this workspace',
       );
@@ -49,6 +74,24 @@ export class WorkspaceAccessGuard implements CanActivate {
       Array.isArray(user.workspaces) &&
       !user.workspaces.includes(workspaceIdParam)
     ) {
+      // Log permission denied (Task 6.1)
+      this.auditService
+        .log(
+          workspaceIdParam,
+          user.sub || user.id,
+          AuditAction.PERMISSION_DENIED,
+          'workspace',
+          workspaceIdParam,
+          {
+            reason: 'User does not belong to workspace (multi-workspace check)',
+            attemptedWorkspaceId: workspaceIdParam,
+            userWorkspaces: user.workspaces,
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+          },
+        )
+        .catch(() => {}); // Don't fail main operation
+
       throw new ForbiddenException(
         'Access denied: You do not have permission to access this workspace',
       );

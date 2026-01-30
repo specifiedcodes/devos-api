@@ -15,6 +15,7 @@ import { WorkspaceOwnerGuard } from './guards/workspace-owner.guard';
 import { WorkspaceAdminGuard } from './guards/workspace-admin.guard';
 import { RoleGuard } from '../../common/guards/role.guard';
 import { EmailModule } from '../email/email.module';
+import { AuditModule } from '../../shared/audit/audit.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { EmailModule } from '../email/email.module';
     }),
     ScheduleModule.forRoot(),
     EmailModule,
+    AuditModule,
   ],
   controllers: [WorkspacesController],
   providers: [

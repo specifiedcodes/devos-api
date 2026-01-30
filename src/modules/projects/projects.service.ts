@@ -13,6 +13,7 @@ import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateProjectPreferencesDto } from './dto/create-project-preferences.dto';
 import { UpdateProjectPreferencesDto } from './dto/update-project-preferences.dto';
+import { AuditService, AuditAction } from '../../shared/audit/audit.service';
 
 @Injectable()
 export class ProjectsService {
@@ -24,6 +25,7 @@ export class ProjectsService {
     @InjectRepository(ProjectPreferences)
     private readonly preferencesRepository: Repository<ProjectPreferences>,
     private readonly dataSource: DataSource,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -85,6 +87,19 @@ export class ProjectsService {
         relations: ['preferences', 'createdBy'],
       });
 
+      // Log to audit log (Task 5.1) - after transaction completes
+      await this.auditService.log(
+        workspaceId,
+        userId,
+        AuditAction.PROJECT_CREATED,
+        'project',
+        savedProject.id,
+        {
+          projectName: savedProject.name,
+          description: savedProject.description,
+        },
+      );
+
       return projectWithPreferences!;
     });
   }
@@ -133,6 +148,7 @@ export class ProjectsService {
     projectId: string,
     workspaceId: string,
     updateDto: UpdateProjectDto,
+    userId?: string,
   ): Promise<Project> {
     const project = await this.findOne(projectId, workspaceId);
 
@@ -147,9 +163,34 @@ export class ProjectsService {
       }
     }
 
+    // Track changes for audit log
+    const changes: Record<string, any> = {};
+    Object.keys(updateDto).forEach((key) => {
+      const projectKey = key as keyof Project;
+      const updateKey = key as keyof UpdateProjectDto;
+      if ((project as any)[projectKey] !== (updateDto as any)[updateKey]) {
+        changes[key] = { old: (project as any)[projectKey], new: (updateDto as any)[updateKey] };
+      }
+    });
+
     Object.assign(project, updateDto);
     const updated = await this.projectRepository.save(project);
     this.logger.log(`Project ${projectId} updated`);
+
+    // Log to audit log (Task 5.2)
+    if (userId) {
+      await this.auditService.log(
+        workspaceId,
+        userId,
+        AuditAction.PROJECT_UPDATED,
+        'project',
+        projectId,
+        {
+          projectName: project.name,
+          changes,
+        },
+      );
+    }
 
     return this.findOne(projectId, workspaceId);
   }
@@ -158,24 +199,64 @@ export class ProjectsService {
    * Soft delete a project
    * @param projectId - Project ID to delete
    * @param workspaceId - Workspace ID for isolation
+   * @param userId - User performing deletion
    */
-  async softDelete(projectId: string, workspaceId: string): Promise<void> {
+  async softDelete(
+    projectId: string,
+    workspaceId: string,
+    userId?: string,
+  ): Promise<void> {
     const project = await this.findOne(projectId, workspaceId);
+    const projectName = project.name;
     await this.projectRepository.softRemove(project);
     this.logger.log(`Project ${projectId} soft deleted`);
+
+    // Log to audit log (Task 5.3)
+    if (userId) {
+      await this.auditService.log(
+        workspaceId,
+        userId,
+        AuditAction.PROJECT_DELETED,
+        'project',
+        projectId,
+        {
+          projectName,
+        },
+      );
+    }
   }
 
   /**
    * Archive a project
    * @param projectId - Project ID to archive
    * @param workspaceId - Workspace ID for isolation
+   * @param userId - User performing archival
    * @returns Archived project
    */
-  async archive(projectId: string, workspaceId: string): Promise<Project> {
+  async archive(
+    projectId: string,
+    workspaceId: string,
+    userId?: string,
+  ): Promise<Project> {
     const project = await this.findOne(projectId, workspaceId);
     project.status = ProjectStatus.ARCHIVED;
     const archived = await this.projectRepository.save(project);
     this.logger.log(`Project ${projectId} archived`);
+
+    // Log to audit log (Task 5.4)
+    if (userId) {
+      await this.auditService.log(
+        workspaceId,
+        userId,
+        AuditAction.PROJECT_ARCHIVED,
+        'project',
+        projectId,
+        {
+          projectName: project.name,
+        },
+      );
+    }
+
     return archived;
   }
 

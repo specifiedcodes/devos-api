@@ -15,6 +15,7 @@ import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { InvitationResponseDto } from './dto/invitation-response.dto';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
+import { AuditService, AuditAction } from '../../shared/audit/audit.service';
 
 @Injectable()
 export class WorkspacesService {
@@ -37,6 +38,8 @@ export class WorkspacesService {
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
     private readonly emailService: EmailService,
+    @Inject(forwardRef(() => AuditService))
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -860,6 +863,20 @@ export class WorkspacesService {
       },
     } as any);
 
+    // 7a. Log to audit log (Task 4.1)
+    await this.auditService.log(
+      workspaceId,
+      userId,
+      AuditAction.MEMBER_INVITED,
+      'workspace_member',
+      savedInvitation.id,
+      {
+        email,
+        role,
+        expiresAt: savedInvitation.expiresAt.toISOString(),
+      },
+    );
+
     // 8. Get inviter details for response
     const inviter = await this.userRepository.findOne({ where: { id: userId } });
 
@@ -1328,6 +1345,22 @@ export class WorkspacesService {
     });
     await this.securityEventRepository.save(securityEvent);
 
+    // 5a. Log to audit log (Task 4.3)
+    await this.auditService.log(
+      workspaceId,
+      requestingUserId,
+      AuditAction.MEMBER_ROLE_CHANGED,
+      'workspace_member',
+      member.userId,
+      {
+        email: member.user?.email,
+        oldRole,
+        newRole,
+        ipAddress,
+        userAgent,
+      },
+    );
+
     return {
       id: member.id,
       userId: member.userId,
@@ -1394,6 +1427,21 @@ export class WorkspacesService {
       },
     });
     await this.securityEventRepository.save(securityEvent);
+
+    // 5a. Log to audit log (Task 4.2)
+    await this.auditService.log(
+      workspaceId,
+      requestingUserId,
+      AuditAction.MEMBER_REMOVED,
+      'workspace_member',
+      member.userId,
+      {
+        email: member.user?.email,
+        role: member.role,
+        ipAddress,
+        userAgent,
+      },
+    );
 
     return { message: 'Member removed successfully' };
   }

@@ -16,6 +16,8 @@ import {
   SecurityEvent,
   SecurityEventType,
 } from '../../database/entities/security-event.entity';
+import { AuditService, AuditAction } from '../../shared/audit/audit.service';
+import { Inject, forwardRef } from '@nestjs/common';
 
 export const ROLES_KEY = 'roles';
 export const RequireRole = (...roles: WorkspaceRole[]) =>
@@ -29,6 +31,8 @@ export class RoleGuard implements CanActivate {
     private workspaceMemberRepository: Repository<WorkspaceMember>,
     @InjectRepository(SecurityEvent)
     private securityEventRepository: Repository<SecurityEvent>,
+    @Inject(forwardRef(() => AuditService))
+    private readonly auditService: AuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -86,6 +90,25 @@ export class RoleGuard implements CanActivate {
           requiredRoles,
         },
       } as any);
+
+      // Log to audit log (Task 6.2)
+      this.auditService
+        .log(
+          workspaceId,
+          userId,
+          AuditAction.UNAUTHORIZED_ACCESS_ATTEMPT,
+          'workspace',
+          workspaceId,
+          {
+            reason: 'insufficient_role',
+            userRole: membership.role,
+            requiredRoles,
+            ipAddress: request.ip,
+            userAgent: request.headers['user-agent'],
+            endpoint: request.url,
+          },
+        )
+        .catch(() => {}); // Don't fail main operation
 
       throw new ForbiddenException('Insufficient permissions for this action');
     }
