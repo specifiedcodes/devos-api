@@ -11,12 +11,16 @@ import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { EncryptionModule } from './shared/encryption/encryption.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
+import { ProjectsModule } from './modules/projects/projects.module';
 import { User } from './database/entities/user.entity';
 import { Workspace } from './database/entities/workspace.entity';
 import { WorkspaceMember } from './database/entities/workspace-member.entity';
 import { BackupCode } from './database/entities/backup-code.entity';
 import { AccountDeletion } from './database/entities/account-deletion.entity';
 import { SecurityEvent } from './database/entities/security-event.entity';
+import { Project } from './database/entities/project.entity';
+import { ProjectPreferences } from './database/entities/project-preferences.entity';
+import { WorkspaceInvitation } from './database/entities/workspace-invitation.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -41,6 +45,9 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         BackupCode,
         AccountDeletion,
         SecurityEvent,
+        WorkspaceInvitation,
+        Project,
+        ProjectPreferences,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -51,6 +58,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     EncryptionModule,
     AuthModule,
     WorkspacesModule,
+    ProjectsModule,
   ],
   controllers: [AppController],
   providers: [
