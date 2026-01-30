@@ -8,8 +8,10 @@ import {
 import { IsUUID, IsNotEmpty } from 'class-validator';
 
 @Entity('audit_logs')
-@Index(['workspaceId', 'createdAt'])
-@Index(['resourceType', 'resourceId'])
+@Index(['workspaceId', 'createdAt']) // Fast retrieval by workspace and time
+@Index(['resourceType', 'resourceId']) // Resource-specific queries
+@Index(['workspaceId', 'userId']) // User-specific filtering (Task 8.2)
+@Index(['workspaceId', 'action']) // Action filtering (Task 8.3)
 export class AuditLog {
   @PrimaryGeneratedColumn('uuid')
   id!: string;

@@ -34,6 +34,7 @@ import { EncryptionService } from '../../shared/encryption/encryption.service';
 import { Session } from './interfaces/session.interface';
 import { AnomalyDetectionService } from './services/anomaly-detection.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
+import { AuditService, AuditAction } from '../../shared/audit/audit.service';
 
 @Injectable()
 export class AuthService {
@@ -59,6 +60,7 @@ export class AuthService {
     private encryptionService: EncryptionService,
     private anomalyDetectionService: AnomalyDetectionService,
     private workspacesService: WorkspacesService,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -411,6 +413,9 @@ export class AuthService {
         reason: 'invalid_email',
       });
 
+      // NOTE: Cannot log to audit_logs for non-existent users (no workspace context)
+      // Security events table is used for these cases instead
+
       // Check for multiple failed attempts even for non-existent email
       const shouldLock = await this.anomalyDetectionService.detectMultipleFailedAttempts(
         loginDto.email,
@@ -446,6 +451,28 @@ export class AuthService {
         user_agent: userAgent,
         reason: 'invalid_password',
       });
+
+      // Log to audit logs if user has a workspace (Task 6.3: LOGIN_FAILED audit logging)
+      if (user.currentWorkspaceId) {
+        try {
+          await this.auditService.log(
+            user.currentWorkspaceId,
+            user.id,
+            AuditAction.LOGIN_FAILED,
+            'auth',
+            user.id,
+            {
+              reason: 'invalid_password',
+              email: user.email,
+            },
+            ipAddress,
+            userAgent,
+          );
+        } catch (error) {
+          // Don't fail login flow if audit logging fails
+          this.logger.error(`Failed to log LOGIN_FAILED audit event: ${error.message}`);
+        }
+      }
 
       // Check for multiple failed attempts and trigger account lockout if needed
       const shouldLock = await this.anomalyDetectionService.detectMultipleFailedAttempts(
