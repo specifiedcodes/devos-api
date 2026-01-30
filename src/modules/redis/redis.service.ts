@@ -1,0 +1,311 @@
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
+import * as crypto from 'crypto';
+
+@Injectable()
+export class RedisService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(RedisService.name);
+  private readonly client: Redis;
+  private readonly BLACKLIST_PREFIX = 'blacklist:token:';
+  private readonly TEMP_TOKEN_PREFIX = '2fa_temp:';
+  private readonly TEMP_TOKEN_TTL = 300; // 5 minutes in seconds
+  private isConnected = false;
+
+  constructor(private configService: ConfigService) {
+    this.client = new Redis({
+      host: this.configService.get('REDIS_HOST', 'localhost'),
+      port: this.configService.get('REDIS_PORT', 6379),
+      password: this.configService.get('REDIS_PASSWORD'),
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      lazyConnect: true, // Don't auto-connect, we'll do it in onModuleInit
+    });
+
+    this.client.on('connect', () => {
+      this.logger.log('Redis connected successfully');
+      this.isConnected = true;
+    });
+
+    this.client.on('error', (error) => {
+      this.logger.error('Redis connection error', error);
+      this.isConnected = false;
+    });
+  }
+
+  /**
+   * Validate Redis connection on module initialization
+   * Throws error if Redis is required but unavailable
+   */
+  async onModuleInit() {
+    try {
+      await this.client.connect();
+      const pingResult = await this.client.ping();
+      if (pingResult !== 'PONG') {
+        throw new Error('Redis ping failed');
+      }
+      this.isConnected = true;
+      this.logger.log('Redis module initialized and connection verified');
+    } catch (error) {
+      this.logger.error('Failed to initialize Redis connection', error);
+      // In development, warn but don't crash. In production, crash.
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error(
+          'Redis connection failed. Redis is required for token blacklist in production.',
+        );
+      } else {
+        this.logger.warn(
+          'Redis connection failed. Token blacklist will not work. This is acceptable in development.',
+        );
+      }
+    }
+  }
+
+  /**
+   * Blacklist a token with TTL matching its expiry
+   * @param token - The token to blacklist (JWT or JTI)
+   * @param ttlSeconds - Time to live in seconds
+   */
+  async blacklistToken(token: string, ttlSeconds: number): Promise<void> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot blacklist token');
+      return;
+    }
+    try {
+      const key = `${this.BLACKLIST_PREFIX}${token}`;
+      await this.client.setex(key, ttlSeconds, '1');
+      this.logger.debug(`Token blacklisted with TTL ${ttlSeconds}s`);
+    } catch (error) {
+      this.logger.error('Failed to blacklist token', error);
+      // Don't throw - logout should succeed even if blacklist fails
+    }
+  }
+
+  /**
+   * Check if a token is blacklisted
+   * @param token - The token to check (JWT or JTI)
+   * @returns true if token is blacklisted, false otherwise
+   */
+  async isTokenBlacklisted(token: string): Promise<boolean> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot check token blacklist');
+      return false; // Fail open in development, fail closed in production
+    }
+    try {
+      const key = `${this.BLACKLIST_PREFIX}${token}`;
+      const result = await this.client.get(key);
+      return result === '1';
+    } catch (error) {
+      this.logger.error('Failed to check token blacklist', error);
+      return false; // Fail open to prevent blocking legitimate users
+    }
+  }
+
+  /**
+   * Health check for Redis connection
+   * @returns true if Redis is connected and responsive
+   */
+  async healthCheck(): Promise<boolean> {
+    try {
+      await this.client.ping();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Creates a temporary 2FA verification token
+   * @param userId - User ID requiring 2FA
+   * @param metadata - Additional context (IP, user-agent, timestamp)
+   * @returns Secure random token string (64 hex characters)
+   */
+  async createTempToken(
+    userId: string,
+    metadata: { ip_address: string; user_agent: string; created_at: string },
+  ): Promise<string> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot create temp token');
+      throw new Error('Redis connection unavailable');
+    }
+
+    try {
+      // Generate cryptographically secure random token
+      const token = crypto.randomBytes(32).toString('hex'); // 64 hex chars
+
+      // Store in Redis with metadata
+      const key = `${this.TEMP_TOKEN_PREFIX}${token}`;
+      const value = JSON.stringify({
+        user_id: userId,
+        ...metadata,
+      });
+
+      await this.client.setex(key, this.TEMP_TOKEN_TTL, value);
+
+      this.logger.debug(
+        `Created temp token for user: ${userId}, expires in ${this.TEMP_TOKEN_TTL}s`,
+      );
+
+      return token;
+    } catch (error) {
+      this.logger.error('Failed to create temp token', error);
+      throw new Error('Failed to create temporary verification token');
+    }
+  }
+
+  /**
+   * Validates and retrieves temp token data
+   * @param token - Token to validate
+   * @returns Token metadata or null if expired/invalid
+   */
+  async validateTempToken(token: string): Promise<{
+    user_id: string;
+    ip_address: string;
+    user_agent: string;
+    created_at: string;
+  } | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot validate temp token');
+      return null;
+    }
+
+    try {
+      const key = `${this.TEMP_TOKEN_PREFIX}${token}`;
+      const value = await this.client.get(key);
+
+      if (!value) {
+        this.logger.warn(
+          `Temp token not found or expired: ${token.substring(0, 8)}...`,
+        );
+        return null;
+      }
+
+      return JSON.parse(value);
+    } catch (error) {
+      this.logger.error('Failed to validate temp token', error);
+      return null;
+    }
+  }
+
+  /**
+   * Deletes temp token after successful verification
+   * @param token - Token to delete
+   */
+  async deleteTempToken(token: string): Promise<void> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot delete temp token');
+      return;
+    }
+
+    try {
+      const key = `${this.TEMP_TOKEN_PREFIX}${token}`;
+      await this.client.del(key);
+      this.logger.debug(`Deleted temp token: ${token.substring(0, 8)}...`);
+    } catch (error) {
+      this.logger.error('Failed to delete temp token', error);
+      // Don't throw - verification already succeeded
+    }
+  }
+
+  /**
+   * Gets remaining TTL for temp token
+   * @param token - Token to check
+   * @returns Remaining seconds or -1 if expired/not found
+   */
+  async getTempTokenTTL(token: string): Promise<number> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot get temp token TTL');
+      return -1;
+    }
+
+    try {
+      const key = `${this.TEMP_TOKEN_PREFIX}${token}`;
+      return await this.client.ttl(key);
+    } catch (error) {
+      this.logger.error('Failed to get temp token TTL', error);
+      return -1;
+    }
+  }
+
+  /**
+   * Generic set operation with TTL (Story 1.9)
+   * @param key - Redis key
+   * @param value - Value to store
+   * @param ttlSeconds - Time to live in seconds
+   */
+  async set(key: string, value: string, ttlSeconds: number): Promise<void> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot set key');
+      return;
+    }
+    try {
+      await this.client.setex(key, ttlSeconds, value);
+    } catch (error) {
+      this.logger.error(`Failed to set key ${key}`, error);
+    }
+  }
+
+  /**
+   * Generic get operation (Story 1.9)
+   * @param key - Redis key
+   * @returns Value or null if not found
+   */
+  async get(key: string): Promise<string | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot get key');
+      return null;
+    }
+    try {
+      return await this.client.get(key);
+    } catch (error) {
+      this.logger.error(`Failed to get key ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Find keys matching a pattern (Story 1.9)
+   * @param pattern - Redis key pattern (e.g., 'session:user123:*')
+   * @returns Array of matching keys
+   */
+  async keys(pattern: string): Promise<string[]> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot query keys');
+      return [];
+    }
+    try {
+      return await this.client.keys(pattern);
+    } catch (error) {
+      this.logger.error(`Failed to query keys with pattern ${pattern}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Delete one or more keys (Story 1.9)
+   * @param keys - Keys to delete
+   */
+  async del(...keys: string[]): Promise<void> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot delete keys');
+      return;
+    }
+    try {
+      if (keys.length > 0) {
+        await this.client.del(...keys);
+      }
+    } catch (error) {
+      this.logger.error(`Failed to delete keys`, error);
+    }
+  }
+
+  /**
+   * Cleanup on module destroy
+   */
+  async onModuleDestroy() {
+    await this.client.quit();
+    this.logger.log('Redis connection closed');
+  }
+}
