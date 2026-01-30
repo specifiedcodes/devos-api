@@ -20,8 +20,10 @@ jest.mock('openai', () => {
   return {
     __esModule: true,
     default: jest.fn().mockImplementation(() => ({
-      models: {
-        list: jest.fn(),
+      chat: {
+        completions: {
+          create: jest.fn(),
+        },
       },
     })),
   };
@@ -90,7 +92,7 @@ describe('ApiKeyValidatorService', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Invalid API key');
+      expect(result.error).toBe('Invalid Anthropic API key');
     });
 
     it('should handle network timeout errors', async () => {
@@ -115,11 +117,15 @@ describe('ApiKeyValidatorService', () => {
   describe('validateOpenAIKey', () => {
     it('should return true for valid OpenAI API key', async () => {
       const OpenAI = require('openai').default;
-      const mockList = jest.fn().mockResolvedValue({
-        data: [{ id: 'gpt-4' }],
+      const mockCreate = jest.fn().mockResolvedValue({
+        choices: [{ message: { content: 'test' } }],
       });
       OpenAI.mockImplementation(() => ({
-        models: { list: mockList },
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
       }));
 
       const result = await service.validateApiKey(
@@ -129,16 +135,25 @@ describe('ApiKeyValidatorService', () => {
 
       expect(result.isValid).toBe(true);
       expect(result.error).toBeUndefined();
+      expect(mockCreate).toHaveBeenCalledWith({
+        model: 'gpt-3.5-turbo',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }],
+      });
     });
 
     it('should return false for invalid OpenAI API key', async () => {
       const OpenAI = require('openai').default;
-      const mockList = jest.fn().mockRejectedValue({
+      const mockCreate = jest.fn().mockRejectedValue({
         status: 401,
         message: 'Invalid API key',
       });
       OpenAI.mockImplementation(() => ({
-        models: { list: mockList },
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
       }));
 
       const result = await service.validateApiKey(
@@ -147,7 +162,7 @@ describe('ApiKeyValidatorService', () => {
       );
 
       expect(result.isValid).toBe(false);
-      expect(result.error).toContain('Invalid API key');
+      expect(result.error).toBe('Invalid OpenAI API key');
     });
   });
 

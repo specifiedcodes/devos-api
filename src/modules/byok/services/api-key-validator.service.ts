@@ -23,6 +23,20 @@ export class ApiKeyValidatorService {
 
   /**
    * Validate an API key by making a lightweight API call to the provider
+   *
+   * This method performs live validation by making a minimal API call to the provider's
+   * service. It verifies that the key is valid, has not been revoked, and has available quota.
+   *
+   * @param provider - The API key provider (Anthropic or OpenAI)
+   * @param apiKey - The API key to validate
+   * @returns ValidationResult containing isValid boolean and optional error message
+   * @throws Never throws - all errors are caught and returned in ValidationResult
+   *
+   * @example
+   * const result = await validator.validateApiKey(KeyProvider.ANTHROPIC, 'sk-ant-...');
+   * if (!result.isValid) {
+   *   console.error(result.error); // "Invalid Anthropic API key"
+   * }
    */
   async validateApiKey(
     provider: KeyProvider,
@@ -71,11 +85,23 @@ export class ApiKeyValidatorService {
       this.logger.warn(
         `Anthropic API key validation failed: ${error.message}`,
       );
+
+      // Provide specific error messages based on error type
+      let errorMessage = 'Validation failed';
+
+      if (error.status === 401) {
+        errorMessage = 'Invalid Anthropic API key';
+      } else if (error.status === 429) {
+        errorMessage = 'API key has no remaining quota or rate limit exceeded';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+        errorMessage = 'Unable to reach Anthropic servers. Check your network connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
       return {
         isValid: false,
-        error: error.status === 401
-          ? 'Invalid API key'
-          : error.message || 'Validation failed',
+        error: errorMessage,
       };
     }
   }
@@ -90,17 +116,33 @@ export class ApiKeyValidatorService {
         timeout: this.validationTimeout,
       });
 
-      // Make a minimal API call to verify the key (list models is lightweight)
-      await client.models.list();
+      // Make a minimal chat completion call to verify the key (2-token prompt)
+      await client.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        max_tokens: 10,
+        messages: [{ role: 'user', content: 'test' }],
+      });
 
       return { isValid: true };
     } catch (error: any) {
       this.logger.warn(`OpenAI API key validation failed: ${error.message}`);
+
+      // Provide specific error messages based on error type
+      let errorMessage = 'Validation failed';
+
+      if (error.status === 401) {
+        errorMessage = 'Invalid OpenAI API key';
+      } else if (error.status === 429) {
+        errorMessage = 'API key has no remaining quota or rate limit exceeded';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+        errorMessage = 'Unable to reach OpenAI servers. Check your network connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
       return {
         isValid: false,
-        error: error.status === 401
-          ? 'Invalid API key'
-          : error.message || 'Validation failed',
+        error: errorMessage,
       };
     }
   }

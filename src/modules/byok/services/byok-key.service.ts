@@ -350,6 +350,20 @@ export class BYOKKeyService {
 
   /**
    * Check if an API key already exists in the workspace
+   *
+   * PERFORMANCE NOTE: This method decrypts all existing keys to check for duplicates.
+   * Time complexity: O(n) where n = number of existing keys in workspace.
+   *
+   * Alternative approach considered: Hash-based comparison using crypto.createHash('sha256')
+   * - Pros: Constant-time comparison, no decryption needed
+   * - Cons: Requires schema migration to add hash column, cannot detect duplicates across existing keys without one-time migration
+   *
+   * Current implementation chosen for:
+   * 1. Security: No additional hash storage required (smaller attack surface)
+   * 2. Simplicity: Works with current schema, no migration needed
+   * 3. Scale: Workspaces typically have 1-5 keys, so O(n) is acceptable
+   *
+   * Future optimization: If workspaces regularly exceed 10+ keys, consider hash-based approach.
    */
   private async checkDuplicateKey(
     workspaceId: string,
@@ -386,28 +400,53 @@ export class BYOKKeyService {
 
   /**
    * Extract key prefix and suffix for masked display
+   *
+   * Handles multiple API key formats:
+   * - Anthropic: "sk-ant-api..." → "sk-ant-...api7"
+   * - OpenAI (new): "sk-proj-..." → "sk-proj-...xyz9"
+   * - OpenAI (legacy): "sk-..." → "sk-...abc3"
+   * - Unknown format: "key123..." → "key...23"
+   *
+   * Algorithm:
+   * 1. For short keys (≤8 chars): Use first 3 chars as prefix
+   * 2. For keys with dashes:
+   *    - If second dash exists within first 15 chars (e.g., 'sk-ant-'): use up to second dash
+   *    - Otherwise: use up to first dash (e.g., 'sk-')
+   * 3. For keys without dashes: Use first 3 chars
+   * 4. Always use last 4 chars as suffix
+   *
+   * The 15-char limit for second dash ensures we capture structured prefixes like
+   * 'sk-ant-' (7 chars) or 'sk-proj-' (8 chars) without including random data.
    */
   private extractKeyParts(apiKey: string): { prefix: string; suffix: string } {
     let prefix = '';
 
     if (apiKey.length <= 8) {
-      prefix = apiKey.substring(0, 3);
+      // Short key: just use first 3 chars
+      prefix = apiKey.substring(0, Math.min(3, apiKey.length));
     } else {
-      // Find the prefix (everything before the first long random string)
-      let prefixEnd = apiKey.indexOf('-');
-      if (prefixEnd !== -1) {
-        // For keys like 'sk-ant-...' or 'sk-proj-...', keep the full prefix
-        const secondDash = apiKey.indexOf('-', prefixEnd + 1);
+      // Find the prefix (structured part before random string)
+      const firstDash = apiKey.indexOf('-');
+
+      if (firstDash !== -1) {
+        // Key has dashes - check for second dash (multi-part prefix)
+        const secondDash = apiKey.indexOf('-', firstDash + 1);
+
         if (secondDash !== -1 && secondDash < 15) {
-          prefixEnd = secondDash;
+          // Multi-part prefix like 'sk-ant-' or 'sk-proj-' (within first 15 chars)
+          prefix = apiKey.substring(0, secondDash + 1);
+        } else {
+          // Single-part prefix like 'sk-' (or second dash too far)
+          prefix = apiKey.substring(0, firstDash + 1);
         }
       } else {
-        prefixEnd = 3; // Default to first 3 chars if no dash
+        // No dashes - use first 3 chars as fallback
+        prefix = apiKey.substring(0, 3);
       }
-      prefix = apiKey.substring(0, prefixEnd + 1);
     }
 
-    const suffix = apiKey.slice(-4);
+    // Always use last 4 chars as suffix (or full length if key is shorter)
+    const suffix = apiKey.slice(-Math.min(4, apiKey.length));
     return { prefix, suffix };
   }
 
