@@ -222,7 +222,7 @@ describe('WorkspacesService - Invitations', () => {
         tokens: { access_token: 'token', refresh_token: 'refresh' },
       });
 
-      const result = await service.acceptInvitation('raw_token', 'user-2');
+      const result = await service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent');
 
       expect(result.workspace).toBeDefined();
       expect(result.tokens).toBeDefined();
@@ -236,7 +236,7 @@ describe('WorkspacesService - Invitations', () => {
 
       jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(expiredInvitation as any);
 
-      await expect(service.acceptInvitation('raw_token', 'user-2')).rejects.toThrow(
+      await expect(service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -249,7 +249,7 @@ describe('WorkspacesService - Invitations', () => {
 
       jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(acceptedInvitation as any);
 
-      await expect(service.acceptInvitation('raw_token', 'user-2')).rejects.toThrow(
+      await expect(service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
         BadRequestException,
       );
     });
@@ -270,7 +270,7 @@ describe('WorkspacesService - Invitations', () => {
       jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(validInvitation as any);
       jest.spyOn(userRepo, 'findOne').mockResolvedValue(wrongUser as any);
 
-      await expect(service.acceptInvitation('raw_token', 'user-2')).rejects.toThrow(
+      await expect(service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
         ForbiddenException,
       );
     });
