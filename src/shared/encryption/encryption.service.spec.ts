@@ -5,6 +5,7 @@ import { EncryptionService } from './encryption.service';
 describe('EncryptionService', () => {
   let service: EncryptionService;
   const mockEncryptionKey = 'a'.repeat(64); // 64-character hex string
+  const mockHkdfSalt = 'b'.repeat(64); // 64-character hex string
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -15,6 +16,7 @@ describe('EncryptionService', () => {
           useValue: {
             get: jest.fn((key: string) => {
               if (key === 'ENCRYPTION_KEY') return mockEncryptionKey;
+              if (key === 'ENCRYPTION_HKDF_SALT') return mockHkdfSalt;
               return null;
             }),
           },

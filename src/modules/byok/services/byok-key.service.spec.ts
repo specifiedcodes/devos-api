@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
 import { BYOKKeyService } from './byok-key.service';
@@ -34,6 +35,10 @@ describe('BYOKKeyService', () => {
     checkLimit: jest.fn(),
   };
 
+  const mockConfigService = {
+    get: jest.fn((key: string, defaultValue?: any) => defaultValue),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -54,6 +59,10 @@ describe('BYOKKeyService', () => {
           provide: RateLimiterService,
           useValue: mockRateLimiterService,
         },
+        {
+          provide: ConfigService,
+          useValue: mockConfigService,
+        },
       ],
     }).compile();
 
@@ -73,7 +82,7 @@ describe('BYOKKeyService', () => {
       const dto = {
         keyName: 'Test Key',
         provider: KeyProvider.ANTHROPIC,
-        apiKey: 'sk-ant-api03-test-key-1234567890abcdefghijklmnop',
+        apiKey: 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz',
       };
 
       mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({

@@ -20,16 +20,14 @@ export class EncryptionService {
     }
     this.encryptionKey = Buffer.from(key, 'hex');
 
-    // Load HKDF salt from environment or use a secure default
+    // Load HKDF salt from environment (REQUIRED for security)
     const saltHex = this.configService.get<string>('ENCRYPTION_HKDF_SALT');
-    if (saltHex && saltHex.length === 64) {
-      this.hkdfSalt = Buffer.from(saltHex, 'hex');
-    } else {
-      this.logger.warn(
-        'ENCRYPTION_HKDF_SALT not configured. Using default salt. For production, set ENCRYPTION_HKDF_SALT to a 64-character hex string.',
+    if (!saltHex || saltHex.length !== 64) {
+      throw new Error(
+        'ENCRYPTION_HKDF_SALT must be 64 characters (32 bytes in hex). Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
       );
-      this.hkdfSalt = Buffer.from('devos-workspace-byok-salt');
     }
+    this.hkdfSalt = Buffer.from(saltHex, 'hex');
   }
 
   /**

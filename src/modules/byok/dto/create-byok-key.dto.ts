@@ -12,6 +12,6 @@ export class CreateBYOKKeyDto {
 
   @IsString()
   @IsNotEmpty()
-  @MinLength(20)
+  @MinLength(50)
   apiKey!: string;
 }

@@ -6,6 +6,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
+import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
@@ -34,6 +35,8 @@ export interface BYOKKeyResponse {
 @Injectable()
 export class BYOKKeyService {
   private readonly logger = new Logger(BYOKKeyService.name);
+  private readonly decryptRateLimit: number;
+  private readonly decryptRateWindowMs: number;
 
   constructor(
     @InjectRepository(BYOKKey)
@@ -41,7 +44,18 @@ export class BYOKKeyService {
     private readonly encryptionService: EncryptionService,
     private readonly auditService: AuditService,
     private readonly rateLimiter: RateLimiterService,
-  ) {}
+    private readonly configService: ConfigService,
+  ) {
+    // Load rate limit configuration from environment (with sensible defaults)
+    this.decryptRateLimit = this.configService.get<number>(
+      'BYOK_DECRYPT_RATE_LIMIT',
+      100,
+    );
+    this.decryptRateWindowMs = this.configService.get<number>(
+      'BYOK_DECRYPT_RATE_WINDOW_MS',
+      60 * 60 * 1000, // 1 hour
+    );
+  }
 
   /**
    * Create a new BYOK key for a workspace
@@ -147,9 +161,13 @@ export class BYOKKeyService {
    * SECURITY: This should only be called by trusted internal services
    */
   async decryptKey(keyId: string, workspaceId: string): Promise<string> {
-    // Rate limiting: 100 decryptions per hour per key
+    // Rate limiting: Configurable via environment variables
     const rateLimitKey = `byok:decrypt:${workspaceId}:${keyId}`;
-    await this.rateLimiter.checkLimit(rateLimitKey, 100, 60 * 60 * 1000);
+    await this.rateLimiter.checkLimit(
+      rateLimitKey,
+      this.decryptRateLimit,
+      this.decryptRateWindowMs,
+    );
 
     const byokKey = await this.byokKeyRepository.findOne({
       where: { id: keyId, workspaceId, isActive: true },
@@ -263,20 +281,38 @@ export class BYOKKeyService {
             'Invalid Anthropic API key format. Key should start with "sk-ant-"',
           );
         }
-        if (apiKey.length < 40) {
-          throw new BadRequestException('Anthropic API key is too short');
+        // Real Anthropic keys are typically 100+ characters
+        if (apiKey.length < 50) {
+          throw new BadRequestException(
+            'Anthropic API key is too short (minimum 50 characters)',
+          );
+        }
+        // Validate format: sk-ant- followed by base64-like characters
+        if (!/^sk-ant-[a-zA-Z0-9_-]+$/.test(apiKey)) {
+          throw new BadRequestException(
+            'Invalid Anthropic API key format. Should contain only alphanumeric, dash, and underscore characters after prefix',
+          );
         }
         break;
 
       case KeyProvider.OPENAI:
-        // OpenAI keys start with 'sk-'
-        if (!apiKey.startsWith('sk-')) {
+        // OpenAI keys start with 'sk-proj-' (new format) or 'sk-' (legacy)
+        if (!apiKey.startsWith('sk-proj-') && !apiKey.startsWith('sk-')) {
           throw new BadRequestException(
-            'Invalid OpenAI API key format. Key should start with "sk-"',
+            'Invalid OpenAI API key format. Key should start with "sk-proj-" or "sk-"',
           );
         }
-        if (apiKey.length < 40) {
-          throw new BadRequestException('OpenAI API key is too short');
+        // Real OpenAI keys are typically 50+ characters
+        if (apiKey.length < 50) {
+          throw new BadRequestException(
+            'OpenAI API key is too short (minimum 50 characters)',
+          );
+        }
+        // Validate format: alphanumeric and dash characters
+        if (!/^sk-[a-zA-Z0-9_-]+$/.test(apiKey)) {
+          throw new BadRequestException(
+            'Invalid OpenAI API key format. Should contain only alphanumeric, dash, and underscore characters after prefix',
+          );
         }
         break;
 

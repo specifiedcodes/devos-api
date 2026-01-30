@@ -302,9 +302,13 @@ API keys are validated before storage:
    ```
 
 3. **Re-encrypt All BYOK Keys**
-   ```typescript
-   // Run migration script (to be implemented)
-   npm run migrate:reencrypt-byok-keys
+   ```bash
+   # Set all required environment variables
+   OLD_ENCRYPTION_KEY=<current_key> \
+   OLD_ENCRYPTION_HKDF_SALT=<current_salt> \
+   NEW_ENCRYPTION_KEY=<new_key> \
+   NEW_ENCRYPTION_HKDF_SALT=<new_salt> \
+   ts-node scripts/reencrypt-byok-keys.ts
    ```
 
 4. **Update Environment Variables**
