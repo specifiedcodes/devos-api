@@ -26,11 +26,14 @@ export class SpendingAlertService {
     this.logger.log('Starting spending alerts check...');
 
     try {
-      // Get all workspaces with limits enabled
-      const workspacesWithLimits = await this.workspaceSettingsRepo.find({
-        where: { limitEnabled: true },
-        relations: ['workspace', 'workspace.members', 'workspace.members.user'],
-      });
+      // Get all workspaces with limits enabled using QueryBuilder for proper relation loading
+      const workspacesWithLimits = await this.workspaceSettingsRepo
+        .createQueryBuilder('ws')
+        .leftJoinAndSelect('ws.workspace', 'workspace')
+        .leftJoinAndSelect('workspace.members', 'members')
+        .leftJoinAndSelect('members.user', 'user')
+        .where('ws.limitEnabled = :enabled', { enabled: true })
+        .getMany();
 
       this.logger.log(
         `Found ${workspacesWithLimits.length} workspaces with spending limits enabled`,
@@ -62,6 +65,7 @@ export class SpendingAlertService {
 
   /**
    * Check spending limit for a single workspace
+   * Uses transaction with row-level locking to prevent race conditions
    */
   private async checkWorkspaceLimit(
     settings: WorkspaceSettings,
@@ -80,11 +84,6 @@ export class SpendingAlertService {
 
     // Get current month key for triggered_alerts
     const currentMonth = new Date().toISOString().slice(0, 7); // "2026-01"
-    const triggeredAlerts =
-      (settings.triggeredAlerts as any)?.[currentMonth] || [];
-    const triggeredThresholds = new Set(
-      triggeredAlerts.map((a: any) => a.threshold),
-    );
 
     // Check each threshold
     if (!alertThresholds || alertThresholds.length === 0) {
@@ -92,36 +91,64 @@ export class SpendingAlertService {
     }
 
     for (const threshold of alertThresholds) {
-      if (
-        percentageUsed >= threshold &&
-        !triggeredThresholds.has(threshold)
-      ) {
-        await this.sendAlert(
-          settings,
-          threshold,
-          currentMonthSpend,
-          monthlyLimitUsd,
-        );
+      if (percentageUsed >= threshold) {
+        // Use transaction with row-level locking to prevent duplicate alerts
+        await this.workspaceSettingsRepo.manager.transaction(
+          async (transactionalEntityManager) => {
+            // Lock the row for update
+            const lockedSettings = await transactionalEntityManager
+              .createQueryBuilder(WorkspaceSettings, 'ws')
+              .where('ws.workspaceId = :workspaceId', { workspaceId })
+              .setLock('pessimistic_write')
+              .getOne();
 
-        // Mark as triggered
-        const newAlert = {
-          threshold,
-          triggered_at: new Date().toISOString(),
-          spend: currentMonthSpend,
-        };
+            if (!lockedSettings) {
+              return;
+            }
 
-        const updatedAlerts = {
-          ...(settings.triggeredAlerts || {}),
-          [currentMonth]: [...triggeredAlerts, newAlert],
-        };
+            // Re-check triggered alerts with locked data
+            const triggeredAlerts =
+              (lockedSettings.triggeredAlerts as any)?.[currentMonth] || [];
+            const triggeredThresholds = new Set(
+              triggeredAlerts.map((a: any) => a.threshold),
+            );
 
-        await this.workspaceSettingsRepo.update(
-          { workspaceId },
-          { triggeredAlerts: updatedAlerts },
-        );
+            // If already triggered, skip
+            if (triggeredThresholds.has(threshold)) {
+              return;
+            }
 
-        this.logger.log(
-          `Alert triggered at ${threshold}% for workspace ${workspaceId}`,
+            // Send alert (outside transaction to avoid long locks)
+            await this.sendAlert(
+              settings,
+              threshold,
+              currentMonthSpend,
+              monthlyLimitUsd,
+            );
+
+            // Mark as triggered
+            const newAlert = {
+              threshold,
+              triggered_at: new Date().toISOString(),
+              spend: currentMonthSpend,
+            };
+
+            const updatedAlerts = {
+              ...(lockedSettings.triggeredAlerts || {}),
+              [currentMonth]: [...triggeredAlerts, newAlert],
+            };
+
+            // Update within transaction
+            await transactionalEntityManager.update(
+              WorkspaceSettings,
+              { workspaceId },
+              { triggeredAlerts: updatedAlerts },
+            );
+
+            this.logger.log(
+              `Alert triggered at ${threshold}% for workspace ${workspaceId}`,
+            );
+          },
         );
       }
     }
@@ -207,6 +234,7 @@ export class SpendingAlertService {
 
   /**
    * Reset monthly alerts (called on 1st of every month)
+   * Clears triggered alerts older than 3 months to prevent JSONB bloat
    */
   async resetMonthlyAlerts(): Promise<void> {
     this.logger.log('Resetting monthly spending alerts...');
@@ -216,15 +244,40 @@ export class SpendingAlertService {
         where: { limitEnabled: true },
       });
 
+      const currentMonth = new Date().toISOString().slice(0, 7); // "2026-01"
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const cutoffMonth = threeMonthsAgo.toISOString().slice(0, 7);
+
+      let cleanedCount = 0;
+
       for (const settings of allSettings) {
-        // Keep historical data, just clear current month
-        // The checkWorkspaceLimit will handle new month automatically
-        this.logger.debug(
-          `Alerts for workspace ${settings.workspaceId} will reset naturally with new month`,
-        );
+        const triggeredAlerts = settings.triggeredAlerts || {};
+
+        // Keep only last 3 months of alerts to prevent JSONB bloat
+        const cleanedAlerts: Record<string, any> = {};
+        for (const [month, alerts] of Object.entries(triggeredAlerts)) {
+          if (month >= cutoffMonth) {
+            cleanedAlerts[month] = alerts;
+          }
+        }
+
+        // Only update if something changed
+        if (
+          Object.keys(cleanedAlerts).length !==
+          Object.keys(triggeredAlerts).length
+        ) {
+          await this.workspaceSettingsRepo.update(
+            { workspaceId: settings.workspaceId },
+            { triggeredAlerts: cleanedAlerts },
+          );
+          cleanedCount++;
+        }
       }
 
-      this.logger.log('Monthly alert reset complete');
+      this.logger.log(
+        `Monthly alert reset complete. Cleaned ${cleanedCount} workspaces.`,
+      );
     } catch (error) {
       this.logger.error(
         `Failed to reset monthly alerts: ${

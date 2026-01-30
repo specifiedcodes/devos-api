@@ -8,6 +8,29 @@ import { Reflector } from '@nestjs/core';
 import { WorkspaceSettingsService } from '../services/workspace-settings.service';
 import { UsageService } from '../../usage/services/usage.service';
 
+/**
+ * Guard to prevent new agent tasks when workspace reaches 100% of monthly budget
+ *
+ * Usage: Apply to agent task creation endpoints
+ * @example
+ * ```typescript
+ * // In agent-tasks.controller.ts (Epic 5)
+ * @Post('workspaces/:workspaceId/agents/:agentId/tasks')
+ * @UseGuards(JwtAuthGuard, WorkspaceAccessGuard, SpendingLimitGuard)
+ * async createTask(@Param('workspaceId') workspaceId: string, ...) {
+ *   // Task creation logic
+ * }
+ *
+ * // With budget override (owners only)
+ * POST /api/workspaces/:id/agents/:id/tasks?allow_budget_override=true
+ * ```
+ *
+ * Behavior:
+ * - Allows requests if no spending limits configured
+ * - Allows requests if budget usage < 100%
+ * - Blocks requests at 100% budget with 403 error
+ * - Allows override if user is workspace owner AND allow_budget_override=true
+ */
 @Injectable()
 export class SpendingLimitGuard implements CanActivate {
   constructor(

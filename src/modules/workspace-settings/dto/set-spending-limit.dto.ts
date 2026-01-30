@@ -3,6 +3,7 @@ import {
   IsArray,
   IsBoolean,
   Min,
+  Max,
   ArrayUnique,
   ArrayMinSize,
   IsOptional,
@@ -28,6 +29,8 @@ export class SetSpendingLimitDto {
   @ArrayMinSize(1, { message: 'At least one alert threshold is required' })
   @ArrayUnique({ message: 'Alert thresholds must be unique' })
   @IsNumber({}, { each: true })
+  @Min(1, { each: true, message: 'Each threshold must be at least 1%' })
+  @Max(100, { each: true, message: 'Each threshold cannot exceed 100%' })
   alert_thresholds!: number[];
 
   @ApiProperty({

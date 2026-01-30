@@ -74,18 +74,18 @@ export class AddSpendingLimits1738368000000 implements MigrationInterface {
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    // Drop notifications table
+    // Drop notifications table (indices are dropped automatically)
     await queryRunner.query(`DROP TABLE IF EXISTS notifications;`);
+
+    // Drop index BEFORE dropping columns
+    await queryRunner.query(`
+      DROP INDEX IF EXISTS idx_workspace_settings_limit_enabled;
+    `);
 
     // Drop spending limit columns from workspace_settings
     await queryRunner.dropColumn('workspace_settings', 'triggered_alerts');
     await queryRunner.dropColumn('workspace_settings', 'limit_enabled');
     await queryRunner.dropColumn('workspace_settings', 'alert_thresholds');
     await queryRunner.dropColumn('workspace_settings', 'monthly_limit_usd');
-
-    // Drop index
-    await queryRunner.query(`
-      DROP INDEX IF EXISTS idx_workspace_settings_limit_enabled;
-    `);
   }
 }
