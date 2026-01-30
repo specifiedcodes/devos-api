@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { RedisService } from '../../../modules/redis/redis.service';
 
 /**
@@ -25,6 +26,22 @@ export class PricingService {
   // Hardcoded fallback pricing (as of 2026-01)
   // Source: Anthropic and OpenAI pricing pages
   private readonly FALLBACK_PRICING: Record<string, ModelPricing> = {
+    // Latest Anthropic models (2026-01)
+    'anthropic:claude-sonnet-4-5-20250929': {
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-5-20250929',
+      inputPricePerMillion: 3.0,
+      outputPricePerMillion: 15.0,
+      effectiveDate: '2026-01-01',
+    },
+    'anthropic:claude-opus-4-5-20251101': {
+      provider: 'anthropic',
+      model: 'claude-opus-4-5-20251101',
+      inputPricePerMillion: 15.0,
+      outputPricePerMillion: 75.0,
+      effectiveDate: '2026-01-01',
+    },
+    // Legacy Anthropic models (for backward compatibility)
     'anthropic:claude-3-5-sonnet-20241022': {
       provider: 'anthropic',
       model: 'claude-3-5-sonnet-20241022',
@@ -39,6 +56,7 @@ export class PricingService {
       outputPricePerMillion: 75.0,
       effectiveDate: '2026-01-01',
     },
+    // OpenAI models
     'openai:gpt-4-turbo': {
       provider: 'openai',
       model: 'gpt-4-turbo',
@@ -88,7 +106,7 @@ export class PricingService {
     const pricingKey = `${provider}:${model}`;
     const pricing =
       this.FALLBACK_PRICING[pricingKey] ||
-      this.FALLBACK_PRICING['anthropic:claude-3-5-sonnet-20241022']; // Default fallback
+      this.FALLBACK_PRICING['anthropic:claude-sonnet-4-5-20250929']; // Default fallback
 
     if (!this.FALLBACK_PRICING[pricingKey]) {
       this.logger.warn(
@@ -133,8 +151,9 @@ export class PricingService {
 
   /**
    * Refresh all pricing data in Redis cache
-   * Intended to be called by a cron job daily
+   * Runs daily at 00:00 UTC via cron job
    */
+  @Cron(CronExpression.EVERY_DAY_AT_MIDNIGHT)
   async refreshAllPricing(): Promise<void> {
     this.logger.log('Refreshing all pricing data');
 

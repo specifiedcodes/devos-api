@@ -1,9 +1,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.entity';
 import { PricingService } from './pricing.service';
 import { RedisService } from '../../../modules/redis/redis.service';
+import { AuditService } from '../../../shared/audit/audit.service';
+import { AuditAction } from '../../../database/entities/audit-log.entity';
 
 /**
  * Usage summary response interface
@@ -51,6 +53,7 @@ export class UsageService {
     private readonly apiUsageRepository: Repository<ApiUsage>,
     private readonly pricingService: PricingService,
     private readonly redisService: RedisService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -108,6 +111,31 @@ export class UsageService {
 
       // Increment Redis counter for real-time display
       await this.incrementMonthlyCounter(workspaceId, costUsd);
+
+      // Audit log the usage recording
+      try {
+        await this.auditService.log(
+          workspaceId,
+          'system', // System-initiated action
+          AuditAction.CREATE,
+          'api_usage',
+          saved.id,
+          {
+            provider,
+            model,
+            inputTokens,
+            outputTokens,
+            costUsd,
+            projectId: projectId || undefined,
+            agentId: agentId || undefined,
+          },
+        );
+      } catch (auditError) {
+        // Log but don't fail the request if audit logging fails
+        this.logger.warn(
+          `Failed to log audit entry: ${auditError instanceof Error ? auditError.message : 'Unknown error'}`,
+        );
+      }
 
       this.logger.log(
         `Recorded usage: workspace=${workspaceId}, cost=$${costUsd}, tokens=${inputTokens}+${outputTokens}`,
@@ -263,6 +291,7 @@ export class UsageService {
 
   /**
    * Increment monthly cost counter in Redis
+   * TTL is set only on first write to avoid redundant expire calls
    *
    * @param workspaceId - Workspace ID
    * @param cost - Cost to add
@@ -272,20 +301,25 @@ export class UsageService {
     cost: number,
   ): Promise<void> {
     try {
-      const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const now = new Date();
+      const monthKey = now.toISOString().slice(0, 7); // YYYY-MM
       const redisKey = `workspace:${workspaceId}:cost:month:${monthKey}`;
 
-      await this.redisService.increment(redisKey, cost);
+      // Increment counter
+      const newValue = await this.redisService.increment(redisKey, cost);
 
-      // Set TTL to end of month + 7 days
-      const endOfMonth = new Date();
-      endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
-      endOfMonth.setHours(23, 59, 59, 999);
-      const ttlSeconds = Math.floor(
-        (endOfMonth.getTime() + 7 * 24 * 60 * 60 * 1000 - Date.now()) / 1000,
-      );
+      // Set TTL only if this is the first write (value equals cost)
+      // This avoids redundant expire calls on every usage record
+      if (newValue !== null && Math.abs(newValue - cost) < 0.000001) {
+        // Calculate TTL: end of current month + 7 days
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        const ttlSeconds = Math.floor(
+          (endOfMonth.getTime() + 7 * 24 * 60 * 60 * 1000 - Date.now()) / 1000,
+        );
 
-      await this.redisService.expire(redisKey, ttlSeconds);
+        await this.redisService.expire(redisKey, ttlSeconds);
+        this.logger.debug(`Set TTL for ${redisKey}: ${ttlSeconds}s`);
+      }
     } catch (error) {
       // Don't fail the request if Redis is down
       this.logger.warn(
@@ -351,17 +385,18 @@ export class UsageService {
   }
 
   /**
-   * Check if date range is current month
+   * Check if date range is within current month
    *
    * @param startDate - Start date
    * @param endDate - End date
-   * @returns True if date range covers current month
+   * @returns True if date range is within current month boundaries
    */
   private isCurrentMonth(startDate: Date, endDate: Date): boolean {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    return startDate <= startOfMonth && endDate >= endOfMonth;
+    // Check if the requested range is within the current month
+    return startDate >= startOfMonth && endDate <= endOfMonth;
   }
 }

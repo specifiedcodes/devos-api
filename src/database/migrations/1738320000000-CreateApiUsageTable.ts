@@ -119,6 +119,14 @@ export class CreateApiUsageTable1738320000000 implements MigrationInterface {
       }),
     );
 
+    await queryRunner.createIndex(
+      'api_usage',
+      new TableIndex({
+        name: 'idx_api_usage_agent',
+        columnNames: ['agent_id', 'created_at'],
+      }),
+    );
+
     // Add foreign key constraints
     await queryRunner.createForeignKey(
       'api_usage',

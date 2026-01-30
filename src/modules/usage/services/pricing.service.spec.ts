@@ -86,8 +86,8 @@ describe('PricingService', () => {
         'unknown-model',
       );
 
-      // Should fallback to Claude 3.5 Sonnet pricing
-      expect(pricing.model).toBe('claude-3-5-sonnet-20241022');
+      // Should fallback to Claude Sonnet 4.5 pricing (latest default)
+      expect(pricing.model).toBe('claude-sonnet-4-5-20250929');
       expect(pricing.inputPricePerMillion).toBe(3.0);
     });
 
@@ -224,8 +224,8 @@ describe('PricingService', () => {
 
       await service.refreshAllPricing();
 
-      // Should cache all 4 default models
-      expect(redisService.set).toHaveBeenCalledTimes(4);
+      // Should cache all 6 default models (2 new + 4 legacy)
+      expect(redisService.set).toHaveBeenCalledTimes(6);
 
       // Verify specific cache calls
       expect(redisService.set).toHaveBeenCalledWith(
