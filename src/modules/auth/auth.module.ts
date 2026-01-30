@@ -13,13 +13,14 @@ import { User } from '../../database/entities/user.entity';
 import { BackupCode } from '../../database/entities/backup-code.entity';
 import { AccountDeletion } from '../../database/entities/account-deletion.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
+import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { CleanupService } from './tasks/cleanup.service';
 import { EmailModule } from '../email/email.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User, BackupCode, AccountDeletion, SecurityEvent]),
+    TypeOrmModule.forFeature([User, BackupCode, AccountDeletion, SecurityEvent, WorkspaceMember]),
     PassportModule,
     EmailModule,
     WorkspacesModule,

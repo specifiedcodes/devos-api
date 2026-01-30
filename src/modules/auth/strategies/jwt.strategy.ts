@@ -5,6 +5,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { User } from '../../../database/entities/user.entity';
+import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { RedisService } from '../../redis/redis.service';
 
 @Injectable()
@@ -13,6 +14,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     configService: ConfigService,
     @InjectRepository(User)
     private userRepository: Repository<User>,
+    @InjectRepository(WorkspaceMember)
+    private workspaceMemberRepository: Repository<WorkspaceMember>,
     private redisService: RedisService,
   ) {
     super({
@@ -25,9 +28,9 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(
     request: any,
-    payload: { sub: string; email: string; jti?: string },
+    payload: { sub: string; email: string; jti?: string; workspaceId?: string },
   ): Promise<any> {
-    const { sub: userId, jti } = payload;
+    const { sub: userId, jti, workspaceId } = payload;
 
     // 1. Check if token is revoked by JTI (Story 1.10)
     if (jti) {
@@ -49,13 +52,26 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // 3. Find user by ID from token payload
     const user = await this.userRepository.findOne({
       where: { id: userId },
+      relations: ['currentWorkspace'],
     });
 
     if (!user) {
       throw new UnauthorizedException('User not found');
     }
 
-    // 4. Update session activity (non-blocking)
+    // 4. Validate workspace access if workspaceId in token
+    if (workspaceId) {
+      // Verify user is still member of this workspace
+      const member = await this.workspaceMemberRepository.findOne({
+        where: { userId, workspaceId },
+      });
+
+      if (!member) {
+        throw new UnauthorizedException('No longer a member of this workspace');
+      }
+    }
+
+    // 5. Update session activity (non-blocking)
     if (jti) {
       // Don't await to avoid blocking request
       this.updateSessionActivity(userId, jti).catch((error) => {
@@ -63,8 +79,13 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       });
     }
 
-    // 5. Return user object with JTI (attached to request.user)
-    return { userId, jti, ...user };
+    // 6. Return user object with workspace context and JTI (attached to request.user)
+    return {
+      userId,
+      jti,
+      workspaceId: workspaceId || user.currentWorkspaceId,
+      ...user,
+    };
   }
 
   private async updateSessionActivity(

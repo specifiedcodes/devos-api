@@ -24,6 +24,8 @@ describe('WorkspacesService', () => {
     workspaceMembers: [],
     lastLoginAt: null,
     deletedAt: null,
+    currentWorkspaceId: null,
+    currentWorkspace: null,
     backupCodes: [],
   };
 

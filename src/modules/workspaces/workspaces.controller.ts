@@ -8,6 +8,7 @@ import {
   Param,
   Request,
   UseGuards,
+  HttpCode,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -36,6 +37,44 @@ export class WorkspacesController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getUserWorkspaces(@Request() req: any): Promise<WorkspaceResponseDto[]> {
     return this.workspacesService.getUserWorkspaces(req.user.id);
+  }
+
+  @Post(':id/switch')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Switch to a different workspace' })
+  @ApiResponse({
+    status: 200,
+    description: 'Workspace switched successfully',
+    schema: {
+      properties: {
+        workspace: { type: 'object' },
+        tokens: {
+          type: 'object',
+          properties: {
+            access_token: { type: 'string' },
+            refresh_token: { type: 'string' },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Not a member of this workspace' })
+  @ApiResponse({ status: 404, description: 'Workspace not found' })
+  async switchWorkspace(
+    @Param('id') workspaceId: string,
+    @Request() req: any,
+  ): Promise<{
+    workspace: WorkspaceResponseDto;
+    tokens: { access_token: string; refresh_token: string };
+  }> {
+    return this.workspacesService.switchWorkspace(
+      req.user.userId,
+      workspaceId,
+      req.user.jti,
+      req.ip,
+      req.headers['user-agent'] || 'unknown',
+    );
   }
 
   @Post()

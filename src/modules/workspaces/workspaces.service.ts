@@ -1,6 +1,7 @@
-import { Injectable, Logger, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryRunner, DataSource } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
@@ -8,19 +9,26 @@ import { User } from '../../database/entities/user.entity';
 import { SecurityEvent, SecurityEventType } from '../../database/entities/security-event.entity';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { WorkspaceResponseDto } from './dto/workspace-response.dto';
+import { RedisService } from '../redis/redis.service';
 
 @Injectable()
 export class WorkspacesService {
   private readonly logger = new Logger(WorkspacesService.name);
+  private readonly ACCESS_TOKEN_EXPIRY = '24h';
+  private readonly REFRESH_TOKEN_EXPIRY = '30d';
 
   constructor(
     @InjectRepository(Workspace)
     private readonly workspaceRepository: Repository<Workspace>,
     @InjectRepository(WorkspaceMember)
     private readonly workspaceMemberRepository: Repository<WorkspaceMember>,
+    @InjectRepository(User)
+    private readonly userRepository: Repository<User>,
     @InjectRepository(SecurityEvent)
     private readonly securityEventRepository: Repository<SecurityEvent>,
     private readonly dataSource: DataSource,
+    private readonly jwtService: JwtService,
+    private readonly redisService: RedisService,
   ) {}
 
   /**
@@ -270,6 +278,12 @@ export class WorkspacesService {
    */
   async getUserWorkspaces(userId: string): Promise<WorkspaceResponseDto[]> {
     try {
+      // Get user's current workspace
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        select: ['currentWorkspaceId'],
+      });
+
       // Query to get all workspaces for the user with role and counts
       const workspaces = await this.workspaceRepository
         .createQueryBuilder('workspace')
@@ -318,6 +332,7 @@ export class WorkspacesService {
             projectCount,
             memberCount,
             createdAt: workspace.createdAt,
+            isCurrentWorkspace: workspace.id === user?.currentWorkspaceId,
           };
         }),
       );
@@ -544,6 +559,196 @@ export class WorkspacesService {
         error instanceof Error ? error.stack : String(error),
       );
       throw new InternalServerErrorException('Failed to delete workspace');
+    }
+  }
+
+  /**
+   * Switch user to a different workspace
+   * @param userId - User ID performing the switch
+   * @param targetWorkspaceId - Workspace ID to switch to
+   * @param currentJti - Current session JTI
+   * @param ipAddress - User's IP address
+   * @param userAgent - User's user agent
+   * @returns New tokens and workspace information
+   */
+  async switchWorkspace(
+    userId: string,
+    targetWorkspaceId: string,
+    currentJti: string,
+    ipAddress: string,
+    userAgent: string,
+  ): Promise<{
+    workspace: WorkspaceResponseDto;
+    tokens: { access_token: string; refresh_token: string };
+  }> {
+    try {
+      // 1. Verify workspace exists
+      const workspace = await this.workspaceRepository.findOne({
+        where: { id: targetWorkspaceId },
+        withDeleted: false,
+      });
+
+      if (!workspace) {
+        throw new NotFoundException('Workspace not found');
+      }
+
+      // 2. Verify user is member of target workspace
+      const membership = await this.workspaceMemberRepository.findOne({
+        where: { userId, workspaceId: targetWorkspaceId },
+      });
+
+      if (!membership) {
+        throw new ForbiddenException('You are not a member of this workspace');
+      }
+
+      // 3. Get user data
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      // Store old workspace ID for logging
+      const oldWorkspaceId = user.currentWorkspaceId;
+
+      // 4. Update user's current workspace in database
+      await this.userRepository.update(userId, {
+        currentWorkspaceId: targetWorkspaceId,
+      });
+
+      // 5. Find current session and update workspace_id
+      const sessionKeys = await this.redisService.keys(`session:${userId}:*`);
+      for (const key of sessionKeys) {
+        const sessionData = await this.redisService.get(key);
+        if (sessionData) {
+          const session = JSON.parse(sessionData);
+          if (session.access_token_jti === currentJti || session.refresh_token_jti === currentJti) {
+            // Update session with new workspace_id
+            session.workspace_id = targetWorkspaceId;
+            const ttlSeconds = Math.floor(
+              (new Date(session.expires_at).getTime() - Date.now()) / 1000,
+            );
+            if (ttlSeconds > 0) {
+              await this.redisService.set(key, JSON.stringify(session), ttlSeconds);
+            }
+            break;
+          }
+        }
+      }
+
+      // 6. Generate NEW tokens with updated workspace_id in payload
+      const accessTokenJti = uuidv4();
+      const refreshTokenJti = uuidv4();
+
+      const accessPayload = {
+        sub: userId,
+        email: user.email,
+        jti: accessTokenJti,
+        workspaceId: targetWorkspaceId,
+      };
+
+      const accessToken = this.jwtService.sign(accessPayload, {
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
+      });
+
+      const refreshPayload = {
+        sub: userId,
+        jti: refreshTokenJti,
+        workspaceId: targetWorkspaceId,
+      };
+
+      const refreshToken = this.jwtService.sign(refreshPayload, {
+        expiresIn: this.REFRESH_TOKEN_EXPIRY,
+      });
+
+      // 7. Create new session with new workspace context
+      const sessionId = uuidv4();
+      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+      const newSession = {
+        session_id: sessionId,
+        user_id: userId,
+        workspace_id: targetWorkspaceId,
+        access_token_jti: accessTokenJti,
+        refresh_token_jti: refreshTokenJti,
+        created_at: new Date(),
+        expires_at: expiresAt,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        last_active: new Date(),
+      };
+
+      const ttlSeconds = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
+      await this.redisService.set(
+        `session:${userId}:${sessionId}`,
+        JSON.stringify(newSession),
+        ttlSeconds,
+      );
+
+      // 8. Log security event
+      try {
+        const securityEvent = this.securityEventRepository.create({
+          user_id: userId,
+          email: user.email,
+          event_type: SecurityEventType.WORKSPACE_SWITCHED,
+          ip_address: ipAddress,
+          user_agent: userAgent,
+          metadata: {
+            from_workspace_id: oldWorkspaceId,
+            to_workspace_id: targetWorkspaceId,
+            timestamp: new Date().toISOString(),
+          },
+        } as any);
+        await this.securityEventRepository.save(securityEvent);
+      } catch (logError) {
+        this.logger.error('Failed to log workspace switch event', logError);
+      }
+
+      this.logger.log(`User ${userId} switched from workspace ${oldWorkspaceId} to ${targetWorkspaceId}`);
+
+      // 9. Get project count and member count for response
+      let projectCount = 0;
+      try {
+        const result = await this.dataSource.query(
+          `SELECT COUNT(*)::int as count FROM "${workspace.schemaName}".projects WHERE status = 'active'`,
+        );
+        projectCount = result[0]?.count || 0;
+      } catch (error) {
+        this.logger.warn(`Failed to get project count for workspace ${targetWorkspaceId}`);
+        projectCount = 0;
+      }
+
+      const memberCount = await this.workspaceMemberRepository.count({
+        where: { workspaceId: targetWorkspaceId },
+      });
+
+      return {
+        workspace: {
+          id: workspace.id,
+          name: workspace.name,
+          description: workspace.description,
+          role: membership.role,
+          projectCount,
+          memberCount,
+          createdAt: workspace.createdAt,
+          isCurrentWorkspace: true,
+        },
+        tokens: {
+          access_token: accessToken,
+          refresh_token: refreshToken,
+        },
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof ForbiddenException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Failed to switch workspace for user ${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException('Failed to switch workspace');
     }
   }
 }

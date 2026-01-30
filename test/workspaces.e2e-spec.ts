@@ -420,4 +420,144 @@ describe('Workspaces Management (e2e)', () => {
       expect(uniqueIds.size).toBe(5);
     });
   });
+
+  describe('POST /api/v1/workspaces/:id/switch', () => {
+    beforeEach(async () => {
+      // Create a second workspace to switch to
+      const createResponse = await request(app.getHttpServer())
+        .post('/api/v1/workspaces')
+        .set('Authorization', `Bearer ${authToken}`)
+        .send({ name: 'Target Workspace', description: 'Workspace to switch to' })
+        .expect(201);
+
+      secondWorkspaceId = createResponse.body.id;
+    });
+
+    it('should switch workspace and return new tokens', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${secondWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      // Verify response structure
+      expect(response.body).toHaveProperty('workspace');
+      expect(response.body).toHaveProperty('tokens');
+      expect(response.body.workspace.id).toBe(secondWorkspaceId);
+      expect(response.body.workspace.name).toBe('Target Workspace');
+      expect(response.body.workspace.isCurrentWorkspace).toBe(true);
+      expect(response.body.tokens).toHaveProperty('access_token');
+      expect(response.body.tokens).toHaveProperty('refresh_token');
+
+      // Verify new tokens are different from old token
+      expect(response.body.tokens.access_token).not.toBe(authToken);
+
+      // Verify user's currentWorkspaceId was updated in database
+      const user = await dataSource.getRepository(User).findOne({
+        where: { id: userId },
+      });
+      expect(user!.currentWorkspaceId).toBe(secondWorkspaceId);
+    });
+
+    it('should include workspace_id in new JWT payload', async () => {
+      const response = await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${secondWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const newToken = response.body.tokens.access_token;
+
+      // Decode JWT to verify workspace_id
+      const base64Payload = newToken.split('.')[1];
+      const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString());
+      expect(payload).toHaveProperty('workspaceId', secondWorkspaceId);
+    });
+
+    it('should return 401 if not authenticated', async () => {
+      await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${secondWorkspaceId}/switch`)
+        .expect(401);
+    });
+
+    it('should return 403 if not member of target workspace', async () => {
+      // Create another user
+      const otherUserResponse = await request(app.getHttpServer())
+        .post('/api/auth/register')
+        .send({
+          email: `other-${Date.now()}@example.com`,
+          password: 'SecurePass123!',
+          passwordConfirmation: 'SecurePass123!',
+        })
+        .expect(201);
+
+      const otherUserToken = otherUserResponse.body.tokens.access_token;
+
+      // Try to switch to a workspace the other user is not a member of
+      await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${testWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${otherUserToken}`)
+        .expect(403);
+    });
+
+    it('should return 404 if workspace does not exist', async () => {
+      const fakeId = '00000000-0000-0000-0000-000000000000';
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${fakeId}/switch`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(404);
+    });
+
+    it('should handle switching back to original workspace', async () => {
+      // First switch to second workspace
+      const firstSwitch = await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${secondWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const newToken = firstSwitch.body.tokens.access_token;
+
+      // Switch back to original workspace
+      const secondSwitch = await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${testWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${newToken}`)
+        .expect(200);
+
+      expect(secondSwitch.body.workspace.id).toBe(testWorkspaceId);
+
+      // Verify user's currentWorkspaceId was updated back
+      const user = await dataSource.getRepository(User).findOne({
+        where: { id: userId },
+      });
+      expect(user!.currentWorkspaceId).toBe(testWorkspaceId);
+    });
+
+    it('should update getUserWorkspaces to reflect current workspace', async () => {
+      // Switch to second workspace
+      await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${secondWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      // Get workspaces list with new token (need to get it first)
+      const switchResponse = await request(app.getHttpServer())
+        .post(`/api/v1/workspaces/${secondWorkspaceId}/switch`)
+        .set('Authorization', `Bearer ${authToken}`)
+        .expect(200);
+
+      const newToken = switchResponse.body.tokens.access_token;
+
+      const workspacesList = await request(app.getHttpServer())
+        .get('/api/v1/workspaces')
+        .set('Authorization', `Bearer ${newToken}`)
+        .expect(200);
+
+      // Find the second workspace and verify it's marked as current
+      const currentWorkspace = workspacesList.body.find((w: any) => w.id === secondWorkspaceId);
+      expect(currentWorkspace.isCurrentWorkspace).toBe(true);
+
+      // Verify the first workspace is NOT marked as current
+      const firstWorkspace = workspacesList.body.find((w: any) => w.id === testWorkspaceId);
+      expect(firstWorkspace.isCurrentWorkspace).toBe(false);
+    });
+  });
 });

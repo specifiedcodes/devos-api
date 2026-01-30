@@ -18,7 +18,7 @@ import { User } from '../../database/entities/user.entity';
 import { BackupCode } from '../../database/entities/backup-code.entity';
 import { AccountDeletion } from '../../database/entities/account-deletion.entity';
 import { Workspace } from '../../database/entities/workspace.entity';
-import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import {
   SecurityEvent,
   SecurityEventType,
@@ -51,6 +51,8 @@ export class AuthService {
     private accountDeletionRepository: Repository<AccountDeletion>,
     @InjectRepository(SecurityEvent)
     private securityEventRepository: Repository<SecurityEvent>,
+    @InjectRepository(WorkspaceMember)
+    private workspaceMemberRepository: Repository<WorkspaceMember>,
     private jwtService: JwtService,
     private dataSource: DataSource,
     private redisService: RedisService,
@@ -332,6 +334,10 @@ export class AuthService {
         queryRunner
       );
 
+      // 7a. Set user's current workspace to the newly created workspace
+      savedUser.currentWorkspaceId = workspace.id;
+      await queryRunner.manager.save(savedUser);
+
       // 8. Commit transaction
       await queryRunner.commitTransaction();
 
@@ -339,8 +345,8 @@ export class AuthService {
         `User registered successfully: ${savedUser.id} (${normalizedEmail}) with workspace: ${workspace.id}`,
       );
 
-      // 9. Generate JWT tokens with session
-      const tokens = await this.generateTokens(savedUser, ipAddress, userAgent);
+      // 9. Generate JWT tokens with session (including workspace_id)
+      const tokens = await this.generateTokens(savedUser, ipAddress, userAgent, workspace.id);
 
       // 9a. Log successful registration security event
       await this.logSecurityEvent({
@@ -384,9 +390,10 @@ export class AuthService {
     ipAddress: string,
     userAgent: string,
   ): Promise<AuthResponseDto | { requires_2fa: true; temp_token: string; backup_codes_remaining?: number }> {
-    // 1. Find user by email (case-insensitive)
+    // 1. Find user by email (case-insensitive) with workspace relations
     const user = await this.userRepository.findOne({
       where: { email: loginDto.email.toLowerCase() },
+      relations: ['currentWorkspace', 'workspaceMembers'],
     });
 
     // 2. If user doesn't exist, throw generic error (don't reveal which field is wrong)
@@ -476,10 +483,33 @@ export class AuthService {
       };
     }
 
-    // 5. If no 2FA, proceed with standard JWT flow (existing Story 1.4 logic)
-    const tokens = await this.generateTokens(user, ipAddress, userAgent);
+    // 5. Determine workspace for this session
+    let workspaceId = user.currentWorkspaceId;
 
-    // 6. Update last_login_at timestamp atomically after successful token generation
+    if (!workspaceId) {
+      // First login or currentWorkspaceId is null - get user's first workspace
+      const firstMembership = await this.workspaceMemberRepository.findOne({
+        where: { userId: user.id },
+        order: { createdAt: 'ASC' },
+      });
+
+      if (firstMembership) {
+        workspaceId = firstMembership.workspaceId;
+        // Update user's currentWorkspaceId for future logins
+        await this.userRepository.update(user.id, {
+          currentWorkspaceId: workspaceId,
+        });
+        user.currentWorkspaceId = workspaceId;
+      } else {
+        this.logger.error(`User ${user.id} has no workspaces - this should not happen`);
+        throw new InternalServerErrorException('User has no workspaces');
+      }
+    }
+
+    // 6. If no 2FA, proceed with standard JWT flow with workspace context
+    const tokens = await this.generateTokens(user, ipAddress, userAgent, workspaceId);
+
+    // 7. Update last_login_at timestamp atomically after successful token generation
     // Use try-catch to ensure we still return tokens even if timestamp update fails
     try {
       await this.userRepository.update(user.id, {
@@ -496,21 +526,22 @@ export class AuthService {
       );
     }
 
-    // 7. Log successful login (for security monitoring)
+    // 8. Log successful login (for security monitoring)
     this.logger.log(
-      `Successful login for user ${user.id} (${user.email}) from IP: ${ipAddress}, User-Agent: ${userAgent}`,
+      `Successful login for user ${user.id} (${user.email}) from IP: ${ipAddress}, User-Agent: ${userAgent}, Workspace: ${workspaceId}`,
     );
 
-    // 7a. Log successful login security event
+    // 8a. Log successful login security event
     await this.logSecurityEvent({
       user_id: user.id,
       email: user.email,
       event_type: SecurityEventType.LOGIN_SUCCESS,
       ip_address: ipAddress,
       user_agent: userAgent,
+      metadata: { workspace_id: workspaceId },
     });
 
-    // 7b. Detect login anomalies (new country, etc.) - non-blocking
+    // 8b. Detect login anomalies (new country, etc.) - non-blocking
     this.anomalyDetectionService
       .detectLoginAnomaly(user.id, ipAddress, user.email)
       .catch((error) => {
@@ -520,7 +551,7 @@ export class AuthService {
         );
       });
 
-    // 8. Return formatted response
+    // 9. Return formatted response
     return {
       user: {
         id: user.id,
@@ -539,9 +570,12 @@ export class AuthService {
     user: User,
     ipAddress?: string,
     userAgent?: string,
+    workspaceId?: string,
   ): Promise<{
     accessToken: string;
     refreshToken: string;
+    accessTokenJti: string;
+    refreshTokenJti: string;
   }> {
     // Generate unique JTIs for both tokens
     const accessTokenJti = uuidv4();
@@ -551,6 +585,7 @@ export class AuthService {
       sub: user.id,
       email: user.email,
       jti: accessTokenJti,
+      workspaceId: workspaceId || user.currentWorkspaceId,
       // Note: iat (issued at) and exp (expiry) are added automatically by JWT service
     };
 
@@ -561,6 +596,7 @@ export class AuthService {
     const refreshPayload = {
       sub: user.id,
       jti: refreshTokenJti,
+      workspaceId: workspaceId || user.currentWorkspaceId,
     };
 
     const refreshToken = this.jwtService.sign(refreshPayload, {
@@ -572,6 +608,7 @@ export class AuthService {
       const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
       await this.createSession(
         user.id,
+        workspaceId || user.currentWorkspaceId || '',
         accessTokenJti,
         refreshTokenJti,
         ipAddress,
@@ -580,7 +617,7 @@ export class AuthService {
       );
     }
 
-    return { accessToken, refreshToken };
+    return { accessToken, refreshToken, accessTokenJti, refreshTokenJti };
   }
 
   async refreshAccessToken(refreshToken: string): Promise<AuthResponseDto> {
@@ -906,11 +943,31 @@ export class AuthService {
     // 6. Delete temp token IMMEDIATELY (prevent replay attacks)
     await this.redisService.deleteTempToken(tempToken);
 
-    // 7. Generate JWT tokens (if this fails after deleting temp token, user must re-login)
+    // 6a. Determine workspace for this session (same logic as login)
+    let workspaceId = user.currentWorkspaceId;
+
+    if (!workspaceId) {
+      const firstMembership = await this.workspaceMemberRepository.findOne({
+        where: { userId: user.id },
+        order: { createdAt: 'ASC' },
+      });
+
+      if (firstMembership) {
+        workspaceId = firstMembership.workspaceId;
+        await this.userRepository.update(user.id, {
+          currentWorkspaceId: workspaceId,
+        });
+      } else {
+        throw new InternalServerErrorException('User has no workspaces');
+      }
+    }
+
+    // 7. Generate JWT tokens with workspace context
     const tokens = await this.generateTokens(
       user,
       tokenData.ip_address,
       tokenData.user_agent,
+      workspaceId,
     );
 
     // 8. Update last login timestamp (non-critical, don't fail if this fails)
@@ -938,6 +995,7 @@ export class AuthService {
       event_type: SecurityEventType.TWO_FACTOR_VERIFIED,
       ip_address: tokenData.ip_address,
       user_agent: tokenData.user_agent,
+      metadata: { workspace_id: workspaceId },
     });
 
     return {
@@ -1010,11 +1068,31 @@ export class AuthService {
     // 6. Delete temp token IMMEDIATELY (prevent replay attacks)
     await this.redisService.deleteTempToken(tempToken);
 
-    // 7. Generate JWT tokens (if this fails after deleting temp token, user must re-login)
+    // 6a. Determine workspace for this session (same logic as login)
+    let workspaceId = user.currentWorkspaceId;
+
+    if (!workspaceId) {
+      const firstMembership = await this.workspaceMemberRepository.findOne({
+        where: { userId: user.id },
+        order: { createdAt: 'ASC' },
+      });
+
+      if (firstMembership) {
+        workspaceId = firstMembership.workspaceId;
+        await this.userRepository.update(user.id, {
+          currentWorkspaceId: workspaceId,
+        });
+      } else {
+        throw new InternalServerErrorException('User has no workspaces');
+      }
+    }
+
+    // 7. Generate JWT tokens with workspace context
     const tokens = await this.generateTokens(
       user,
       tokenData.ip_address,
       tokenData.user_agent,
+      workspaceId,
     );
 
     // 8. Update last login timestamp (non-critical, don't fail if this fails)
@@ -1042,7 +1120,7 @@ export class AuthService {
       event_type: SecurityEventType.TWO_FACTOR_VERIFIED,
       ip_address: tokenData.ip_address,
       user_agent: tokenData.user_agent,
-      metadata: { backup_code_used: true },
+      metadata: { backup_code_used: true, workspace_id: workspaceId },
     });
 
     // 10. Check remaining backup codes and warn user
@@ -1192,6 +1270,7 @@ export class AuthService {
    */
   async createSession(
     userId: string,
+    workspaceId: string,
     accessTokenJti: string,
     refreshTokenJti: string,
     ipAddress: string,
@@ -1202,6 +1281,7 @@ export class AuthService {
     const session: Session = {
       session_id: sessionId,
       user_id: userId,
+      workspace_id: workspaceId,
       access_token_jti: accessTokenJti,
       refresh_token_jti: refreshTokenJti,
       created_at: new Date(),
@@ -1225,7 +1305,7 @@ export class AuthService {
       event_type: SecurityEventType.SESSION_CREATED,
       ip_address: ipAddress,
       user_agent: userAgent,
-      metadata: { session_id: sessionId },
+      metadata: { session_id: sessionId, workspace_id: workspaceId },
     });
 
     return sessionId;

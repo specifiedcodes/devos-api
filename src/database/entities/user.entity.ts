@@ -5,10 +5,13 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   OneToMany,
+  ManyToOne,
+  JoinColumn,
   Index,
 } from 'typeorm';
 import { IsEmail, IsNotEmpty, IsBoolean, IsOptional } from 'class-validator';
 import { WorkspaceMember } from './workspace-member.entity';
+import { Workspace } from './workspace.entity';
 import { BackupCode } from './backup-code.entity';
 
 @Entity('users')
@@ -47,6 +50,15 @@ export class User {
   @Index()
   @IsOptional()
   deletedAt!: Date | null;
+
+  @Column({ type: 'uuid', nullable: true, name: 'current_workspace_id' })
+  @Index()
+  @IsOptional()
+  currentWorkspaceId!: string | null;
+
+  @ManyToOne(() => Workspace, { nullable: true })
+  @JoinColumn({ name: 'current_workspace_id' })
+  currentWorkspace!: Workspace | null;
 
   @OneToMany(() => WorkspaceMember, (member) => member.user)
   workspaceMembers!: WorkspaceMember[];
