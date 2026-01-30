@@ -7,6 +7,7 @@ import { UsageTrackingService } from './services/usage-tracking.service';
 import { UsageService } from './services/usage.service';
 import { PricingService } from './services/pricing.service';
 import { SpendingAlertService } from './services/spending-alert.service';
+import { CsvExportService } from './services/csv-export.service';
 import { SpendingAlertJob } from './jobs/spending-alert.job';
 import { UsageV2Controller } from './controllers/usage-v2.controller';
 import { RedisModule } from '../redis/redis.module';
@@ -27,6 +28,7 @@ import { EmailModule } from '../email/email.module';
     UsageService,
     PricingService,
     SpendingAlertService,
+    CsvExportService,
     SpendingAlertJob,
   ],
   controllers: [UsageV2Controller],

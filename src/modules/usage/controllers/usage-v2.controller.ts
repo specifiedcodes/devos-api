@@ -8,10 +8,15 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
+  Header,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { UsageService } from '../services/usage.service';
+import { CsvExportService } from '../services/csv-export.service';
 import { RecordUsageDto } from '../dto/record-usage.dto';
 import { UsageQueryDto } from '../dto/usage-query.dto';
+import { ExportUsageDto } from '../dto/export-usage.dto';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 
 /**
@@ -21,7 +26,10 @@ import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.gu
 @Controller('api/v1/workspaces/:workspaceId/usage')
 @UseGuards(WorkspaceAccessGuard)
 export class UsageV2Controller {
-  constructor(private readonly usageService: UsageService) {}
+  constructor(
+    private readonly usageService: UsageService,
+    private readonly csvExportService: CsvExportService,
+  ) {}
 
   /**
    * Record API usage transaction
@@ -156,6 +164,53 @@ export class UsageV2Controller {
     }
 
     return this.usageService.getDailyUsage(workspaceId, daysToQuery);
+  }
+
+  /**
+   * Export usage data as CSV
+   * GET /api/v1/workspaces/:workspaceId/usage/export?startDate=2024-01-01&endDate=2024-01-31
+   *
+   * @param workspaceId - Workspace ID
+   * @param query - Export query parameters with date range
+   * @param res - Express response object for streaming
+   * @returns CSV file stream
+   */
+  @Get('export')
+  @Header('Content-Type', 'text/csv')
+  async exportUsageData(
+    @Param('workspaceId') workspaceId: string,
+    @Query() query: ExportUsageDto,
+    @Res() res: Response,
+  ) {
+    const startDate = new Date(query.startDate);
+    const endDate = new Date(query.endDate);
+
+    // Set filename with date range
+    const filename = `usage-export-${query.startDate}-to-${query.endDate}.csv`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+
+    // Get estimated row count for logging
+    const estimatedRows = await this.csvExportService.getEstimatedRowCount(
+      workspaceId,
+      startDate,
+      endDate,
+    );
+
+    if (estimatedRows === 0) {
+      // Return empty CSV with headers
+      res.send('Timestamp,Provider,Model,Project,Input Tokens,Output Tokens,Cost (USD),Agent ID\n');
+      return;
+    }
+
+    // Generate and stream CSV
+    const csvStream = await this.csvExportService.generateCsvStream(
+      workspaceId,
+      startDate,
+      endDate,
+    );
+
+    // Pipe CSV stream to response
+    csvStream.pipe(res);
   }
 
   /**
