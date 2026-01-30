@@ -464,13 +464,13 @@ export class AuthService {
             {
               reason: 'invalid_password',
               email: user.email,
+              ipAddress,
+              userAgent,
             },
-            ipAddress,
-            userAgent,
           );
         } catch (error) {
           // Don't fail login flow if audit logging fails
-          this.logger.error(`Failed to log LOGIN_FAILED audit event: ${error.message}`);
+          this.logger.error(`Failed to log LOGIN_FAILED audit event: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
       }
 

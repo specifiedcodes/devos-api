@@ -16,6 +16,11 @@ export enum AuditAction {
   // Workspace settings (existing)
   WORKSPACE_SETTINGS_UPDATED = 'workspace_settings_updated',
 
+  // Generic actions
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+
   // Member actions (NEW - Task 3.1)
   MEMBER_INVITED = 'member_invited',
   MEMBER_REMOVED = 'member_removed',

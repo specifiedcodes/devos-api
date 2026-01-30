@@ -14,6 +14,8 @@ import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { BYOKModule } from './modules/byok/byok.module';
 import { UsageModule } from './modules/usage/usage.module';
+import { WorkspaceSettingsModule } from './modules/workspace-settings/workspace-settings.module';
+import { NotificationModule } from './modules/notification/notification.module';
 import { User } from './database/entities/user.entity';
 import { Workspace } from './database/entities/workspace.entity';
 import { WorkspaceMember } from './database/entities/workspace-member.entity';
@@ -26,6 +28,7 @@ import { WorkspaceInvitation } from './database/entities/workspace-invitation.en
 import { BYOKKey } from './database/entities/byok-key.entity';
 import { UsageRecord } from './database/entities/usage-record.entity';
 import { WorkspaceSettings } from './database/entities/workspace-settings.entity';
+import { Notification } from './database/entities/notification.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -56,6 +59,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         BYOKKey,
         UsageRecord,
         WorkspaceSettings,
+        Notification,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -69,6 +73,8 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     ProjectsModule,
     BYOKModule,
     UsageModule,
+    WorkspaceSettingsModule,
+    NotificationModule,
   ],
   controllers: [AppController],
   providers: [

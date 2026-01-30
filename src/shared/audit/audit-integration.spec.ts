@@ -331,9 +331,11 @@ describe('Audit Service Integration Tests', () => {
         AuditAction.PROJECT_CREATED,
         'project',
         'project-1',
-        { name: 'Test Project' },
-        '192.168.1.1',
-        'Mozilla/5.0',
+        {
+          name: 'Test Project',
+          ipAddress: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+        },
       );
 
       const csv = await auditService.exportAuditLogsToCSV(workspaceA, {});

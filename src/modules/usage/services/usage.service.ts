@@ -4,8 +4,7 @@ import { Repository } from 'typeorm';
 import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.entity';
 import { PricingService } from './pricing.service';
 import { RedisService } from '../../../modules/redis/redis.service';
-import { AuditService } from '../../../shared/audit/audit.service';
-import { AuditAction } from '../../../database/entities/audit-log.entity';
+import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
 
 /**
  * Usage summary response interface
@@ -418,6 +417,38 @@ export class UsageService {
       totalOutputTokens: parseInt(result.totalOutputTokens || '0', 10),
       totalRequests: parseInt(result.totalRequests || '0', 10),
     };
+  }
+
+  /**
+   * Get current month spend for a workspace
+   * Used by Story 3.5 spending limits feature
+   *
+   * @param workspaceId - Workspace ID
+   * @returns Total spend for current month
+   */
+  async getCurrentMonthSpend(workspaceId: string): Promise<number> {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    // Try Redis first for real-time cost
+    const redisTotal = await this.getMonthlyTotalFromRedis(workspaceId);
+    if (redisTotal !== null) {
+      return redisTotal;
+    }
+
+    // Fallback to database query
+    const result = await this.apiUsageRepository
+      .createQueryBuilder('usage')
+      .select('SUM(usage.cost_usd)', 'totalCost')
+      .where('usage.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('usage.created_at BETWEEN :startOfMonth AND :endOfMonth', {
+        startOfMonth,
+        endOfMonth,
+      })
+      .getRawOne();
+
+    return parseFloat(result.totalCost || '0');
   }
 
   /**

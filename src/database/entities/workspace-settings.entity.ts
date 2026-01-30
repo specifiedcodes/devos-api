@@ -55,6 +55,23 @@ export class WorkspaceSettings {
     secondaryColor?: string;
   };
 
+  // Spending limits (Story 3.5)
+  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, name: 'monthly_limit_usd' })
+  @IsOptional()
+  monthlyLimitUsd?: number;
+
+  @Column({ type: 'integer', array: true, nullable: true, name: 'alert_thresholds', default: () => "ARRAY[80, 90, 100]" })
+  @IsOptional()
+  alertThresholds?: number[];
+
+  @Column({ type: 'boolean', default: false, name: 'limit_enabled' })
+  limitEnabled!: boolean;
+
+  @Column({ type: 'jsonb', default: {}, name: 'triggered_alerts' })
+  @IsJSON()
+  @IsOptional()
+  triggeredAlerts?: Record<string, any>;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;
 
