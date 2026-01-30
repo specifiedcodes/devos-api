@@ -9,6 +9,8 @@ import {
   Req,
   HttpCode,
   HttpStatus,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard } from '../../../common/guards/role.guard';
@@ -17,11 +19,16 @@ import { Roles } from '../../../common/decorators/roles.decorator';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { BYOKKeyService } from '../services/byok-key.service';
 import { CreateBYOKKeyDto } from '../dto/create-byok-key.dto';
+import { UsageService } from '../../usage/services/usage.service';
 
 @Controller('api/v1/workspaces/:workspaceId/byok-keys')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard)
 export class BYOKKeyController {
-  constructor(private readonly byokKeyService: BYOKKeyService) {}
+  constructor(
+    private readonly byokKeyService: BYOKKeyService,
+    @Inject(forwardRef(() => UsageService))
+    private readonly usageService: UsageService,
+  ) {}
 
   /**
    * Create a new BYOK key
@@ -76,7 +83,7 @@ export class BYOKKeyController {
 
   /**
    * Get usage statistics for a specific BYOK key
-   * Stub endpoint for Story 3.3
+   * Integrated with Story 3.3 real-time cost tracking
    */
   @Get(':keyId/usage')
   async getKeyUsage(
@@ -84,21 +91,28 @@ export class BYOKKeyController {
     @Param('keyId') keyId: string,
   ) {
     // Verify the key exists and belongs to the workspace
-    await this.byokKeyService.getKeyById(keyId, workspaceId);
+    const key = await this.byokKeyService.getKeyById(keyId, workspaceId);
 
-    // Return stub data for now - will be implemented in Story 3.3
+    // Get usage data from Story 3.3 UsageService
+    const usage = await this.usageService.getKeyUsage(keyId, workspaceId);
+
+    // Calculate current month period
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
     return {
       keyId,
+      keyName: key.keyName,
+      provider: key.provider,
       workspaceId,
-      totalRequests: 0,
-      totalTokens: 0,
-      estimatedCost: 0,
-      lastUsedAt: null,
+      totalRequests: usage.requests,
+      totalCost: usage.cost,
+      lastUsedAt: key.lastUsedAt,
       period: {
-        start: new Date(),
-        end: new Date(),
+        start: startOfMonth,
+        end: endOfMonth,
       },
-      message: 'Usage tracking will be available in Story 3.3',
     };
   }
 }

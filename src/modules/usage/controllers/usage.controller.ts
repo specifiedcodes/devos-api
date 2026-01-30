@@ -27,22 +27,21 @@ export class UsageController {
   @Get()
   async getWorkspaceUsage(
     @Param('workspaceId') workspaceId: string,
+    @Req() req: any,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Query('groupBy') groupBy?: 'project' | 'agent' | 'model',
-    @Req() req: any,
   ) {
     // Validate workspace access (req.user should be set by auth middleware)
     this.validateWorkspaceAccess(req, workspaceId);
 
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
+    const now = new Date();
+    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    return this.usageTrackingService.getUsageSummary(
+    return this.usageTrackingService.getWorkspaceUsage(
       workspaceId,
       start,
       end,
-      groupBy,
     );
   }
 
@@ -54,21 +53,20 @@ export class UsageController {
   async getProjectUsage(
     @Param('workspaceId') workspaceId: string,
     @Param('projectId') projectId: string,
+    @Req() req: any,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Req() req: any,
   ) {
     this.validateWorkspaceAccess(req, workspaceId);
 
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
+    const now = new Date();
+    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    return this.usageTrackingService.getUsageSummary(
+    return this.usageTrackingService.getWorkspaceUsage(
       workspaceId,
       start,
       end,
-      'project',
-      projectId,
     );
   }
 
@@ -80,21 +78,20 @@ export class UsageController {
   async getAgentUsage(
     @Param('workspaceId') workspaceId: string,
     @Param('agentId') agentId: string,
+    @Req() req: any,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Req() req: any,
   ) {
     this.validateWorkspaceAccess(req, workspaceId);
 
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
+    const now = new Date();
+    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    return this.usageTrackingService.getUsageSummary(
+    return this.usageTrackingService.getWorkspaceUsage(
       workspaceId,
       start,
       end,
-      'agent',
-      agentId,
     );
   }
 
@@ -105,17 +102,18 @@ export class UsageController {
   @Get('export')
   async exportUsageCSV(
     @Param('workspaceId') workspaceId: string,
+    @Req() req: any,
+    @Res() res: Response,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
-    @Res() res: Response,
-    @Req() req: any,
   ) {
     this.validateWorkspaceAccess(req, workspaceId);
 
-    const start = startDate ? new Date(startDate) : undefined;
-    const end = endDate ? new Date(endDate) : undefined;
+    const now = new Date();
+    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = endDate ? new Date(endDate) : new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-    const csvContent = await this.usageTrackingService.exportUsageToCSV(
+    const csvContent = await this.usageTrackingService.exportUsage(
       workspaceId,
       start,
       end,
@@ -135,8 +133,8 @@ export class UsageController {
   @Get('trends')
   async getUsageTrends(
     @Param('workspaceId') workspaceId: string,
-    @Query('days') days?: string,
     @Req() req: any,
+    @Query('days') days?: string,
   ) {
     this.validateWorkspaceAccess(req, workspaceId);
 
@@ -145,7 +143,7 @@ export class UsageController {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - numDays);
 
-    return this.usageTrackingService.getUsageSummary(
+    return this.usageTrackingService.getWorkspaceUsage(
       workspaceId,
       startDate,
       endDate,

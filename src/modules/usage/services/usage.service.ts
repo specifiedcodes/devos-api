@@ -1,0 +1,367 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository, Between } from 'typeorm';
+import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.entity';
+import { PricingService } from './pricing.service';
+import { RedisService } from '../../../modules/redis/redis.service';
+
+/**
+ * Usage summary response interface
+ */
+export interface UsageSummary {
+  totalCost: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalRequests: number;
+}
+
+/**
+ * Project usage breakdown item
+ */
+export interface ProjectUsageItem {
+  projectId: string | null;
+  cost: number;
+  requests: number;
+}
+
+/**
+ * Model usage breakdown item
+ */
+export interface ModelUsageItem {
+  model: string;
+  cost: number;
+  requests: number;
+}
+
+/**
+ * Service for tracking and querying API usage with real-time cost calculation
+ *
+ * Features:
+ * - Records individual API usage transactions
+ * - Calculates costs using PricingService
+ * - Maintains Redis counters for real-time monthly costs
+ * - Provides aggregation queries for dashboards
+ */
+@Injectable()
+export class UsageService {
+  private readonly logger = new Logger(UsageService.name);
+
+  constructor(
+    @InjectRepository(ApiUsage)
+    private readonly apiUsageRepository: Repository<ApiUsage>,
+    private readonly pricingService: PricingService,
+    private readonly redisService: RedisService,
+  ) {}
+
+  /**
+   * Record API usage transaction
+   *
+   * @param workspaceId - Workspace ID
+   * @param projectId - Project ID (optional)
+   * @param provider - AI provider
+   * @param model - Model identifier
+   * @param inputTokens - Number of input tokens
+   * @param outputTokens - Number of output tokens
+   * @param byokKeyId - BYOK key ID (optional)
+   * @param agentId - Agent identifier (optional)
+   * @returns Created ApiUsage record
+   */
+  async recordUsage(
+    workspaceId: string,
+    projectId: string | null,
+    provider: ApiProvider,
+    model: string,
+    inputTokens: number,
+    outputTokens: number,
+    byokKeyId?: string,
+    agentId?: string,
+  ): Promise<ApiUsage> {
+    try {
+      // Get current pricing
+      const pricing = await this.pricingService.getCurrentPricing(
+        provider,
+        model,
+      );
+
+      // Calculate cost
+      const costUsd = this.pricingService.calculateCost(
+        inputTokens,
+        outputTokens,
+        pricing,
+      );
+
+      // Create usage record
+      const usage = this.apiUsageRepository.create({
+        workspaceId,
+        projectId,
+        provider,
+        model,
+        inputTokens,
+        outputTokens,
+        costUsd,
+        byokKeyId,
+        agentId,
+      });
+
+      // Save to database
+      const saved = await this.apiUsageRepository.save(usage);
+
+      // Increment Redis counter for real-time display
+      await this.incrementMonthlyCounter(workspaceId, costUsd);
+
+      this.logger.log(
+        `Recorded usage: workspace=${workspaceId}, cost=$${costUsd}, tokens=${inputTokens}+${outputTokens}`,
+      );
+
+      return saved;
+    } catch (error) {
+      this.logger.error('Failed to record usage', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get workspace usage summary for a date range
+   *
+   * @param workspaceId - Workspace ID
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @returns Usage summary
+   */
+  async getWorkspaceUsageSummary(
+    workspaceId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UsageSummary> {
+    // Try Redis first for current month
+    const isCurrentMonth = this.isCurrentMonth(startDate, endDate);
+    if (isCurrentMonth) {
+      const redisTotal = await this.getMonthlyTotalFromRedis(workspaceId);
+      if (redisTotal !== null) {
+        // Still query database for other metrics
+        const dbMetrics = await this.queryUsageMetrics(
+          workspaceId,
+          startDate,
+          endDate,
+        );
+        return {
+          ...dbMetrics,
+          totalCost: redisTotal, // Use Redis for real-time cost
+        };
+      }
+    }
+
+    // Fallback to database query
+    return this.queryUsageMetrics(workspaceId, startDate, endDate);
+  }
+
+  /**
+   * Get project usage breakdown for a workspace
+   *
+   * @param workspaceId - Workspace ID
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @returns Array of project usage items
+   */
+  async getProjectUsageBreakdown(
+    workspaceId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<ProjectUsageItem[]> {
+    const results = await this.apiUsageRepository
+      .createQueryBuilder('usage')
+      .select('usage.project_id', 'projectId')
+      .addSelect('SUM(usage.cost_usd)', 'cost')
+      .addSelect('COUNT(*)', 'requests')
+      .where('usage.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('usage.created_at BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .groupBy('usage.project_id')
+      .orderBy('SUM(usage.cost_usd)', 'DESC')
+      .getRawMany();
+
+    return results.map((r) => ({
+      projectId: r.projectId,
+      cost: parseFloat(r.cost),
+      requests: parseInt(r.requests, 10),
+    }));
+  }
+
+  /**
+   * Get model usage breakdown for a workspace
+   *
+   * @param workspaceId - Workspace ID
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @returns Array of model usage items
+   */
+  async getModelUsageBreakdown(
+    workspaceId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<ModelUsageItem[]> {
+    const results = await this.apiUsageRepository
+      .createQueryBuilder('usage')
+      .select('usage.model', 'model')
+      .addSelect('SUM(usage.cost_usd)', 'cost')
+      .addSelect('COUNT(*)', 'requests')
+      .where('usage.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('usage.created_at BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .groupBy('usage.model')
+      .orderBy('SUM(usage.cost_usd)', 'DESC')
+      .getRawMany();
+
+    return results.map((r) => ({
+      model: r.model,
+      cost: parseFloat(r.cost),
+      requests: parseInt(r.requests, 10),
+    }));
+  }
+
+  /**
+   * Get usage for a specific BYOK key
+   * Used by Story 3.2 integration
+   *
+   * @param keyId - BYOK key ID
+   * @param workspaceId - Workspace ID
+   * @returns Usage summary for the key
+   */
+  async getKeyUsage(
+    keyId: string,
+    workspaceId: string,
+  ): Promise<{ requests: number; cost: number }> {
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const endOfMonth = new Date();
+    endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
+    endOfMonth.setHours(23, 59, 59, 999);
+
+    const result = await this.apiUsageRepository
+      .createQueryBuilder('usage')
+      .select('COUNT(*)', 'requests')
+      .addSelect('SUM(usage.cost_usd)', 'cost')
+      .where('usage.byok_key_id = :keyId', { keyId })
+      .andWhere('usage.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('usage.created_at BETWEEN :startOfMonth AND :endOfMonth', {
+        startOfMonth,
+        endOfMonth,
+      })
+      .getRawOne();
+
+    return {
+      requests: parseInt(result.requests || '0', 10),
+      cost: parseFloat(result.cost || '0'),
+    };
+  }
+
+  /**
+   * Increment monthly cost counter in Redis
+   *
+   * @param workspaceId - Workspace ID
+   * @param cost - Cost to add
+   */
+  private async incrementMonthlyCounter(
+    workspaceId: string,
+    cost: number,
+  ): Promise<void> {
+    try {
+      const monthKey = new Date().toISOString().slice(0, 7); // YYYY-MM
+      const redisKey = `workspace:${workspaceId}:cost:month:${monthKey}`;
+
+      await this.redisService.increment(redisKey, cost);
+
+      // Set TTL to end of month + 7 days
+      const endOfMonth = new Date();
+      endOfMonth.setMonth(endOfMonth.getMonth() + 1, 0);
+      endOfMonth.setHours(23, 59, 59, 999);
+      const ttlSeconds = Math.floor(
+        (endOfMonth.getTime() + 7 * 24 * 60 * 60 * 1000 - Date.now()) / 1000,
+      );
+
+      await this.redisService.expire(redisKey, ttlSeconds);
+    } catch (error) {
+      // Don't fail the request if Redis is down
+      this.logger.warn(
+        `Failed to increment Redis counter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+    }
+  }
+
+  /**
+   * Get monthly total from Redis counter
+   *
+   * @param workspaceId - Workspace ID
+   * @returns Total cost for current month or null if not cached
+   */
+  private async getMonthlyTotalFromRedis(
+    workspaceId: string,
+  ): Promise<number | null> {
+    try {
+      const monthKey = new Date().toISOString().slice(0, 7);
+      const redisKey = `workspace:${workspaceId}:cost:month:${monthKey}`;
+      const value = await this.redisService.get(redisKey);
+      return value ? parseFloat(value) : null;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to get Redis counter: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Query usage metrics from database
+   *
+   * @param workspaceId - Workspace ID
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @returns Usage summary
+   */
+  private async queryUsageMetrics(
+    workspaceId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<UsageSummary> {
+    const result = await this.apiUsageRepository
+      .createQueryBuilder('usage')
+      .select('SUM(usage.cost_usd)', 'totalCost')
+      .addSelect('SUM(usage.input_tokens)', 'totalInputTokens')
+      .addSelect('SUM(usage.output_tokens)', 'totalOutputTokens')
+      .addSelect('COUNT(*)', 'totalRequests')
+      .where('usage.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('usage.created_at BETWEEN :startDate AND :endDate', {
+        startDate,
+        endDate,
+      })
+      .getRawOne();
+
+    return {
+      totalCost: parseFloat(result.totalCost || '0'),
+      totalInputTokens: parseInt(result.totalInputTokens || '0', 10),
+      totalOutputTokens: parseInt(result.totalOutputTokens || '0', 10),
+      totalRequests: parseInt(result.totalRequests || '0', 10),
+    };
+  }
+
+  /**
+   * Check if date range is current month
+   *
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @returns True if date range covers current month
+   */
+  private isCurrentMonth(startDate: Date, endDate: Date): boolean {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+    return startDate <= startOfMonth && endDate >= endOfMonth;
+  }
+}

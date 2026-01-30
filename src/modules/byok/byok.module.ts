@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BYOKKey } from '../../database/entities/byok-key.entity';
 import { BYOKKeyService } from './services/byok-key.service';
@@ -8,6 +8,7 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
 import { AuditModule } from '../../shared/audit/audit.module';
 import { RateLimiterModule } from '../../shared/cache/rate-limiter.module';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { UsageModule } from '../usage/usage.module';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
     EncryptionModule,
     AuditModule,
     RateLimiterModule,
+    forwardRef(() => UsageModule),
   ],
   providers: [BYOKKeyService, ApiKeyValidatorService],
   controllers: [BYOKKeyController],

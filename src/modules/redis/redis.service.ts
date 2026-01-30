@@ -302,6 +302,47 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Increment a key by a value (Story 3.3 - Real-time cost tracking)
+   * @param key - Redis key
+   * @param value - Value to increment by (default: 1)
+   * @returns New value after increment
+   */
+  async increment(key: string, value: number = 1): Promise<number | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot increment key');
+      return null;
+    }
+    try {
+      // Use INCRBYFLOAT for decimal values (cost tracking)
+      const newValue = await this.client.incrbyfloat(key, value);
+      return parseFloat(newValue);
+    } catch (error) {
+      this.logger.error(`Failed to increment key ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Set expiration on a key (Story 3.3 - Real-time cost tracking)
+   * @param key - Redis key
+   * @param ttlSeconds - Time to live in seconds
+   * @returns true if expiration was set successfully
+   */
+  async expire(key: string, ttlSeconds: number): Promise<boolean> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot set expiration');
+      return false;
+    }
+    try {
+      const result = await this.client.expire(key, ttlSeconds);
+      return result === 1;
+    } catch (error) {
+      this.logger.error(`Failed to set expiration on key ${key}`, error);
+      return false;
+    }
+  }
+
+  /**
    * Cleanup on module destroy
    */
   async onModuleDestroy() {
