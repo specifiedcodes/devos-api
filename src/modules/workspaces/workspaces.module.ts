@@ -2,7 +2,9 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { WorkspacesService } from './workspaces.service';
+import { WorkspacesCleanupService } from './workspaces-cleanup.service';
 import { WorkspacesController } from './workspaces.controller';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
@@ -25,10 +27,17 @@ import { EmailModule } from '../email/email.module';
         signOptions: { algorithm: 'HS256' },
       }),
     }),
+    ScheduleModule.forRoot(),
     EmailModule,
   ],
   controllers: [WorkspacesController],
-  providers: [WorkspacesService, WorkspaceOwnerGuard, WorkspaceAdminGuard, RoleGuard],
+  providers: [
+    WorkspacesService,
+    WorkspacesCleanupService,
+    WorkspaceOwnerGuard,
+    WorkspaceAdminGuard,
+    RoleGuard,
+  ],
   exports: [WorkspacesService],
 })
 export class WorkspacesModule {}

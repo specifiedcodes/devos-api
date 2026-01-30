@@ -884,6 +884,21 @@ export class WorkspacesService {
    * @param token - Raw (unhashed) token for the magic link
    * @param inviterUserId - User who created the invitation
    */
+  /**
+   * Sanitize text for use in HTML emails to prevent XSS attacks
+   * @param text - The text to sanitize
+   * @returns Sanitized text safe for HTML rendering
+   */
+  private sanitizeForEmail(text: string): string {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#x27;')
+      .replace(/\//g, '&#x2F;');
+  }
+
   private async sendInvitationEmail(
     email: string,
     workspaceName: string,
@@ -903,13 +918,14 @@ export class WorkspacesService {
       viewer: 'read-only access',
     };
 
+    // Sanitize user-provided content to prevent XSS in email templates
     await this.emailService.sendEmail({
       to: email,
-      subject: `Invitation to join ${workspaceName}`,
+      subject: `Invitation to join ${this.sanitizeForEmail(workspaceName)}`,
       template: 'invitation',
       context: {
-        workspaceName,
-        inviterName,
+        workspaceName: this.sanitizeForEmail(workspaceName),
+        inviterName: this.sanitizeForEmail(inviterName),
         role,
         roleDescription: roleDescriptions[role],
         magicLink,
@@ -953,17 +969,42 @@ export class WorkspacesService {
   }
 
   /**
+   * Find invitation by token using constant-time comparison to prevent timing attacks
+   * @param rawToken - The raw (unhashed) invitation token
+   * @returns The invitation or null if not found
+   */
+  private async findInvitationByToken(
+    rawToken: string,
+  ): Promise<WorkspaceInvitation | null> {
+    const targetHash = crypto.createHash('sha256').update(rawToken).digest();
+
+    // Get all pending invitations for constant-time comparison
+    const invitations = await this.invitationRepository.find({
+      where: { status: InvitationStatus.PENDING },
+      relations: ['workspace', 'inviter'],
+    });
+
+    // Constant-time comparison to prevent timing attacks
+    for (const invitation of invitations) {
+      const storedHash = Buffer.from(invitation.token, 'hex');
+      if (
+        storedHash.length === targetHash.length &&
+        crypto.timingSafeEqual(targetHash, storedHash)
+      ) {
+        return invitation;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Get invitation details by token (public endpoint)
    * @param token - The invitation token
    * @returns Invitation details
    */
   async getInvitationDetails(token: string): Promise<InvitationResponseDto> {
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
-    const invitation = await this.invitationRepository.findOne({
-      where: { token: hashedToken },
-      relations: ['inviter', 'workspace'],
-    });
+    const invitation = await this.findInvitationByToken(token);
 
     if (!invitation) {
       throw new NotFoundException('Invitation not found or expired');
@@ -996,21 +1037,31 @@ export class WorkspacesService {
    * Accept an invitation
    * @param token - The invitation token
    * @param userId - The user accepting (from JWT)
+   * @param ipAddress - IP address of the user accepting
+   * @param userAgent - User agent of the user accepting
    * @returns Workspace details and new tokens
    */
   async acceptInvitation(
     token: string,
     userId: string,
+    ipAddress: string,
+    userAgent: string,
   ): Promise<{ workspace: WorkspaceResponseDto; tokens: any }> {
-    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
-    const invitation = await this.invitationRepository.findOne({
-      where: { token: hashedToken },
-      relations: ['workspace'],
-    });
+    const invitation = await this.findInvitationByToken(token);
 
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
+    }
+
+    // Load workspace relation if not already loaded
+    if (!invitation.workspace) {
+      const invitationWithWorkspace = await this.invitationRepository.findOne({
+        where: { id: invitation.id },
+        relations: ['workspace'],
+      });
+      if (invitationWithWorkspace) {
+        invitation.workspace = invitationWithWorkspace.workspace;
+      }
     }
 
     // Validate invitation
@@ -1066,8 +1117,14 @@ export class WorkspacesService {
       },
     } as any);
 
-    // Switch to the new workspace and generate tokens
-    const result = await this.switchWorkspace(userId, invitation.workspaceId, '', '', '');
+    // Switch to the new workspace and generate tokens with proper context
+    const result = await this.switchWorkspace(
+      userId,
+      invitation.workspaceId,
+      '', // No current JTI since this is a new session
+      ipAddress,
+      userAgent,
+    );
 
     return result;
   }

@@ -75,7 +75,7 @@ export class WorkspacesController {
     tokens: { access_token: string; refresh_token: string };
   }> {
     return this.workspacesService.switchWorkspace(
-      req.user.userId,
+      req.user.id,
       workspaceId,
       req.user.jti,
       req.ip,
@@ -173,10 +173,17 @@ export class WorkspacesController {
     @Param('token') token: string,
     @Request() req: any,
   ): Promise<{ workspace: WorkspaceResponseDto; tokens: any }> {
-    return this.workspacesService.acceptInvitation(token, req.user.id);
+    return this.workspacesService.acceptInvitation(
+      token,
+      req.user.id,
+      req.ip || 'unknown',
+      req.headers['user-agent'] || 'unknown',
+    );
   }
 
   @Post('invitations/:id/resend')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   @ApiOperation({ summary: 'Resend invitation email' })
   @ApiResponse({ status: 200, description: 'Invitation resent successfully' })
   @ApiResponse({ status: 403, description: 'Only workspace owners or admins can resend invitations' })
@@ -188,6 +195,8 @@ export class WorkspacesController {
   }
 
   @Delete('invitations/:id')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   @ApiOperation({ summary: 'Revoke invitation' })
   @ApiResponse({ status: 200, description: 'Invitation revoked successfully' })
   @ApiResponse({ status: 403, description: 'Only workspace owners or admins can revoke invitations' })
