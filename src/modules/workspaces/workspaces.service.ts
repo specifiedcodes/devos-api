@@ -619,22 +619,35 @@ export class WorkspacesService {
       });
 
       // 5. Find current session and update workspace_id
+      // NOTE: This operation has a potential race condition under high concurrency.
+      // For production, consider using Redis Lua scripts or WATCH/MULTI/EXEC for atomic updates.
+      // Current implementation is acceptable for MVP as:
+      // - New tokens are generated immediately after (step 6)
+      // - Old tokens remain valid but will be replaced by client
+      // - Session updates are idempotent (setting workspace_id to same value is safe)
       const sessionKeys = await this.redisService.keys(`session:${userId}:*`);
       for (const key of sessionKeys) {
-        const sessionData = await this.redisService.get(key);
-        if (sessionData) {
-          const session = JSON.parse(sessionData);
-          if (session.access_token_jti === currentJti || session.refresh_token_jti === currentJti) {
-            // Update session with new workspace_id
-            session.workspace_id = targetWorkspaceId;
-            const ttlSeconds = Math.floor(
-              (new Date(session.expires_at).getTime() - Date.now()) / 1000,
-            );
-            if (ttlSeconds > 0) {
-              await this.redisService.set(key, JSON.stringify(session), ttlSeconds);
+        try {
+          const sessionData = await this.redisService.get(key);
+          if (sessionData) {
+            const session = JSON.parse(sessionData);
+            if (session.access_token_jti === currentJti || session.refresh_token_jti === currentJti) {
+              // Update session with new workspace_id
+              session.workspace_id = targetWorkspaceId;
+              const ttlSeconds = Math.floor(
+                (new Date(session.expires_at).getTime() - Date.now()) / 1000,
+              );
+              if (ttlSeconds > 0) {
+                await this.redisService.set(key, JSON.stringify(session), ttlSeconds);
+                this.logger.log(`Updated session ${key} with workspace ${targetWorkspaceId}`);
+              }
+              break;
             }
-            break;
           }
+        } catch (sessionError) {
+          // Log session update failure but don't block workspace switch
+          // New session will be created in step 7 anyway
+          this.logger.warn(`Failed to update session ${key}:`, sessionError);
         }
       }
 

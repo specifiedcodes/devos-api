@@ -2,7 +2,7 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
@@ -18,6 +18,7 @@ import { BackupCode } from './database/entities/backup-code.entity';
 import { AccountDeletion } from './database/entities/account-deletion.entity';
 import { SecurityEvent } from './database/entities/security-event.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
+import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
 @Module({
   imports: [
@@ -54,6 +55,11 @@ import { WorkspaceContextMiddleware } from './common/middleware/workspace-contex
   controllers: [AppController],
   providers: [
     AppService,
+    // Apply WorkspaceContextInterceptor globally to extract workspace_id from JWT (Task 4.3)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: WorkspaceContextInterceptor,
+    },
     // Disable global throttler in test environment
     ...(process.env.NODE_ENV !== 'test'
       ? [

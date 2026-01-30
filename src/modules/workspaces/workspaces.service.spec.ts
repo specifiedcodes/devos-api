@@ -1,11 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository, QueryRunner } from 'typeorm';
+import { Repository, QueryRunner, DataSource } from 'typeorm';
+import { JwtService } from '@nestjs/jwt';
 import { WorkspacesService } from './workspaces.service';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
+import { RedisService } from '../redis/redis.service';
 
 describe('WorkspacesService', () => {
   let service: WorkspacesService;
@@ -84,10 +86,40 @@ describe('WorkspacesService', () => {
           },
         },
         {
+          provide: getRepositoryToken(User),
+          useValue: {
+            findOne: jest.fn(),
+            update: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
           provide: getRepositoryToken(SecurityEvent),
           useValue: {
             create: jest.fn(),
             save: jest.fn(),
+          },
+        },
+        {
+          provide: DataSource,
+          useValue: {
+            createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner),
+          },
+        },
+        {
+          provide: JwtService,
+          useValue: {
+            sign: jest.fn(),
+            verify: jest.fn(),
+          },
+        },
+        {
+          provide: RedisService,
+          useValue: {
+            get: jest.fn(),
+            set: jest.fn(),
+            keys: jest.fn(),
+            del: jest.fn(),
           },
         },
       ],
