@@ -44,6 +44,14 @@ export class Workspace {
   @Column({ type: 'boolean', default: false, name: 'is_favorite' })
   isFavorite!: boolean;
 
+  @Column({ type: 'varchar', length: 50, nullable: true })
+  @IsOptional()
+  type?: string; // 'client' | 'internal' | 'personal'
+
+  @Column({ type: 'simple-array', nullable: true })
+  @IsOptional()
+  tags?: string[]; // For categorization: ['agency-client', 'enterprise', etc]
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;
 

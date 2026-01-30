@@ -9,6 +9,8 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
+import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { RateLimiterService } from '../../../shared/cache/rate-limiter.service';
 
 export interface CreateBYOKKeyDto {
   keyName: string;
@@ -33,6 +35,8 @@ export class BYOKKeyService {
     @InjectRepository(BYOKKey)
     private readonly byokKeyRepository: Repository<BYOKKey>,
     private readonly encryptionService: EncryptionService,
+    private readonly auditService: AuditService,
+    private readonly rateLimiter: RateLimiterService,
   ) {}
 
   /**
@@ -65,6 +69,16 @@ export class BYOKKeyService {
       });
 
       const saved = await this.byokKeyRepository.save(byokKey);
+
+      // Audit log the key creation
+      await this.auditService.log(
+        workspaceId,
+        userId,
+        AuditAction.BYOK_KEY_CREATED,
+        'byok_key',
+        saved.id,
+        { keyName: dto.keyName, provider: dto.provider },
+      );
 
       this.logger.log(
         `BYOK key created: ${saved.id} for workspace ${workspaceId} by user ${userId}`,
@@ -128,6 +142,10 @@ export class BYOKKeyService {
    * SECURITY: This should only be called by trusted internal services
    */
   async decryptKey(keyId: string, workspaceId: string): Promise<string> {
+    // Rate limiting: 100 decryptions per hour per key
+    const rateLimitKey = `byok:decrypt:${workspaceId}:${keyId}`;
+    await this.rateLimiter.checkLimit(rateLimitKey, 100, 60 * 60 * 1000);
+
     const byokKey = await this.byokKeyRepository.findOne({
       where: { id: keyId, workspaceId, isActive: true },
     });
@@ -148,6 +166,16 @@ export class BYOKKeyService {
       await this.byokKeyRepository.update(keyId, {
         lastUsedAt: new Date(),
       });
+
+      // Audit log the key access
+      await this.auditService.log(
+        workspaceId,
+        'system', // Key decryption is typically triggered by system/agent
+        AuditAction.BYOK_KEY_ACCESSED,
+        'byok_key',
+        keyId,
+        { action: 'decrypt' },
+      );
 
       this.logger.log(`BYOK key ${keyId} decrypted for workspace ${workspaceId}`);
 
@@ -181,6 +209,16 @@ export class BYOKKeyService {
     await this.byokKeyRepository.update(keyId, {
       isActive: false,
     });
+
+    // Audit log the key deletion
+    await this.auditService.log(
+      workspaceId,
+      userId,
+      AuditAction.BYOK_KEY_DELETED,
+      'byok_key',
+      keyId,
+      { keyName: byokKey.keyName, provider: byokKey.provider },
+    );
 
     this.logger.log(
       `BYOK key ${keyId} deleted by user ${userId} in workspace ${workspaceId}`,

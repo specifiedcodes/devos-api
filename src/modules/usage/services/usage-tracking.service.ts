@@ -62,15 +62,23 @@ export class UsageTrackingService {
       const today = new Date().toISOString().split('T')[0];
 
       // Check if record exists for today
+      const whereClause: any = {
+        workspaceId: data.workspaceId,
+        provider: data.provider,
+        model: data.model,
+        date: new Date(today),
+      };
+
+      // Only add optional fields if they exist
+      if (data.projectId) {
+        whereClause.projectId = data.projectId;
+      }
+      if (data.agentId) {
+        whereClause.agentId = data.agentId;
+      }
+
       const existingRecord = await this.usageRepository.findOne({
-        where: {
-          workspaceId: data.workspaceId,
-          projectId: data.projectId || null as any,
-          agentId: data.agentId || null as any,
-          provider: data.provider,
-          model: data.model,
-          date: new Date(today) as any,
-        },
+        where: whereClause,
       });
 
       if (existingRecord) {
@@ -122,7 +130,10 @@ export class UsageTrackingService {
       order: { date: 'DESC' },
     });
 
-    // Aggregate usage
+    // Aggregate usage using BigInt to preserve precision
+    let totalInputTokensBigInt = BigInt(0);
+    let totalOutputTokensBigInt = BigInt(0);
+
     const summary: UsageSummary = {
       workspaceId,
       totalRequests: 0,
@@ -138,8 +149,8 @@ export class UsageTrackingService {
 
     for (const record of records) {
       summary.totalRequests += record.requestCount;
-      summary.totalInputTokens += Number(record.inputTokens);
-      summary.totalOutputTokens += Number(record.outputTokens);
+      totalInputTokensBigInt += BigInt(record.inputTokens);
+      totalOutputTokensBigInt += BigInt(record.outputTokens);
       summary.totalCostUSD += Number(record.costUSD);
 
       // By project
@@ -167,6 +178,10 @@ export class UsageTrackingService {
       summary.breakdown.byDate[date].requests += record.requestCount;
       summary.breakdown.byDate[date].cost += Number(record.costUSD);
     }
+
+    // Convert BigInt totals to numbers (safe as long as < Number.MAX_SAFE_INTEGER)
+    summary.totalInputTokens = Number(totalInputTokensBigInt);
+    summary.totalOutputTokens = Number(totalOutputTokensBigInt);
 
     return summary;
   }
@@ -210,7 +225,22 @@ export class UsageTrackingService {
       Number(r.costUSD).toFixed(4),
     ]);
 
-    const csv = [headers, ...rows].map((row) => row.join(',')).join('\n');
+    // Escape CSV fields to prevent injection attacks
+    const escapeCSVField = (field: string): string => {
+      // If field starts with dangerous characters, prefix with single quote
+      if (/^[=+\-@\t\r]/.test(field)) {
+        field = "'" + field;
+      }
+      // If field contains comma, quote, or newline, wrap in quotes and escape quotes
+      if (/[,"\n\r]/.test(field)) {
+        field = '"' + field.replace(/"/g, '""') + '"';
+      }
+      return field;
+    };
+
+    const csv = [headers, ...rows]
+      .map((row) => row.map(escapeCSVField).join(','))
+      .join('\n');
 
     return csv;
   }

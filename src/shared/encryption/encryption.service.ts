@@ -8,15 +8,27 @@ export class EncryptionService {
   private readonly algorithm = 'aes-256-gcm';
   private readonly ivLength = 16; // 128 bits for GCM
   private readonly encryptionKey: Buffer;
+  private readonly hkdfSalt: Buffer;
 
   constructor(private configService: ConfigService) {
     const key = this.configService.get<string>('ENCRYPTION_KEY');
     if (!key || key.length !== 64) {
       throw new Error(
-        'ENCRYPTION_KEY must be 64 characters (32 bytes in hex)',
+        'ENCRYPTION_KEY must be 64 characters (32 bytes in hex). Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"',
       );
     }
     this.encryptionKey = Buffer.from(key, 'hex');
+
+    // Load HKDF salt from environment or use a secure default
+    const saltHex = this.configService.get<string>('ENCRYPTION_HKDF_SALT');
+    if (saltHex && saltHex.length === 64) {
+      this.hkdfSalt = Buffer.from(saltHex, 'hex');
+    } else {
+      this.logger.warn(
+        'ENCRYPTION_HKDF_SALT not configured. Using default salt. For production, set ENCRYPTION_HKDF_SALT to a 64-character hex string.',
+      );
+      this.hkdfSalt = Buffer.from('devos-workspace-byok-salt');
+    }
   }
 
   /**
@@ -103,13 +115,12 @@ export class EncryptionService {
    */
   private deriveWorkspaceKey(workspaceId: string): Buffer {
     // Use HKDF (HMAC-based Key Derivation Function) to derive workspace key
-    const salt = Buffer.from('devos-workspace-byok-salt');
     const info = Buffer.from(`workspace:${workspaceId}`);
 
     return crypto.hkdfSync(
       'sha256',
       this.encryptionKey,
-      salt,
+      this.hkdfSalt,
       info,
       32, // 32 bytes for AES-256
     );

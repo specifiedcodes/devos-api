@@ -12,13 +12,14 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard } from '../../../common/guards/role.guard';
+import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { BYOKKeyService } from '../services/byok-key.service';
 import { CreateBYOKKeyDto } from '../dto/create-byok-key.dto';
 
 @Controller('api/v1/workspaces/:workspaceId/byok-keys')
-@UseGuards(JwtAuthGuard, RoleGuard)
+@UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard)
 export class BYOKKeyController {
   constructor(private readonly byokKeyService: BYOKKeyService) {}
 
