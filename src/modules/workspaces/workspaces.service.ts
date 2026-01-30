@@ -1229,4 +1229,271 @@ export class WorkspacesService {
 
     return { message: 'Invitation revoked successfully' };
   }
+
+  /**
+   * Get all members of a workspace
+   * @param workspaceId - Workspace ID
+   * @returns List of workspace members
+   */
+  async getMembers(workspaceId: string): Promise<any[]> {
+    const members = await this.workspaceMemberRepository.find({
+      where: { workspaceId },
+      relations: ['user'],
+      order: { createdAt: 'ASC' },
+    });
+
+    return members.map((member) => ({
+      id: member.id,
+      userId: member.userId,
+      email: member.user?.email || 'Unknown',
+      role: member.role,
+      joinedAt: member.createdAt,
+    }));
+  }
+
+  /**
+   * Change a workspace member's role
+   * @param workspaceId - Workspace ID
+   * @param memberId - Member ID
+   * @param newRole - New role to assign
+   * @param requestingUserId - User making the change
+   * @returns Updated member information
+   */
+  async changeMemberRole(
+    workspaceId: string,
+    memberId: string,
+    newRole: WorkspaceRole,
+    requestingUserId: string,
+  ): Promise<any> {
+    // 1. Find member to change
+    const member = await this.workspaceMemberRepository.findOne({
+      where: { id: memberId, workspaceId },
+      relations: ['user'],
+    });
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    // 2. Get workspace to check ownership
+    const workspace = await this.workspaceRepository.findOne({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    // 3. Prevent changing owner role unless you ARE the owner
+    if (member.userId === workspace.ownerUserId) {
+      const requestingMember = await this.workspaceMemberRepository.findOne({
+        where: { workspaceId, userId: requestingUserId },
+      });
+
+      if (requestingMember?.role !== WorkspaceRole.OWNER) {
+        throw new ForbiddenException('Only the owner can change the owner role');
+      }
+    }
+
+    // 4. Update role
+    const oldRole = member.role;
+    member.role = newRole;
+    await this.workspaceMemberRepository.save(member);
+
+    // 5. Log security event
+    await this.securityEventRepository.save({
+      user_id: requestingUserId,
+      event_type: SecurityEventType.ROLE_CHANGED,
+      ip_address: 'system',
+      metadata: {
+        workspaceId,
+        targetUserId: member.userId,
+        oldRole,
+        newRole,
+      },
+    } as any);
+
+    return {
+      id: member.id,
+      userId: member.userId,
+      email: member.user?.email || 'Unknown',
+      role: member.role,
+      joinedAt: member.createdAt,
+    };
+  }
+
+  /**
+   * Remove a member from a workspace
+   * @param workspaceId - Workspace ID
+   * @param memberId - Member ID
+   * @param requestingUserId - User making the removal
+   * @returns Success message
+   */
+  async removeMember(
+    workspaceId: string,
+    memberId: string,
+    requestingUserId: string,
+  ): Promise<{ message: string }> {
+    // 1. Find member to remove
+    const member = await this.workspaceMemberRepository.findOne({
+      where: { id: memberId, workspaceId },
+      relations: ['user'],
+    });
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    // 2. Get workspace to check ownership
+    const workspace = await this.workspaceRepository.findOne({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    // 3. Prevent removing owner
+    if (member.userId === workspace.ownerUserId) {
+      throw new BadRequestException('Cannot remove workspace owner. Transfer ownership first.');
+    }
+
+    // 4. Remove member
+    await this.workspaceMemberRepository.remove(member);
+
+    // 5. Log security event
+    await this.securityEventRepository.save({
+      user_id: requestingUserId,
+      event_type: SecurityEventType.MEMBER_REMOVED,
+      ip_address: 'system',
+      metadata: {
+        workspaceId,
+        removedUserId: member.userId,
+        removedUserEmail: member.user?.email,
+        removedUserRole: member.role,
+      },
+    } as any);
+
+    return { message: 'Member removed successfully' };
+  }
+
+  /**
+   * Transfer workspace ownership to another member
+   * @param workspaceId - Workspace ID
+   * @param currentOwnerId - Current owner's user ID
+   * @param newOwnerId - New owner's user ID
+   * @returns Success message
+   */
+  async transferOwnership(
+    workspaceId: string,
+    currentOwnerId: string,
+    newOwnerId: string,
+  ): Promise<{ message: string }> {
+    // 1. Verify workspace exists and current user is owner
+    const workspace = await this.workspaceRepository.findOne({
+      where: { id: workspaceId, ownerUserId: currentOwnerId },
+    });
+
+    if (!workspace) {
+      throw new ForbiddenException('Only workspace owner can transfer ownership');
+    }
+
+    // 2. Verify new owner is a workspace member
+    const newOwnerMember = await this.workspaceMemberRepository.findOne({
+      where: { workspaceId, userId: newOwnerId },
+      relations: ['user'],
+    });
+
+    if (!newOwnerMember) {
+      throw new BadRequestException('New owner must be a workspace member');
+    }
+
+    // 3. Verify not transferring to self
+    if (currentOwnerId === newOwnerId) {
+      throw new BadRequestException('Cannot transfer ownership to yourself');
+    }
+
+    // 4. Get current owner member record
+    const currentOwnerMember = await this.workspaceMemberRepository.findOne({
+      where: { workspaceId, userId: currentOwnerId },
+    });
+
+    if (!currentOwnerMember) {
+      throw new InternalServerErrorException('Owner member record not found');
+    }
+
+    // 5. Update workspace owner
+    workspace.ownerUserId = newOwnerId;
+    await this.workspaceRepository.save(workspace);
+
+    // 6. Update new owner role to OWNER
+    newOwnerMember.role = WorkspaceRole.OWNER;
+    await this.workspaceMemberRepository.save(newOwnerMember);
+
+    // 7. Demote current owner to ADMIN
+    currentOwnerMember.role = WorkspaceRole.ADMIN;
+    await this.workspaceMemberRepository.save(currentOwnerMember);
+
+    // 8. Log security event
+    await this.securityEventRepository.save({
+      user_id: currentOwnerId,
+      event_type: SecurityEventType.OWNERSHIP_TRANSFERRED,
+      ip_address: 'system',
+      metadata: {
+        workspaceId,
+        fromUserId: currentOwnerId,
+        toUserId: newOwnerId,
+        toUserEmail: newOwnerMember.user?.email,
+      },
+    } as any);
+
+    // 9. Send email notifications (async)
+    this.sendOwnershipTransferEmails(
+      workspace.name,
+      currentOwnerId,
+      newOwnerId,
+      newOwnerMember.user?.email || '',
+    ).catch((error) => {
+      this.logger.error('Failed to send ownership transfer emails', error);
+    });
+
+    return { message: 'Ownership transferred successfully' };
+  }
+
+  /**
+   * Send email notifications for ownership transfer
+   * @private
+   */
+  private async sendOwnershipTransferEmails(
+    workspaceName: string,
+    fromUserId: string,
+    toUserId: string,
+    toUserEmail: string,
+  ): Promise<void> {
+    // Email to new owner
+    await this.emailService.sendEmail({
+      to: toUserEmail,
+      subject: `You are now the owner of ${workspaceName}`,
+      template: 'ownership-transfer-new-owner',
+      context: {
+        workspaceName,
+        message: `You have been designated as the new owner of ${workspaceName}. You now have full control including workspace deletion and ownership transfer.`,
+      },
+    });
+
+    // Email to previous owner
+    const fromUser = await this.userRepository.findOne({ where: { id: fromUserId } });
+    if (fromUser) {
+      await this.emailService.sendEmail({
+        to: fromUser.email,
+        subject: `Ownership of ${workspaceName} transferred`,
+        template: 'ownership-transfer-previous-owner',
+        context: {
+          workspaceName,
+          newOwnerEmail: toUserEmail,
+          message: `You have transferred ownership of ${workspaceName} to ${toUserEmail}. Your role has been changed to Admin.`,
+        },
+      });
+    }
+  }
 }

@@ -31,6 +31,9 @@ export enum SecurityEventType {
   INVITATION_ACCEPTED = 'invitation_accepted',
   INVITATION_REVOKED = 'invitation_revoked',
   PERMISSION_DENIED = 'permission_denied',
+  ROLE_CHANGED = 'role_changed',
+  MEMBER_REMOVED = 'member_removed',
+  OWNERSHIP_TRANSFERRED = 'ownership_transferred',
 }
 
 @Entity('security_events')

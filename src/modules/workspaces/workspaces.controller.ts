@@ -23,11 +23,12 @@ import { RenameWorkspaceDto } from './dto/rename-workspace.dto';
 import { WorkspaceResponseDto } from './dto/workspace-response.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { InvitationResponseDto } from './dto/invitation-response.dto';
+import { WorkspaceMemberDto } from './dto/workspace-member.dto';
+import { ChangeMemberRoleDto } from './dto/change-member-role.dto';
+import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
 import { InvitationStatus } from '../../database/entities/workspace-invitation.entity';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-import { WorkspaceOwnerGuard } from './guards/workspace-owner.guard';
-import { WorkspaceAdminGuard } from './guards/workspace-admin.guard';
 import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 
 @Controller('api/v1/workspaces')
@@ -88,6 +89,7 @@ export class WorkspacesController {
   @ApiResponse({ status: 201, type: WorkspaceResponseDto, description: 'Workspace created successfully' })
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
   async createWorkspace(
     @Request() req: any,
     @Body() dto: CreateWorkspaceDto,
@@ -96,7 +98,8 @@ export class WorkspacesController {
   }
 
   @Patch(':id')
-  @UseGuards(WorkspaceAdminGuard)
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   @ApiOperation({ summary: 'Rename workspace (Admin/Owner only)' })
   @ApiResponse({ status: 200, type: WorkspaceResponseDto, description: 'Workspace renamed successfully' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -111,7 +114,8 @@ export class WorkspacesController {
   }
 
   @Delete(':id')
-  @UseGuards(WorkspaceOwnerGuard)
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Delete workspace (Owner only)' })
   @ApiResponse({ status: 200, description: 'Workspace soft deleted successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -205,5 +209,72 @@ export class WorkspacesController {
     @Request() req: any,
   ): Promise<{ message: string }> {
     return this.workspacesService.revokeInvitation(invitationId, req.user.id);
+  }
+
+  @Get(':id/members')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN, WorkspaceRole.DEVELOPER, WorkspaceRole.VIEWER)
+  @ApiOperation({ summary: 'List workspace members' })
+  @ApiResponse({ status: 200, type: [WorkspaceMemberDto], description: 'List of workspace members' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getMembers(@Param('id') workspaceId: string): Promise<WorkspaceMemberDto[]> {
+    return this.workspacesService.getMembers(workspaceId);
+  }
+
+  @Patch(':id/members/:memberId/role')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @ApiOperation({ summary: 'Change member role' })
+  @ApiResponse({ status: 200, type: WorkspaceMemberDto, description: 'Member role updated' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Member not found' })
+  async changeMemberRole(
+    @Param('id') workspaceId: string,
+    @Param('memberId') memberId: string,
+    @Body() dto: ChangeMemberRoleDto,
+    @Request() req: any,
+  ): Promise<WorkspaceMemberDto> {
+    return this.workspacesService.changeMemberRole(
+      workspaceId,
+      memberId,
+      dto.role,
+      req.user.id,
+    );
+  }
+
+  @Delete(':id/members/:memberId')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @ApiOperation({ summary: 'Remove member from workspace' })
+  @ApiResponse({ status: 200, description: 'Member removed successfully' })
+  @ApiResponse({ status: 400, description: 'Cannot remove workspace owner' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Member not found' })
+  async removeMember(
+    @Param('id') workspaceId: string,
+    @Param('memberId') memberId: string,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    return this.workspacesService.removeMember(workspaceId, memberId, req.user.id);
+  }
+
+  @Post(':id/transfer-ownership')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Transfer workspace ownership (Owner only)' })
+  @ApiResponse({ status: 200, description: 'Ownership transferred successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid transfer request' })
+  @ApiResponse({ status: 403, description: 'Only owner can transfer ownership' })
+  @ApiResponse({ status: 404, description: 'Workspace or new owner not found' })
+  async transferOwnership(
+    @Param('id') workspaceId: string,
+    @Body() dto: TransferOwnershipDto,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    return this.workspacesService.transferOwnership(
+      workspaceId,
+      req.user.id,
+      dto.newOwnerId,
+    );
   }
 }
