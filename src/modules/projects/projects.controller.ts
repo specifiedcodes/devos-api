@@ -34,6 +34,17 @@ import { UpdateProjectPreferencesDto } from './dto/update-project-preferences.dt
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
+  /**
+   * Create a new project within a workspace
+   *
+   * @param workspaceId - UUID of the workspace to create the project in
+   * @param createDto - Project creation data (name, description, etc.)
+   * @param preferencesDto - Optional project preferences (code style, git workflow, etc.)
+   * @param req - Request object containing authenticated user
+   * @returns The created project with preferences
+   * @throws ConflictException if project name already exists in workspace
+   * @throws ForbiddenException if user doesn't have Developer+ role
+   */
   @Post()
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Create a new project in workspace' })
@@ -67,6 +78,13 @@ export class ProjectsController {
     );
   }
 
+  /**
+   * Get all active projects in a workspace
+   *
+   * @param workspaceId - UUID of the workspace
+   * @returns Array of projects in the workspace (filtered to ACTIVE status only)
+   * @throws ForbiddenException if user is not a member of the workspace
+   */
   @Get()
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get all projects in workspace' })
@@ -82,6 +100,15 @@ export class ProjectsController {
     return this.projectsService.findAllByWorkspace(workspaceId);
   }
 
+  /**
+   * Get a single project by ID with workspace isolation
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project
+   * @returns Project details with preferences and creator information
+   * @throws NotFoundException if project doesn't exist or doesn't belong to workspace
+   * @throws ForbiddenException if user is not a member of the workspace
+   */
   @Get(':projectId')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get a single project by ID' })
@@ -102,6 +129,17 @@ export class ProjectsController {
     return this.projectsService.findOne(projectId, workspaceId);
   }
 
+  /**
+   * Update project metadata
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project to update
+   * @param updateDto - Updated project data (name, description, etc.)
+   * @returns Updated project
+   * @throws NotFoundException if project doesn't exist
+   * @throws ConflictException if new name conflicts with existing project
+   * @throws ForbiddenException if user doesn't have Developer+ role
+   */
   @Patch(':projectId')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update a project' })
@@ -131,6 +169,15 @@ export class ProjectsController {
     return this.projectsService.update(projectId, workspaceId, updateDto);
   }
 
+  /**
+   * Soft delete a project (sets deleted_at timestamp)
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project to delete
+   * @returns void (204 No Content)
+   * @throws NotFoundException if project doesn't exist
+   * @throws ForbiddenException if user doesn't have Developer+ role
+   */
   @Delete(':projectId')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @HttpCode(204)
@@ -151,6 +198,15 @@ export class ProjectsController {
     return this.projectsService.softDelete(projectId, workspaceId);
   }
 
+  /**
+   * Get project preferences
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project
+   * @returns Project preferences (code style, git workflow, testing strategy, etc.)
+   * @throws NotFoundException if project doesn't exist
+   * @throws ForbiddenException if user is not a workspace member
+   */
   @Get(':projectId/preferences')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get project preferences' })
@@ -171,6 +227,16 @@ export class ProjectsController {
     return project.preferences;
   }
 
+  /**
+   * Update project preferences
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project
+   * @param preferencesDto - Updated preferences (repository structure, code style, etc.)
+   * @returns Updated preferences
+   * @throws NotFoundException if project or preferences don't exist
+   * @throws ForbiddenException if user doesn't have Developer+ role
+   */
   @Patch(':projectId/preferences')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update project preferences' })
