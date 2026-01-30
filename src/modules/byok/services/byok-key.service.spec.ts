@@ -5,6 +5,8 @@ import { ForbiddenException, BadRequestException } from '@nestjs/common';
 import { BYOKKeyService } from './byok-key.service';
 import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
+import { AuditService } from '../../../shared/audit/audit.service';
+import { RateLimiterService } from '../../../shared/cache/rate-limiter.service';
 
 describe('BYOKKeyService', () => {
   let service: BYOKKeyService;
@@ -24,6 +26,14 @@ describe('BYOKKeyService', () => {
     decryptWithWorkspaceKey: jest.fn(),
   };
 
+  const mockAuditService = {
+    log: jest.fn(),
+  };
+
+  const mockRateLimiterService = {
+    checkLimit: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -35,6 +45,14 @@ describe('BYOKKeyService', () => {
         {
           provide: EncryptionService,
           useValue: mockEncryptionService,
+        },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
+        },
+        {
+          provide: RateLimiterService,
+          useValue: mockRateLimiterService,
         },
       ],
     }).compile();
@@ -55,7 +73,7 @@ describe('BYOKKeyService', () => {
       const dto = {
         keyName: 'Test Key',
         provider: KeyProvider.ANTHROPIC,
-        apiKey: 'sk-ant-api03-test-key-1234567890',
+        apiKey: 'sk-ant-api03-test-key-1234567890abcdefghijklmnop',
       };
 
       mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({

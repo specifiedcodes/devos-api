@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { sanitizeLogData } from '../logging/log-sanitizer';
 
 @Injectable()
 export class EncryptionService {
@@ -58,7 +59,7 @@ export class EncryptionService {
       // Return format: iv:authTag:ciphertext
       return `${iv.toString('hex')}:${authTag.toString('hex')}:${ciphertext}`;
     } catch (error) {
-      this.logger.error('Encryption failed', error);
+      this.logger.error('Encryption failed', sanitizeLogData(error));
       throw new Error('Failed to encrypt data');
     }
   }
@@ -94,7 +95,7 @@ export class EncryptionService {
 
       return plaintext;
     } catch (error) {
-      this.logger.error('Decryption failed', error);
+      this.logger.error('Decryption failed', sanitizeLogData(error));
       throw new Error('Failed to decrypt data');
     }
   }
@@ -117,12 +118,14 @@ export class EncryptionService {
     // Use HKDF (HMAC-based Key Derivation Function) to derive workspace key
     const info = Buffer.from(`workspace:${workspaceId}`);
 
-    return crypto.hkdfSync(
-      'sha256',
-      this.encryptionKey,
-      this.hkdfSalt,
-      info,
-      32, // 32 bytes for AES-256
+    return Buffer.from(
+      crypto.hkdfSync(
+        'sha256',
+        this.encryptionKey,
+        this.hkdfSalt,
+        info,
+        32, // 32 bytes for AES-256
+      ),
     );
   }
 
@@ -159,7 +162,7 @@ export class EncryptionService {
         iv: iv.toString('hex'),
       };
     } catch (error) {
-      this.logger.error('Workspace encryption failed', error);
+      this.logger.error('Workspace encryption failed', sanitizeLogData(error));
       throw new Error('Failed to encrypt workspace data');
     }
   }
@@ -204,7 +207,7 @@ export class EncryptionService {
 
       return plaintext;
     } catch (error) {
-      this.logger.error('Workspace decryption failed', error);
+      this.logger.error('Workspace decryption failed', sanitizeLogData(error));
       throw new Error('Failed to decrypt workspace data');
     }
   }

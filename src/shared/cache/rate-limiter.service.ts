@@ -1,5 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { TooManyRequestsException } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 
 interface RateLimitEntry {
   count: number;
@@ -20,7 +19,7 @@ export class RateLimiterService {
    * @param key - Unique identifier for the resource (e.g., 'byok:workspace-id:key-id')
    * @param maxRequests - Maximum requests allowed in the window
    * @param windowMs - Time window in milliseconds
-   * @throws TooManyRequestsException if rate limit exceeded
+   * @throws HttpException (429 Too Many Requests) if rate limit exceeded
    */
   async checkLimit(
     key: string,
@@ -41,8 +40,9 @@ export class RateLimiterService {
 
     if (entry.count >= maxRequests) {
       const retryAfter = Math.ceil((entry.resetAt - now) / 1000);
-      throw new TooManyRequestsException(
+      throw new HttpException(
         `Rate limit exceeded. Retry after ${retryAfter} seconds.`,
+        HttpStatus.TOO_MANY_REQUESTS,
       );
     }
 

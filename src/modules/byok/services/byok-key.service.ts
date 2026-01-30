@@ -11,6 +11,10 @@ import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
 import { RateLimiterService } from '../../../shared/cache/rate-limiter.service';
+import {
+  sanitizeLogData,
+  sanitizeForAudit,
+} from '../../../shared/logging/log-sanitizer';
 
 export interface CreateBYOKKeyDto {
   keyName: string;
@@ -70,14 +74,14 @@ export class BYOKKeyService {
 
       const saved = await this.byokKeyRepository.save(byokKey);
 
-      // Audit log the key creation
+      // Audit log the key creation (never log plaintext key)
       await this.auditService.log(
         workspaceId,
         userId,
         AuditAction.BYOK_KEY_CREATED,
         'byok_key',
         saved.id,
-        { keyName: dto.keyName, provider: dto.provider },
+        sanitizeForAudit({ keyName: dto.keyName, provider: dto.provider }),
       );
 
       this.logger.log(
@@ -86,7 +90,8 @@ export class BYOKKeyService {
 
       return this.toResponse(saved);
     } catch (error) {
-      this.logger.error('Failed to create BYOK key', error);
+      // Sanitize error to prevent logging API keys
+      this.logger.error('Failed to create BYOK key', sanitizeLogData(error));
       throw error;
     }
   }
@@ -167,23 +172,24 @@ export class BYOKKeyService {
         lastUsedAt: new Date(),
       });
 
-      // Audit log the key access
+      // Audit log the key access (log key ID only, never plaintext)
       await this.auditService.log(
         workspaceId,
         'system', // Key decryption is typically triggered by system/agent
         AuditAction.BYOK_KEY_ACCESSED,
         'byok_key',
         keyId,
-        { action: 'decrypt' },
+        sanitizeForAudit({ action: 'decrypt', keyId }),
       );
 
       this.logger.log(`BYOK key ${keyId} decrypted for workspace ${workspaceId}`);
 
       return decryptedKey;
     } catch (error) {
+      // Sanitize error to prevent logging decrypted keys
       this.logger.error(
         `Failed to decrypt BYOK key ${keyId} for workspace ${workspaceId}`,
-        error,
+        sanitizeLogData(error),
       );
       throw new ForbiddenException('Failed to decrypt API key');
     }
@@ -210,14 +216,14 @@ export class BYOKKeyService {
       isActive: false,
     });
 
-    // Audit log the key deletion
+    // Audit log the key deletion (never log plaintext key)
     await this.auditService.log(
       workspaceId,
       userId,
       AuditAction.BYOK_KEY_DELETED,
       'byok_key',
       keyId,
-      { keyName: byokKey.keyName, provider: byokKey.provider },
+      sanitizeForAudit({ keyName: byokKey.keyName, provider: byokKey.provider }),
     );
 
     this.logger.log(

@@ -243,4 +243,165 @@ describe('EncryptionService', () => {
       expect(() => service.decrypt(tamperedData)).toThrow();
     });
   });
+
+  describe('Workspace-scoped encryption', () => {
+    it('should encrypt with workspace-specific key', () => {
+      const workspaceId = 'workspace-123';
+      const plaintext = 'Workspace secret data';
+
+      const result = service.encryptWithWorkspaceKey(workspaceId, plaintext);
+
+      expect(result.encryptedData).toBeDefined();
+      expect(result.iv).toBeDefined();
+      expect(result.iv).toHaveLength(32); // 16 bytes in hex
+      expect(result.encryptedData.split(':')).toHaveLength(2); // authTag:ciphertext
+    });
+
+    it('should decrypt with workspace-specific key', () => {
+      const workspaceId = 'workspace-456';
+      const plaintext = 'Test data';
+
+      const encrypted = service.encryptWithWorkspaceKey(workspaceId, plaintext);
+      const decrypted = service.decryptWithWorkspaceKey(
+        workspaceId,
+        encrypted.encryptedData,
+        encrypted.iv,
+      );
+
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it('should produce different ciphertext for same plaintext with different workspaces', () => {
+      const plaintext = 'Same data';
+
+      const workspace1Result = service.encryptWithWorkspaceKey(
+        'workspace-1',
+        plaintext,
+      );
+      const workspace2Result = service.encryptWithWorkspaceKey(
+        'workspace-2',
+        plaintext,
+      );
+
+      // Different workspaces should produce different encrypted data
+      expect(workspace1Result.encryptedData).not.toBe(
+        workspace2Result.encryptedData,
+      );
+      expect(workspace1Result.iv).not.toBe(workspace2Result.iv);
+    });
+
+    it('should fail to decrypt with wrong workspace ID', () => {
+      const plaintext = 'Workspace isolated data';
+
+      const encrypted = service.encryptWithWorkspaceKey(
+        'workspace-correct',
+        plaintext,
+      );
+
+      // Try to decrypt with different workspace ID
+      expect(() =>
+        service.decryptWithWorkspaceKey(
+          'workspace-wrong',
+          encrypted.encryptedData,
+          encrypted.iv,
+        ),
+      ).toThrow('Failed to decrypt workspace data');
+    });
+
+    it('should handle empty string encryption for workspace', () => {
+      const workspaceId = 'workspace-789';
+      const plaintext = '';
+
+      const encrypted = service.encryptWithWorkspaceKey(workspaceId, plaintext);
+      const decrypted = service.decryptWithWorkspaceKey(
+        workspaceId,
+        encrypted.encryptedData,
+        encrypted.iv,
+      );
+
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it('should handle very long API keys (100+ characters)', () => {
+      const workspaceId = 'workspace-long';
+      const longApiKey = 'sk-ant-api03-' + 'x'.repeat(150);
+
+      const encrypted = service.encryptWithWorkspaceKey(
+        workspaceId,
+        longApiKey,
+      );
+      const decrypted = service.decryptWithWorkspaceKey(
+        workspaceId,
+        encrypted.encryptedData,
+        encrypted.iv,
+      );
+
+      expect(decrypted).toBe(longApiKey);
+      expect(decrypted.length).toBeGreaterThan(100);
+    });
+
+    it('should handle unicode and emoji in encrypted data', () => {
+      const workspaceId = 'workspace-unicode';
+      const plaintext = '🔐 Secure 世界 Data ñ';
+
+      const encrypted = service.encryptWithWorkspaceKey(workspaceId, plaintext);
+      const decrypted = service.decryptWithWorkspaceKey(
+        workspaceId,
+        encrypted.encryptedData,
+        encrypted.iv,
+      );
+
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it('should produce different IV for each encryption', () => {
+      const workspaceId = 'workspace-iv-test';
+      const plaintext = 'Test IV randomness';
+
+      const encrypted1 = service.encryptWithWorkspaceKey(
+        workspaceId,
+        plaintext,
+      );
+      const encrypted2 = service.encryptWithWorkspaceKey(
+        workspaceId,
+        plaintext,
+      );
+
+      // Different IVs should be generated
+      expect(encrypted1.iv).not.toBe(encrypted2.iv);
+      expect(encrypted1.encryptedData).not.toBe(encrypted2.encryptedData);
+
+      // But both should decrypt to same plaintext
+      const decrypted1 = service.decryptWithWorkspaceKey(
+        workspaceId,
+        encrypted1.encryptedData,
+        encrypted1.iv,
+      );
+      const decrypted2 = service.decryptWithWorkspaceKey(
+        workspaceId,
+        encrypted2.encryptedData,
+        encrypted2.iv,
+      );
+
+      expect(decrypted1).toBe(plaintext);
+      expect(decrypted2).toBe(plaintext);
+    });
+
+    it('should detect tampered ciphertext in workspace encryption', () => {
+      const workspaceId = 'workspace-tamper';
+      const plaintext = 'Original data';
+
+      const encrypted = service.encryptWithWorkspaceKey(workspaceId, plaintext);
+
+      // Tamper with encrypted data
+      const parts = encrypted.encryptedData.split(':');
+      const tamperedCiphertext = parts[1].replace(/.$/, 'X');
+      const tamperedData = `${parts[0]}:${tamperedCiphertext}`;
+
+      // Should throw on decryption due to auth tag mismatch
+      expect(() =>
+        service.decryptWithWorkspaceKey(workspaceId, tamperedData, encrypted.iv),
+      ).toThrow('Failed to decrypt workspace data');
+    });
+  });
 });
