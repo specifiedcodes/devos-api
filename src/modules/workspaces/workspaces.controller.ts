@@ -9,6 +9,7 @@ import {
   Request,
   UseGuards,
   HttpCode,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -20,9 +21,14 @@ import { WorkspacesService } from './workspaces.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { RenameWorkspaceDto } from './dto/rename-workspace.dto';
 import { WorkspaceResponseDto } from './dto/workspace-response.dto';
+import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { InvitationResponseDto } from './dto/invitation-response.dto';
+import { InvitationStatus } from '../../database/entities/workspace-invitation.entity';
+import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceOwnerGuard } from './guards/workspace-owner.guard';
 import { WorkspaceAdminGuard } from './guards/workspace-admin.guard';
+import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 
 @Controller('api/v1/workspaces')
 @UseGuards(JwtAuthGuard)
@@ -116,5 +122,79 @@ export class WorkspacesController {
     return {
       message: 'Workspace deleted successfully. Data will be permanently removed in 30 days.',
     };
+  }
+
+  @Post(':id/invitations')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @ApiOperation({ summary: 'Invite user to workspace' })
+  @ApiResponse({ status: 201, type: InvitationResponseDto, description: 'Invitation created successfully' })
+  @ApiResponse({ status: 400, description: 'User already member or invitation pending' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async createInvitation(
+    @Param('id') workspaceId: string,
+    @Body() createInvitationDto: CreateInvitationDto,
+    @Request() req: any,
+  ): Promise<InvitationResponseDto> {
+    return this.workspacesService.createInvitation(
+      workspaceId,
+      req.user.id,
+      createInvitationDto,
+    );
+  }
+
+  @Get(':id/invitations')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @ApiOperation({ summary: 'List workspace invitations' })
+  @ApiResponse({ status: 200, type: [InvitationResponseDto], description: 'List of invitations' })
+  async getInvitations(
+    @Param('id') workspaceId: string,
+    @Query('status') status?: InvitationStatus,
+  ): Promise<InvitationResponseDto[]> {
+    return this.workspacesService.getInvitations(workspaceId, status);
+  }
+
+  @Get('invitations/:token/details')
+  @ApiOperation({ summary: 'Get invitation details (public)' })
+  @ApiResponse({ status: 200, type: InvitationResponseDto, description: 'Invitation details' })
+  @ApiResponse({ status: 404, description: 'Invitation not found or expired' })
+  async getInvitationDetails(
+    @Param('token') token: string,
+  ): Promise<InvitationResponseDto> {
+    return this.workspacesService.getInvitationDetails(token);
+  }
+
+  @Post('invitations/:token/accept')
+  @ApiOperation({ summary: 'Accept workspace invitation' })
+  @ApiResponse({ status: 200, description: 'Invitation accepted, user added to workspace' })
+  @ApiResponse({ status: 400, description: 'Invalid or expired invitation' })
+  async acceptInvitation(
+    @Param('token') token: string,
+    @Request() req: any,
+  ): Promise<{ workspace: WorkspaceResponseDto; tokens: any }> {
+    return this.workspacesService.acceptInvitation(token, req.user.id);
+  }
+
+  @Post('invitations/:id/resend')
+  @ApiOperation({ summary: 'Resend invitation email' })
+  @ApiResponse({ status: 200, description: 'Invitation resent successfully' })
+  @ApiResponse({ status: 403, description: 'Only workspace owners or admins can resend invitations' })
+  async resendInvitation(
+    @Param('id') invitationId: string,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    return this.workspacesService.resendInvitation(invitationId, req.user.id);
+  }
+
+  @Delete('invitations/:id')
+  @ApiOperation({ summary: 'Revoke invitation' })
+  @ApiResponse({ status: 200, description: 'Invitation revoked successfully' })
+  @ApiResponse({ status: 403, description: 'Only workspace owners or admins can revoke invitations' })
+  async revokeInvitation(
+    @Param('id') invitationId: string,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    return this.workspacesService.revokeInvitation(invitationId, req.user.id);
   }
 }

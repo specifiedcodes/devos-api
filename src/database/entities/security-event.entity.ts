@@ -27,6 +27,10 @@ export enum SecurityEventType {
   WORKSPACE_CREATION_FAILED = 'workspace_creation_failed',
   WORKSPACE_DELETED = 'workspace_deleted',
   WORKSPACE_SWITCHED = 'workspace_switched',
+  INVITATION_CREATED = 'invitation_created',
+  INVITATION_ACCEPTED = 'invitation_accepted',
+  INVITATION_REVOKED = 'invitation_revoked',
+  PERMISSION_DENIED = 'permission_denied',
 }
 
 @Entity('security_events')

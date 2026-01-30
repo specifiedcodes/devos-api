@@ -3,13 +3,18 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, QueryRunner, DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
+import * as crypto from 'crypto';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
+import { WorkspaceInvitation, InvitationStatus } from '../../database/entities/workspace-invitation.entity';
 import { User } from '../../database/entities/user.entity';
 import { SecurityEvent, SecurityEventType } from '../../database/entities/security-event.entity';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { WorkspaceResponseDto } from './dto/workspace-response.dto';
+import { CreateInvitationDto } from './dto/create-invitation.dto';
+import { InvitationResponseDto } from './dto/invitation-response.dto';
 import { RedisService } from '../redis/redis.service';
+import { EmailService } from '../email/email.service';
 
 @Injectable()
 export class WorkspacesService {
@@ -22,6 +27,8 @@ export class WorkspacesService {
     private readonly workspaceRepository: Repository<Workspace>,
     @InjectRepository(WorkspaceMember)
     private readonly workspaceMemberRepository: Repository<WorkspaceMember>,
+    @InjectRepository(WorkspaceInvitation)
+    private readonly invitationRepository: Repository<WorkspaceInvitation>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(SecurityEvent)
@@ -29,6 +36,7 @@ export class WorkspacesService {
     private readonly dataSource: DataSource,
     private readonly jwtService: JwtService,
     private readonly redisService: RedisService,
+    private readonly emailService: EmailService,
   ) {}
 
   /**
@@ -763,5 +771,405 @@ export class WorkspacesService {
       );
       throw new InternalServerErrorException('Failed to switch workspace');
     }
+  }
+
+  /**
+   * Create an invitation to join a workspace
+   * @param workspaceId - The workspace to invite to
+   * @param userId - The user creating the invitation (must be owner/admin)
+   * @param createInvitationDto - Invitation details (email, role)
+   * @returns The created invitation
+   */
+  async createInvitation(
+    workspaceId: string,
+    userId: string,
+    createInvitationDto: CreateInvitationDto,
+  ): Promise<InvitationResponseDto> {
+    const { email, role } = createInvitationDto;
+
+    // 1. Verify workspace exists
+    const workspace = await this.workspaceRepository.findOne({
+      where: { id: workspaceId },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    // 2. Check if email is already a member
+    const existingMember = await this.workspaceMemberRepository
+      .createQueryBuilder('member')
+      .leftJoin('member.user', 'user')
+      .where('member.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('user.email = :email', { email })
+      .getOne();
+
+    if (existingMember) {
+      throw new BadRequestException('User is already a member of this workspace');
+    }
+
+    // 3. Check for existing pending invitation
+    const existingInvitation = await this.invitationRepository.findOne({
+      where: {
+        workspaceId,
+        email,
+        status: InvitationStatus.PENDING,
+      },
+    });
+
+    if (existingInvitation) {
+      throw new BadRequestException('An invitation is already pending for this email');
+    }
+
+    // 4. Generate secure token
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    // 5. Create invitation
+    const invitation = this.invitationRepository.create({
+      workspaceId,
+      email,
+      role,
+      inviterUserId: userId,
+      token: hashedToken,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
+      status: InvitationStatus.PENDING,
+    });
+
+    const savedInvitation = await this.invitationRepository.save(invitation);
+
+    // 6. Send invitation email (async, don't block response)
+    this.sendInvitationEmail(
+      email,
+      workspace.name,
+      role,
+      rawToken, // Send actual token, not hash
+      userId,
+    ).catch((error) => {
+      this.logger.error(`Failed to send invitation email to ${email}`, error);
+    });
+
+    // 7. Log security event
+    await this.securityEventRepository.save({
+      user_id: userId,
+      event_type: SecurityEventType.INVITATION_CREATED,
+      metadata: {
+        workspaceId,
+        invitedEmail: email,
+        role,
+      },
+    } as any);
+
+    // 8. Get inviter details for response
+    const inviter = await this.userRepository.findOne({ where: { id: userId } });
+
+    return {
+      id: savedInvitation.id,
+      workspaceId: savedInvitation.workspaceId,
+      workspaceName: workspace.name,
+      email: savedInvitation.email,
+      role: savedInvitation.role,
+      inviterName: inviter?.email || 'Unknown',
+      status: savedInvitation.status,
+      expiresAt: savedInvitation.expiresAt,
+      createdAt: savedInvitation.createdAt,
+    };
+  }
+
+  /**
+   * Send invitation email with magic link
+   * @param email - Email address to send to
+   * @param workspaceName - Name of the workspace
+   * @param role - Role being assigned
+   * @param token - Raw (unhashed) token for the magic link
+   * @param inviterUserId - User who created the invitation
+   */
+  private async sendInvitationEmail(
+    email: string,
+    workspaceName: string,
+    role: WorkspaceRole,
+    token: string,
+    inviterUserId: string,
+  ): Promise<void> {
+    const inviter = await this.userRepository.findOne({ where: { id: inviterUserId } });
+    const inviterName = inviter?.email || 'Someone';
+
+    const magicLink = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/invitations/${token}/accept`;
+
+    const roleDescriptions = {
+      owner: 'full control including workspace deletion',
+      admin: 'manage projects and invite users',
+      developer: 'create and edit projects',
+      viewer: 'read-only access',
+    };
+
+    await this.emailService.sendEmail({
+      to: email,
+      subject: `Invitation to join ${workspaceName}`,
+      template: 'invitation',
+      context: {
+        workspaceName,
+        inviterName,
+        role,
+        roleDescription: roleDescriptions[role],
+        magicLink,
+        expiryDays: 7,
+      },
+    });
+  }
+
+  /**
+   * Get invitations for a workspace
+   * @param workspaceId - The workspace ID
+   * @param status - Optional status filter
+   * @returns List of invitations
+   */
+  async getInvitations(
+    workspaceId: string,
+    status?: InvitationStatus,
+  ): Promise<InvitationResponseDto[]> {
+    const where: any = { workspaceId };
+    if (status) {
+      where.status = status;
+    }
+
+    const invitations = await this.invitationRepository.find({
+      where,
+      relations: ['inviter', 'workspace'],
+      order: { createdAt: 'DESC' },
+    });
+
+    return invitations.map((inv) => ({
+      id: inv.id,
+      workspaceId: inv.workspaceId,
+      workspaceName: inv.workspace?.name || 'Unknown',
+      email: inv.email,
+      role: inv.role,
+      inviterName: inv.inviter?.email || 'Unknown',
+      status: inv.status,
+      expiresAt: inv.expiresAt,
+      createdAt: inv.createdAt,
+    }));
+  }
+
+  /**
+   * Get invitation details by token (public endpoint)
+   * @param token - The invitation token
+   * @returns Invitation details
+   */
+  async getInvitationDetails(token: string): Promise<InvitationResponseDto> {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const invitation = await this.invitationRepository.findOne({
+      where: { token: hashedToken },
+      relations: ['inviter', 'workspace'],
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found or expired');
+    }
+
+    // Check if expired
+    if (invitation.expiresAt < new Date()) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    // Check if already accepted or revoked
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException(`Invitation has been ${invitation.status}`);
+    }
+
+    return {
+      id: invitation.id,
+      workspaceId: invitation.workspaceId,
+      workspaceName: invitation.workspace?.name || 'Unknown',
+      email: invitation.email,
+      role: invitation.role,
+      inviterName: invitation.inviter?.email || 'Unknown',
+      status: invitation.status,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+    };
+  }
+
+  /**
+   * Accept an invitation
+   * @param token - The invitation token
+   * @param userId - The user accepting (from JWT)
+   * @returns Workspace details and new tokens
+   */
+  async acceptInvitation(
+    token: string,
+    userId: string,
+  ): Promise<{ workspace: WorkspaceResponseDto; tokens: any }> {
+    const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+
+    const invitation = await this.invitationRepository.findOne({
+      where: { token: hashedToken },
+      relations: ['workspace'],
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    // Validate invitation
+    if (invitation.expiresAt < new Date()) {
+      throw new BadRequestException('Invitation has expired');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException(`Invitation has been ${invitation.status}`);
+    }
+
+    // Get user details
+    const user = await this.userRepository.findOne({ where: { id: userId } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Verify email matches
+    if (user.email !== invitation.email) {
+      throw new ForbiddenException('This invitation is for a different email address');
+    }
+
+    // Check if already a member
+    const existingMember = await this.workspaceMemberRepository.findOne({
+      where: { workspaceId: invitation.workspaceId, userId },
+    });
+
+    if (existingMember) {
+      throw new BadRequestException('You are already a member of this workspace');
+    }
+
+    // Add user to workspace
+    const member = this.workspaceMemberRepository.create({
+      workspaceId: invitation.workspaceId,
+      userId,
+      role: invitation.role,
+    });
+
+    await this.workspaceMemberRepository.save(member);
+
+    // Update invitation status
+    invitation.status = InvitationStatus.ACCEPTED;
+    await this.invitationRepository.save(invitation);
+
+    // Log security event
+    await this.securityEventRepository.save({
+      user_id: userId,
+      event_type: SecurityEventType.INVITATION_ACCEPTED,
+      metadata: {
+        workspaceId: invitation.workspaceId,
+        invitationId: invitation.id,
+        role: invitation.role,
+      },
+    } as any);
+
+    // Switch to the new workspace and generate tokens
+    const result = await this.switchWorkspace(userId, invitation.workspaceId, '', '', '');
+
+    return result;
+  }
+
+  /**
+   * Resend an invitation
+   * @param invitationId - The invitation ID
+   * @param userId - The user resending (must be owner/admin)
+   * @returns Success message
+   */
+  async resendInvitation(
+    invitationId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
+    const invitation = await this.invitationRepository.findOne({
+      where: { id: invitationId },
+      relations: ['workspace'],
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    // Check if user is owner or admin of the workspace
+    const membership = await this.workspaceMemberRepository.findOne({
+      where: { workspaceId: invitation.workspaceId, userId },
+    });
+
+    if (!membership || (membership.role !== WorkspaceRole.OWNER && membership.role !== WorkspaceRole.ADMIN)) {
+      throw new ForbiddenException('Only workspace owners or admins can resend invitations');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Can only resend pending invitations');
+    }
+
+    // Generate new token and expiry
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(rawToken).digest('hex');
+
+    invitation.token = hashedToken;
+    invitation.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+    await this.invitationRepository.save(invitation);
+
+    // Resend email
+    await this.sendInvitationEmail(
+      invitation.email,
+      invitation.workspace?.name || 'Unknown',
+      invitation.role,
+      rawToken,
+      userId,
+    );
+
+    return { message: 'Invitation resent successfully' };
+  }
+
+  /**
+   * Revoke an invitation
+   * @param invitationId - The invitation ID
+   * @param userId - The user revoking (must be owner/admin)
+   * @returns Success message
+   */
+  async revokeInvitation(
+    invitationId: string,
+    userId: string,
+  ): Promise<{ message: string }> {
+    const invitation = await this.invitationRepository.findOne({
+      where: { id: invitationId },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
+    }
+
+    // Check if user is owner or admin of the workspace
+    const membership = await this.workspaceMemberRepository.findOne({
+      where: { workspaceId: invitation.workspaceId, userId },
+    });
+
+    if (!membership || (membership.role !== WorkspaceRole.OWNER && membership.role !== WorkspaceRole.ADMIN)) {
+      throw new ForbiddenException('Only workspace owners or admins can revoke invitations');
+    }
+
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Can only revoke pending invitations');
+    }
+
+    invitation.status = InvitationStatus.REVOKED;
+    await this.invitationRepository.save(invitation);
+
+    // Log security event
+    await this.securityEventRepository.save({
+      user_id: userId,
+      event_type: SecurityEventType.INVITATION_REVOKED,
+      metadata: {
+        workspaceId: invitation.workspaceId,
+        invitationId: invitation.id,
+        email: invitation.email,
+      },
+    } as any);
+
+    return { message: 'Invitation revoked successfully' };
   }
 }
