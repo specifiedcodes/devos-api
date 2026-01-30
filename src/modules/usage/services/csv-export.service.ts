@@ -8,17 +8,24 @@ import { Transform, PassThrough } from 'stream';
  * Escape CSV field according to RFC 4180
  * - Fields containing comma, quote, or newline must be quoted
  * - Quotes within fields must be escaped by doubling them
+ * - Null/undefined values converted to empty string
  */
-function escapeCSVField(field: string): string {
-  if (
-    field.includes(',') ||
-    field.includes('"') ||
-    field.includes('\n') ||
-    field.includes('\r')
-  ) {
-    return `"${field.replace(/"/g, '""')}"`;
+function escapeCSVField(field: string | null | undefined): string {
+  // Handle null/undefined by converting to empty string
+  if (field === null || field === undefined) {
+    return '';
   }
-  return field;
+
+  const strField = String(field);
+  if (
+    strField.includes(',') ||
+    strField.includes('"') ||
+    strField.includes('\n') ||
+    strField.includes('\r')
+  ) {
+    return `"${strField.replace(/"/g, '""')}"`;
+  }
+  return strField;
 }
 
 /**
@@ -56,15 +63,15 @@ export class CsvExportService {
     const queryStream = await this.apiUsageRepository
       .createQueryBuilder('usage')
       .leftJoin('projects', 'project', 'usage.project_id = project.id')
+      .leftJoin('agents', 'agent', 'usage.agent_id = agent.id')
       .select('usage.id', 'id')
       .addSelect('usage.created_at', 'createdAt')
-      .addSelect('usage.provider', 'provider')
-      .addSelect('usage.model', 'model')
       .addSelect('COALESCE(project.name, NULL)', 'projectName')
+      .addSelect('COALESCE(agent.name, NULL)', 'agentName')
+      .addSelect('usage.model', 'model')
       .addSelect('usage.input_tokens', 'inputTokens')
       .addSelect('usage.output_tokens', 'outputTokens')
       .addSelect('usage.cost_usd', 'costUsd')
-      .addSelect('usage.agent_id', 'agentId')
       .where('usage.workspace_id = :workspaceId', { workspaceId })
       .andWhere('usage.created_at BETWEEN :startDate AND :endDate', {
         startDate,
@@ -73,9 +80,9 @@ export class CsvExportService {
       .orderBy('usage.created_at', 'ASC')
       .stream();
 
-    // Create CSV header
+    // Create CSV header matching AC specification
     const header =
-      'Timestamp,Provider,Model,Project,Input Tokens,Output Tokens,Cost (USD),Agent ID\n';
+      'Date,Project,Agent,Model,Input Tokens,Output Tokens,Cost (USD)\n';
 
     // Create transform stream to convert rows to CSV format
     let isFirstRow = true;
@@ -89,21 +96,21 @@ export class CsvExportService {
             isFirstRow = false;
           }
 
-          // Format row as CSV
+          // Format row as CSV matching AC specification order
+          // Date, Project, Agent, Model, Input Tokens, Output Tokens, Cost (USD)
           const csvRow = [
-            row.createdAt.toISOString(),
-            row.provider,
+            row.createdAt.toISOString().split('T')[0], // Date only (YYYY-MM-DD)
+            row.projectName,
+            row.agentName,
             row.model,
-            row.projectName || 'No Project',
             row.inputTokens,
             row.outputTokens,
             parseFloat(row.costUsd).toFixed(6),
-            row.agentId || '',
           ];
 
-          // Escape and quote fields that need it
+          // Escape and quote fields that need it (handles nulls now)
           const escapedRow = csvRow.map((field) =>
-            escapeCSVField(String(field)),
+            escapeCSVField(field),
           );
 
           this.push(escapedRow.join(',') + '\n');

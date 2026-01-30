@@ -10,14 +10,16 @@ import {
   HttpStatus,
   Res,
   Header,
+  Req,
 } from '@nestjs/common';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import { UsageService } from '../services/usage.service';
 import { CsvExportService } from '../services/csv-export.service';
 import { RecordUsageDto } from '../dto/record-usage.dto';
 import { UsageQueryDto } from '../dto/usage-query.dto';
 import { ExportUsageDto } from '../dto/export-usage.dto';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
+import { AuditService } from '../../../shared/audit/audit.service';
 
 /**
  * Controller for real-time cost tracking and usage aggregation
@@ -29,6 +31,7 @@ export class UsageV2Controller {
   constructor(
     private readonly usageService: UsageService,
     private readonly csvExportService: CsvExportService,
+    private readonly auditService: AuditService,
   ) {}
 
   /**
@@ -172,6 +175,7 @@ export class UsageV2Controller {
    *
    * @param workspaceId - Workspace ID
    * @param query - Export query parameters with date range
+   * @param req - Express request object for user context
    * @param res - Express response object for streaming
    * @returns CSV file stream
    */
@@ -180,13 +184,15 @@ export class UsageV2Controller {
   async exportUsageData(
     @Param('workspaceId') workspaceId: string,
     @Query() query: ExportUsageDto,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     const startDate = new Date(query.startDate);
     const endDate = new Date(query.endDate);
 
-    // Set filename with date range
-    const filename = `usage-export-${query.startDate}-to-${query.endDate}.csv`;
+    // Format filename to match AC specification: devos-usage-{workspace}-{date}.csv
+    const dateFormat = `${query.startDate}-to-${query.endDate}`;
+    const filename = `devos-usage-${workspaceId.substring(0, 8)}-${dateFormat}.csv`;
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
     // Get estimated row count for logging
@@ -196,9 +202,23 @@ export class UsageV2Controller {
       endDate,
     );
 
+    // Log export action to audit trail
+    await this.auditService.log({
+      workspaceId,
+      userId: (req as any).user?.id || 'system',
+      action: 'usage_export',
+      resourceType: 'usage',
+      resourceId: workspaceId,
+      metadata: {
+        startDate: query.startDate,
+        endDate: query.endDate,
+        estimatedRows,
+      },
+    });
+
     if (estimatedRows === 0) {
-      // Return empty CSV with headers
-      res.send('Timestamp,Provider,Model,Project,Input Tokens,Output Tokens,Cost (USD),Agent ID\n');
+      // Return empty CSV with headers matching AC spec
+      res.send('Date,Project,Agent,Model,Input Tokens,Output Tokens,Cost (USD)\n');
       return;
     }
 
