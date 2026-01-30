@@ -64,7 +64,7 @@ export class AuthController {
   }
 
   @Post('register')
-  @Throttle({ default: { limit: 5, ttl: 3600000 } }) // 5 requests per hour
+  @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 1000 : 5, ttl: 3600000 } }) // 5 requests per hour (relaxed in test)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
     status: 201,

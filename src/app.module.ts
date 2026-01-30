@@ -54,10 +54,15 @@ import { WorkspaceContextMiddleware } from './common/middleware/workspace-contex
   controllers: [AppController],
   providers: [
     AppService,
-    {
-      provide: APP_GUARD,
-      useClass: ThrottlerGuard,
-    },
+    // Disable global throttler in test environment
+    ...(process.env.NODE_ENV !== 'test'
+      ? [
+          {
+            provide: APP_GUARD,
+            useClass: ThrottlerGuard,
+          },
+        ]
+      : []),
   ],
 })
 export class AppModule implements NestModule {

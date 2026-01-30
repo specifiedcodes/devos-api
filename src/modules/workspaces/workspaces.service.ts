@@ -1,11 +1,13 @@
-import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, QueryRunner } from 'typeorm';
+import { Repository, QueryRunner, DataSource } from 'typeorm';
 import { v4 as uuidv4 } from 'uuid';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { SecurityEvent, SecurityEventType } from '../../database/entities/security-event.entity';
+import { CreateWorkspaceDto } from './dto/create-workspace.dto';
+import { WorkspaceResponseDto } from './dto/workspace-response.dto';
 
 @Injectable()
 export class WorkspacesService {
@@ -18,6 +20,7 @@ export class WorkspacesService {
     private readonly workspaceMemberRepository: Repository<WorkspaceMember>,
     @InjectRepository(SecurityEvent)
     private readonly securityEventRepository: Repository<SecurityEvent>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -257,6 +260,290 @@ export class WorkspacesService {
       }
 
       throw error;
+    }
+  }
+
+  /**
+   * Get all workspaces for a user with role information
+   * @param userId - User ID to fetch workspaces for
+   * @returns Array of workspaces with role, project count, and member count
+   */
+  async getUserWorkspaces(userId: string): Promise<WorkspaceResponseDto[]> {
+    try {
+      // Query to get all workspaces for the user with role and counts
+      const workspaces = await this.workspaceRepository
+        .createQueryBuilder('workspace')
+        .leftJoin('workspace.members', 'member')
+        .where('member.userId = :userId', { userId })
+        .select([
+          'workspace.id',
+          'workspace.name',
+          'workspace.description',
+          'workspace.createdAt',
+          'member.role',
+        ])
+        .getMany();
+
+      // Get counts for each workspace
+      const workspaceDtos: WorkspaceResponseDto[] = await Promise.all(
+        workspaces.map(async (workspace) => {
+          // Get member count
+          const memberCount = await this.workspaceMemberRepository.count({
+            where: { workspaceId: workspace.id },
+          });
+
+          // Get project count from workspace schema
+          let projectCount = 0;
+          try {
+            const schemaName = workspace.schemaName;
+            const result = await this.dataSource.query(
+              `SELECT COUNT(*)::int as count FROM "${schemaName}".projects WHERE status = 'active'`,
+            );
+            projectCount = result[0]?.count || 0;
+          } catch (error) {
+            this.logger.warn(`Failed to get project count for workspace ${workspace.id}: ${error}`);
+            projectCount = 0;
+          }
+
+          // Get user's role for this workspace
+          const member = await this.workspaceMemberRepository.findOne({
+            where: { workspaceId: workspace.id, userId },
+          });
+
+          return {
+            id: workspace.id,
+            name: workspace.name,
+            description: workspace.description,
+            role: member?.role || WorkspaceRole.VIEWER,
+            projectCount,
+            memberCount,
+            createdAt: workspace.createdAt,
+          };
+        }),
+      );
+
+      return workspaceDtos;
+    } catch (error) {
+      this.logger.error(
+        `Failed to get workspaces for user ${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException('Failed to fetch workspaces');
+    }
+  }
+
+  /**
+   * Create new workspace for user (user-initiated, not registration default)
+   * @param userId - User ID creating the workspace
+   * @param dto - Workspace creation data
+   * @returns Created workspace with role information
+   */
+  async createWorkspace(userId: string, dto: CreateWorkspaceDto): Promise<WorkspaceResponseDto> {
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      // Validate name length
+      if (dto.name.length < 3 || dto.name.length > 50) {
+        throw new BadRequestException('Workspace name must be between 3 and 50 characters');
+      }
+
+      this.logger.log(`Creating workspace for user ${userId}: "${dto.name}"`);
+
+      // Generate unique schema name
+      const workspaceId = uuidv4();
+      const schemaName = `workspace_${workspaceId.replace(/-/g, '')}`;
+
+      // Create workspace record
+      const workspace = this.workspaceRepository.create({
+        id: workspaceId,
+        name: dto.name,
+        description: dto.description,
+        ownerUserId: userId,
+        schemaName: schemaName,
+      });
+
+      const savedWorkspace = await queryRunner.manager.save(workspace);
+      this.logger.log(`Workspace created: ${savedWorkspace.id}`);
+
+      // Add user as workspace owner in workspace_members
+      const workspaceMember = this.workspaceMemberRepository.create({
+        workspaceId: savedWorkspace.id,
+        userId: userId,
+        role: WorkspaceRole.OWNER,
+      });
+
+      await queryRunner.manager.save(workspaceMember);
+      this.logger.log(`User ${userId} added as owner to workspace ${savedWorkspace.id}`);
+
+      // Create PostgreSQL schema for the workspace
+      await this.createWorkspaceSchema(schemaName, queryRunner);
+
+      // Create base tables in the workspace schema
+      await this.createWorkspaceTables(schemaName, queryRunner);
+
+      await queryRunner.commitTransaction();
+
+      this.logger.log(`User-initiated workspace creation complete for user ${userId}`);
+
+      return {
+        id: savedWorkspace.id,
+        name: savedWorkspace.name,
+        description: savedWorkspace.description,
+        role: WorkspaceRole.OWNER,
+        projectCount: 0,
+        memberCount: 1,
+        createdAt: savedWorkspace.createdAt,
+      };
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+
+      this.logger.error(
+        `User-initiated workspace creation failed for user ${userId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+
+      // Log security event
+      try {
+        const securityEvent = this.securityEventRepository.create({
+          user_id: userId,
+          email: '',
+          event_type: SecurityEventType.WORKSPACE_CREATION_FAILED,
+          reason: 'user_initiated_workspace_creation_failed',
+          metadata: {
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          },
+        } as any);
+        await this.securityEventRepository.save(securityEvent);
+      } catch (logError) {
+        this.logger.error('Failed to log workspace creation failure event', logError);
+      }
+
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException('Failed to create workspace');
+    } finally {
+      await queryRunner.release();
+    }
+  }
+
+  /**
+   * Rename existing workspace
+   * @param workspaceId - Workspace ID to rename
+   * @param newName - New workspace name
+   * @returns Updated workspace
+   */
+  async renameWorkspace(workspaceId: string, newName: string): Promise<WorkspaceResponseDto> {
+    try {
+      // Validate name length
+      if (newName.length < 3 || newName.length > 50) {
+        throw new BadRequestException('Workspace name must be between 3 and 50 characters');
+      }
+
+      // Check workspace exists
+      const workspace = await this.workspaceRepository.findOne({
+        where: { id: workspaceId },
+      });
+
+      if (!workspace) {
+        throw new NotFoundException('Workspace not found');
+      }
+
+      // Update workspace name
+      workspace.name = newName;
+      const updatedWorkspace = await this.workspaceRepository.save(workspace);
+
+      this.logger.log(`Workspace renamed: ${workspaceId} -> "${newName}"`);
+
+      // Get member count
+      const memberCount = await this.workspaceMemberRepository.count({
+        where: { workspaceId },
+      });
+
+      // Get project count
+      let projectCount = 0;
+      try {
+        const result = await this.dataSource.query(
+          `SELECT COUNT(*)::int as count FROM "${workspace.schemaName}".projects WHERE status = 'active'`,
+        );
+        projectCount = result[0]?.count || 0;
+      } catch (error) {
+        this.logger.warn(`Failed to get project count for workspace ${workspaceId}: ${error}`);
+      }
+
+      return {
+        id: updatedWorkspace.id,
+        name: updatedWorkspace.name,
+        description: updatedWorkspace.description,
+        role: WorkspaceRole.OWNER, // Role will be determined by guard
+        projectCount,
+        memberCount,
+        createdAt: updatedWorkspace.createdAt,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Failed to rename workspace ${workspaceId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException('Failed to rename workspace');
+    }
+  }
+
+  /**
+   * Soft delete workspace (30-day retention before permanent deletion)
+   * @param workspaceId - Workspace ID to delete
+   */
+  async softDeleteWorkspace(workspaceId: string): Promise<void> {
+    try {
+      // Check workspace exists
+      const workspace = await this.workspaceRepository.findOne({
+        where: { id: workspaceId },
+      });
+
+      if (!workspace) {
+        throw new NotFoundException('Workspace not found');
+      }
+
+      // Soft delete (sets deletedAt timestamp)
+      await this.workspaceRepository.softDelete(workspaceId);
+
+      this.logger.log(`Workspace soft deleted: ${workspaceId}`);
+
+      // Log security event
+      try {
+        const securityEvent = this.securityEventRepository.create({
+          user_id: workspace.ownerUserId,
+          email: '',
+          event_type: SecurityEventType.WORKSPACE_DELETED,
+          reason: 'workspace_soft_deleted',
+          metadata: {
+            workspaceId,
+            workspaceName: workspace.name,
+            timestamp: new Date().toISOString(),
+          },
+        } as any);
+        await this.securityEventRepository.save(securityEvent);
+      } catch (logError) {
+        this.logger.error('Failed to log workspace deletion event', logError);
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+
+      this.logger.error(
+        `Failed to delete workspace ${workspaceId}`,
+        error instanceof Error ? error.stack : String(error),
+      );
+      throw new InternalServerErrorException('Failed to delete workspace');
     }
   }
 }

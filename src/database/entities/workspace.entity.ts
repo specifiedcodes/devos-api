@@ -4,11 +4,12 @@ import {
   PrimaryGeneratedColumn,
   CreateDateColumn,
   UpdateDateColumn,
+  DeleteDateColumn,
   ManyToOne,
   OneToMany,
   JoinColumn,
 } from 'typeorm';
-import { IsNotEmpty, IsUUID } from 'class-validator';
+import { IsNotEmpty, IsUUID, IsOptional } from 'class-validator';
 import { User } from './user.entity';
 import { WorkspaceMember } from './workspace-member.entity';
 
@@ -20,6 +21,10 @@ export class Workspace {
   @Column({ type: 'varchar', length: 255 })
   @IsNotEmpty()
   name!: string;
+
+  @Column({ type: 'text', nullable: true })
+  @IsOptional()
+  description?: string;
 
   @Column({ type: 'uuid', name: 'owner_user_id' })
   @IsUUID()
@@ -38,6 +43,9 @@ export class Workspace {
 
   @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
   updatedAt!: Date;
+
+  @DeleteDateColumn({ type: 'timestamp', name: 'deleted_at', nullable: true })
+  deletedAt?: Date;
 
   @OneToMany(() => WorkspaceMember, (member) => member.workspace)
   members!: WorkspaceMember[];

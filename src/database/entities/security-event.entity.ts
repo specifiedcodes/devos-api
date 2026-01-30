@@ -25,6 +25,7 @@ export enum SecurityEventType {
   ANOMALY_DETECTED = 'anomaly_detected',
   WORKSPACE_CREATED = 'workspace_created',
   WORKSPACE_CREATION_FAILED = 'workspace_creation_failed',
+  WORKSPACE_DELETED = 'workspace_deleted',
 }
 
 @Entity('security_events')
