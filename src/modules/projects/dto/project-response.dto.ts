@@ -71,10 +71,24 @@ export class ProjectResponseDto {
 
   @ApiPropertyOptional({
     description: 'Creator user information',
-    example: { id: '550e8400-e29b-41d4-a716-446655440002', email: 'user@example.com' },
+    example: {
+      id: '550e8400-e29b-41d4-a716-446655440002',
+      name: 'John Doe',
+      email: 'user@example.com',
+      avatarUrl: 'https://example.com/avatar.jpg',
+    },
   })
   createdBy?: {
     id: string;
+    name: string;
     email: string;
+    avatarUrl?: string;
   };
+
+  @ApiProperty({
+    description: 'Number of active agents working on this project',
+    example: 2,
+    default: 0,
+  })
+  activeAgentCount!: number;
 }

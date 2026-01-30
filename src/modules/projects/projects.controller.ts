@@ -97,7 +97,19 @@ export class ProjectsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - not a workspace member' })
   async findAll(@Param('workspaceId') workspaceId: string) {
-    return this.projectsService.findAllByWorkspace(workspaceId);
+    const projects = await this.projectsService.findAllByWorkspace(workspaceId);
+
+    // Add activeAgentCount field (placeholder until agent system is implemented)
+    return projects.map(project => ({
+      ...project,
+      activeAgentCount: 0, // TODO: Integrate with agent system in Epic 5
+      createdBy: {
+        id: project.createdBy.id,
+        name: project.createdBy.email.split('@')[0], // Temporary: use email prefix as name
+        email: project.createdBy.email,
+        avatarUrl: undefined, // TODO: Add avatar support in user profile
+      },
+    }));
   }
 
   /**
@@ -126,7 +138,19 @@ export class ProjectsController {
     @Param('workspaceId') workspaceId: string,
     @Param('projectId') projectId: string,
   ) {
-    return this.projectsService.findOne(projectId, workspaceId);
+    const project = await this.projectsService.findOne(projectId, workspaceId);
+
+    // Add activeAgentCount field (placeholder until agent system is implemented)
+    return {
+      ...project,
+      activeAgentCount: 0, // TODO: Integrate with agent system in Epic 5
+      createdBy: {
+        id: project.createdBy.id,
+        name: project.createdBy.email.split('@')[0], // Temporary: use email prefix as name
+        email: project.createdBy.email,
+        avatarUrl: undefined, // TODO: Add avatar support in user profile
+      },
+    };
   }
 
   /**
