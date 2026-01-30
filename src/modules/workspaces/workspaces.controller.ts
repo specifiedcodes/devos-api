@@ -17,6 +17,7 @@ import {
   ApiResponse,
   ApiBearerAuth,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { WorkspacesService } from './workspaces.service';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { RenameWorkspaceDto } from './dto/rename-workspace.dto';
@@ -90,6 +91,8 @@ export class WorkspacesController {
   @ApiResponse({ status: 400, description: 'Validation error' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - insufficient permissions' })
+  // NOTE: RoleGuard not applied here because workspace creation doesn't have a workspace context yet
+  // Authentication via JwtAuthGuard is sufficient - all authenticated users can create workspaces
   async createWorkspace(
     @Request() req: any,
     @Body() dto: CreateWorkspaceDto,
@@ -224,6 +227,7 @@ export class WorkspacesController {
   @Patch(':id/members/:memberId/role')
   @UseGuards(RoleGuard)
   @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // Max 10 role changes per minute
   @ApiOperation({ summary: 'Change member role' })
   @ApiResponse({ status: 200, type: WorkspaceMemberDto, description: 'Member role updated' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
@@ -239,12 +243,15 @@ export class WorkspacesController {
       memberId,
       dto.role,
       req.user.id,
+      req.ip || 'unknown',
+      req.headers['user-agent'] || 'unknown',
     );
   }
 
   @Delete(':id/members/:memberId')
   @UseGuards(RoleGuard)
   @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // Max 10 member removals per minute
   @ApiOperation({ summary: 'Remove member from workspace' })
   @ApiResponse({ status: 200, description: 'Member removed successfully' })
   @ApiResponse({ status: 400, description: 'Cannot remove workspace owner' })
@@ -255,12 +262,19 @@ export class WorkspacesController {
     @Param('memberId') memberId: string,
     @Request() req: any,
   ): Promise<{ message: string }> {
-    return this.workspacesService.removeMember(workspaceId, memberId, req.user.id);
+    return this.workspacesService.removeMember(
+      workspaceId,
+      memberId,
+      req.user.id,
+      req.ip || 'unknown',
+      req.headers['user-agent'] || 'unknown',
+    );
   }
 
   @Post(':id/transfer-ownership')
   @UseGuards(RoleGuard)
   @RequireRole(WorkspaceRole.OWNER)
+  @Throttle({ default: { limit: 3, ttl: 60000 } }) // Max 3 ownership transfers per minute (critical operation)
   @ApiOperation({ summary: 'Transfer workspace ownership (Owner only)' })
   @ApiResponse({ status: 200, description: 'Ownership transferred successfully' })
   @ApiResponse({ status: 400, description: 'Invalid transfer request' })
@@ -275,6 +289,8 @@ export class WorkspacesController {
       workspaceId,
       req.user.id,
       dto.newOwnerId,
+      req.ip || 'unknown',
+      req.headers['user-agent'] || 'unknown',
     );
   }
 }

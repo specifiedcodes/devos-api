@@ -1264,7 +1264,23 @@ export class WorkspacesService {
     memberId: string,
     newRole: WorkspaceRole,
     requestingUserId: string,
+    ipAddress: string = 'unknown',
+    userAgent: string = 'unknown',
   ): Promise<any> {
+    // Service-level validation: Ensure newRole is valid WorkspaceRole enum (defense in depth)
+    const validRoles = Object.values(WorkspaceRole);
+    if (!validRoles.includes(newRole)) {
+      throw new BadRequestException(`Invalid role: ${newRole}. Must be one of: ${validRoles.join(', ')}`);
+    }
+
+    // SECURITY: Prevent escalation to OWNER role via this endpoint
+    // Only transferOwnership() should create new owners
+    if (newRole === WorkspaceRole.OWNER) {
+      throw new ForbiddenException(
+        'Cannot assign OWNER role via role change. Use transfer ownership endpoint instead.',
+      );
+    }
+
     // 1. Find member to change
     const member = await this.workspaceMemberRepository.findOne({
       where: { id: memberId, workspaceId },
@@ -1284,15 +1300,11 @@ export class WorkspacesService {
       throw new NotFoundException('Workspace not found');
     }
 
-    // 3. Prevent changing owner role unless you ARE the owner
+    // 3. Prevent changing owner role (they must transfer ownership first)
     if (member.userId === workspace.ownerUserId) {
-      const requestingMember = await this.workspaceMemberRepository.findOne({
-        where: { workspaceId, userId: requestingUserId },
-      });
-
-      if (requestingMember?.role !== WorkspaceRole.OWNER) {
-        throw new ForbiddenException('Only the owner can change the owner role');
-      }
+      throw new ForbiddenException(
+        'Cannot change the owner role. The owner must transfer ownership first.',
+      );
     }
 
     // 4. Update role
@@ -1300,18 +1312,21 @@ export class WorkspacesService {
     member.role = newRole;
     await this.workspaceMemberRepository.save(member);
 
-    // 5. Log security event
-    await this.securityEventRepository.save({
+    // 5. Log security event with actual IP and user agent
+    const securityEvent = this.securityEventRepository.create({
       user_id: requestingUserId,
       event_type: SecurityEventType.ROLE_CHANGED,
-      ip_address: 'system',
+      ip_address: ipAddress,
+      user_agent: userAgent,
       metadata: {
         workspaceId,
         targetUserId: member.userId,
+        targetUserEmail: member.user?.email,
         oldRole,
         newRole,
       },
-    } as any);
+    });
+    await this.securityEventRepository.save(securityEvent);
 
     return {
       id: member.id,
@@ -1327,12 +1342,16 @@ export class WorkspacesService {
    * @param workspaceId - Workspace ID
    * @param memberId - Member ID
    * @param requestingUserId - User making the removal
+   * @param ipAddress - IP address of requester
+   * @param userAgent - User agent of requester
    * @returns Success message
    */
   async removeMember(
     workspaceId: string,
     memberId: string,
     requestingUserId: string,
+    ipAddress: string = 'unknown',
+    userAgent: string = 'unknown',
   ): Promise<{ message: string }> {
     // 1. Find member to remove
     const member = await this.workspaceMemberRepository.findOne({
@@ -1361,33 +1380,40 @@ export class WorkspacesService {
     // 4. Remove member
     await this.workspaceMemberRepository.remove(member);
 
-    // 5. Log security event
-    await this.securityEventRepository.save({
+    // 5. Log security event with actual IP and user agent
+    const securityEvent = this.securityEventRepository.create({
       user_id: requestingUserId,
       event_type: SecurityEventType.MEMBER_REMOVED,
-      ip_address: 'system',
+      ip_address: ipAddress,
+      user_agent: userAgent,
       metadata: {
         workspaceId,
         removedUserId: member.userId,
         removedUserEmail: member.user?.email,
         removedUserRole: member.role,
       },
-    } as any);
+    });
+    await this.securityEventRepository.save(securityEvent);
 
     return { message: 'Member removed successfully' };
   }
 
   /**
    * Transfer workspace ownership to another member
+   * Uses database transaction to ensure atomicity
    * @param workspaceId - Workspace ID
    * @param currentOwnerId - Current owner's user ID
    * @param newOwnerId - New owner's user ID
+   * @param ipAddress - IP address of requester
+   * @param userAgent - User agent of requester
    * @returns Success message
    */
   async transferOwnership(
     workspaceId: string,
     currentOwnerId: string,
     newOwnerId: string,
+    ipAddress: string = 'unknown',
+    userAgent: string = 'unknown',
   ): Promise<{ message: string }> {
     // 1. Verify workspace exists and current user is owner
     const workspace = await this.workspaceRepository.findOne({
@@ -1422,40 +1448,67 @@ export class WorkspacesService {
       throw new InternalServerErrorException('Owner member record not found');
     }
 
-    // 5. Update workspace owner
-    workspace.ownerUserId = newOwnerId;
-    await this.workspaceRepository.save(workspace);
+    // Execute ownership transfer in a transaction to prevent data corruption
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // 6. Update new owner role to OWNER
-    newOwnerMember.role = WorkspaceRole.OWNER;
-    await this.workspaceMemberRepository.save(newOwnerMember);
+    try {
+      // 5. Update workspace owner
+      workspace.ownerUserId = newOwnerId;
+      await queryRunner.manager.save(workspace);
 
-    // 7. Demote current owner to ADMIN
-    currentOwnerMember.role = WorkspaceRole.ADMIN;
-    await this.workspaceMemberRepository.save(currentOwnerMember);
+      // 6. Update new owner role to OWNER
+      newOwnerMember.role = WorkspaceRole.OWNER;
+      await queryRunner.manager.save(newOwnerMember);
 
-    // 8. Log security event
-    await this.securityEventRepository.save({
-      user_id: currentOwnerId,
-      event_type: SecurityEventType.OWNERSHIP_TRANSFERRED,
-      ip_address: 'system',
-      metadata: {
-        workspaceId,
-        fromUserId: currentOwnerId,
-        toUserId: newOwnerId,
-        toUserEmail: newOwnerMember.user?.email,
-      },
-    } as any);
+      // 7. Demote current owner to ADMIN
+      currentOwnerMember.role = WorkspaceRole.ADMIN;
+      await queryRunner.manager.save(currentOwnerMember);
 
-    // 9. Send email notifications (async)
-    this.sendOwnershipTransferEmails(
-      workspace.name,
-      currentOwnerId,
-      newOwnerId,
-      newOwnerMember.user?.email || '',
-    ).catch((error) => {
+      // 8. Log security event with actual IP and user agent
+      const securityEvent = this.securityEventRepository.create({
+        user_id: currentOwnerId,
+        event_type: SecurityEventType.OWNERSHIP_TRANSFERRED,
+        ip_address: ipAddress,
+        user_agent: userAgent,
+        metadata: {
+          workspaceId,
+          fromUserId: currentOwnerId,
+          toUserId: newOwnerId,
+          toUserEmail: newOwnerMember.user?.email,
+        },
+      });
+      await queryRunner.manager.save(securityEvent);
+
+      // Commit transaction - all changes applied atomically
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      // Rollback on any error - no partial state
+      await queryRunner.rollbackTransaction();
+      this.logger.error('Failed to transfer ownership, transaction rolled back', error);
+      throw new InternalServerErrorException('Failed to transfer ownership');
+    } finally {
+      await queryRunner.release();
+    }
+
+    // 9. Send email notifications (blocking requirement for security notification)
+    // If email fails, user should know - this is a critical security event
+    try {
+      await this.sendOwnershipTransferEmails(
+        workspace.name,
+        currentOwnerId,
+        newOwnerId,
+        newOwnerMember.user?.email || '',
+      );
+    } catch (error) {
       this.logger.error('Failed to send ownership transfer emails', error);
-    });
+      // Don't fail the request, but warn the user
+      return {
+        message:
+          'Ownership transferred successfully, but email notifications failed. Please inform the new owner manually.',
+      };
+    }
 
     return { message: 'Ownership transferred successfully' };
   }

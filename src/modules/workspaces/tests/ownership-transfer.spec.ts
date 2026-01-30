@@ -36,14 +36,28 @@ describe('Workspace Ownership Transfer', () => {
 
   const mockSecurityEventRepository = {
     save: jest.fn(),
+    create: jest.fn((entity) => entity),
   };
 
   const mockEmailService = {
     sendEmail: jest.fn().mockResolvedValue(undefined),
   };
 
+  const mockQueryRunner = {
+    connect: jest.fn(),
+    startTransaction: jest.fn(),
+    commitTransaction: jest.fn(),
+    rollbackTransaction: jest.fn(),
+    release: jest.fn(),
+    manager: {
+      save: jest.fn(),
+    },
+  };
+
   const mockInvitationRepository = {};
-  const mockDataSource = {};
+  const mockDataSource = {
+    createQueryRunner: jest.fn(() => mockQueryRunner),
+  };
   const mockJwtService = {};
   const mockRedisService = {};
 
@@ -166,15 +180,18 @@ describe('Workspace Ownership Transfer', () => {
       const result = await service.transferOwnership('workspace-1', 'user-1', 'user-2');
 
       expect(result.message).toBe('Ownership transferred successfully');
-      expect(workspaceRepository.save).toHaveBeenCalledWith(
+      // All saves now go through queryRunner.manager.save (transaction)
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
         expect.objectContaining({ ownerUserId: 'user-2' }),
       );
-      expect(memberRepository.save).toHaveBeenCalledWith(
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
         expect.objectContaining({ role: WorkspaceRole.OWNER }),
       );
-      expect(memberRepository.save).toHaveBeenCalledWith(
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
         expect.objectContaining({ role: WorkspaceRole.ADMIN }),
       );
+      // Verify transaction was committed
+      expect(mockQueryRunner.commitTransaction).toHaveBeenCalled();
     });
 
     it('should prevent transferring ownership to yourself', async () => {
@@ -222,7 +239,7 @@ describe('Workspace Ownership Transfer', () => {
 
       await service.transferOwnership('workspace-1', 'user-1', 'user-2');
 
-      expect(securityEventRepository.save).toHaveBeenCalledWith(
+      expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
         expect.objectContaining({
           user_id: 'user-1',
           event_type: SecurityEventType.OWNERSHIP_TRANSFERRED,

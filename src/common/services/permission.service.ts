@@ -63,12 +63,15 @@ const PERMISSION_MATRIX: Record<WorkspaceRole, WorkspaceAction[]> = {
   ],
   [WorkspaceRole.DEVELOPER]: [
     // Developer has view + create/edit permissions
+    // NOTE: DELETE_PROJECTS permission granted per Epic 2 Story 2.5 specification
+    // "Developer permissions: Create/delete projects, Edit project settings"
+    // This aligns with development workflow where developers manage their own projects
     WorkspaceAction.VIEW_WORKSPACE,
     WorkspaceAction.VIEW_PROJECTS,
     WorkspaceAction.VIEW_AGENT_STATUS,
     WorkspaceAction.CREATE_PROJECTS,
     WorkspaceAction.EDIT_PROJECTS,
-    WorkspaceAction.DELETE_PROJECTS,
+    WorkspaceAction.DELETE_PROJECTS, // Explicitly granted in PRD/Epic 2 Story 2.5
     WorkspaceAction.ASSIGN_AGENT_TASKS,
     WorkspaceAction.TRIGGER_DEPLOYMENTS,
     WorkspaceAction.MANAGE_BYOK_KEYS,

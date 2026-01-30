@@ -31,6 +31,7 @@ describe('Workspace Member Management', () => {
 
   const mockSecurityEventRepository = {
     save: jest.fn(),
+    create: jest.fn((entity) => entity),
   };
 
   const mockUserRepository = {
