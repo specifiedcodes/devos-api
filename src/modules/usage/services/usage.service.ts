@@ -22,6 +22,7 @@ export interface UsageSummary {
  */
 export interface ProjectUsageItem {
   projectId: string | null;
+  projectName: string;
   cost: number;
   requests: number;
 }
@@ -198,7 +199,9 @@ export class UsageService {
   ): Promise<ProjectUsageItem[]> {
     const results = await this.apiUsageRepository
       .createQueryBuilder('usage')
+      .leftJoin('projects', 'project', 'usage.project_id = project.id')
       .select('usage.project_id', 'projectId')
+      .addSelect('COALESCE(project.name, \'No Project\')', 'projectName')
       .addSelect('SUM(usage.cost_usd)', 'cost')
       .addSelect('COUNT(*)', 'requests')
       .where('usage.workspace_id = :workspaceId', { workspaceId })
@@ -207,11 +210,13 @@ export class UsageService {
         endDate,
       })
       .groupBy('usage.project_id')
+      .addGroupBy('project.name')
       .orderBy('SUM(usage.cost_usd)', 'DESC')
       .getRawMany();
 
     return results.map((r) => ({
       projectId: r.projectId,
+      projectName: r.projectName || 'No Project',
       cost: parseFloat(r.cost),
       requests: parseInt(r.requests, 10),
     }));
