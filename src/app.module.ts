@@ -12,6 +12,8 @@ import { RedisModule } from './modules/redis/redis.module';
 import { EncryptionModule } from './shared/encryption/encryption.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { BYOKModule } from './modules/byok/byok.module';
+import { UsageModule } from './modules/usage/usage.module';
 import { User } from './database/entities/user.entity';
 import { Workspace } from './database/entities/workspace.entity';
 import { WorkspaceMember } from './database/entities/workspace-member.entity';
@@ -21,6 +23,9 @@ import { SecurityEvent } from './database/entities/security-event.entity';
 import { Project } from './database/entities/project.entity';
 import { ProjectPreferences } from './database/entities/project-preferences.entity';
 import { WorkspaceInvitation } from './database/entities/workspace-invitation.entity';
+import { BYOKKey } from './database/entities/byok-key.entity';
+import { UsageRecord } from './database/entities/usage-record.entity';
+import { WorkspaceSettings } from './database/entities/workspace-settings.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -48,6 +53,9 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         WorkspaceInvitation,
         Project,
         ProjectPreferences,
+        BYOKKey,
+        UsageRecord,
+        WorkspaceSettings,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -59,6 +67,8 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     AuthModule,
     WorkspacesModule,
     ProjectsModule,
+    BYOKModule,
+    UsageModule,
   ],
   controllers: [AppController],
   providers: [

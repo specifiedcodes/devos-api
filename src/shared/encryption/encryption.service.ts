@@ -95,4 +95,106 @@ export class EncryptionService {
   hash(data: string): string {
     return crypto.createHash('sha256').update(data).digest('hex');
   }
+
+  /**
+   * Derives a workspace-specific encryption key from the master key
+   * @param workspaceId - Workspace ID to derive key for
+   * @returns Workspace-specific encryption key
+   */
+  private deriveWorkspaceKey(workspaceId: string): Buffer {
+    // Use HKDF (HMAC-based Key Derivation Function) to derive workspace key
+    const salt = Buffer.from('devos-workspace-byok-salt');
+    const info = Buffer.from(`workspace:${workspaceId}`);
+
+    return crypto.hkdfSync(
+      'sha256',
+      this.encryptionKey,
+      salt,
+      info,
+      32, // 32 bytes for AES-256
+    );
+  }
+
+  /**
+   * Encrypts plaintext using workspace-scoped AES-256-GCM
+   * @param workspaceId - Workspace ID for key derivation
+   * @param plaintext - Text to encrypt
+   * @returns Object with encrypted data and IV
+   */
+  encryptWithWorkspaceKey(
+    workspaceId: string,
+    plaintext: string,
+  ): { encryptedData: string; iv: string } {
+    try {
+      // Derive workspace-specific key
+      const workspaceKey = this.deriveWorkspaceKey(workspaceId);
+
+      // Generate random initialization vector
+      const iv = crypto.randomBytes(this.ivLength);
+
+      // Create cipher
+      const cipher = crypto.createCipheriv(this.algorithm, workspaceKey, iv);
+
+      // Encrypt
+      let ciphertext = cipher.update(plaintext, 'utf8', 'hex');
+      ciphertext += cipher.final('hex');
+
+      // Get authentication tag (GCM mode)
+      const authTag = cipher.getAuthTag();
+
+      // Return format: authTag:ciphertext
+      return {
+        encryptedData: `${authTag.toString('hex')}:${ciphertext}`,
+        iv: iv.toString('hex'),
+      };
+    } catch (error) {
+      this.logger.error('Workspace encryption failed', error);
+      throw new Error('Failed to encrypt workspace data');
+    }
+  }
+
+  /**
+   * Decrypts ciphertext using workspace-scoped AES-256-GCM
+   * @param workspaceId - Workspace ID for key derivation
+   * @param encryptedData - Encrypted text in format: authTag:ciphertext
+   * @param ivHex - Initialization vector (hex-encoded)
+   * @returns Decrypted plaintext
+   */
+  decryptWithWorkspaceKey(
+    workspaceId: string,
+    encryptedData: string,
+    ivHex: string,
+  ): string {
+    try {
+      // Derive workspace-specific key
+      const workspaceKey = this.deriveWorkspaceKey(workspaceId);
+
+      // Parse encrypted data
+      const parts = encryptedData.split(':');
+      if (parts.length !== 2) {
+        throw new Error('Invalid encrypted data format');
+      }
+
+      const authTag = Buffer.from(parts[0], 'hex');
+      const ciphertext = parts[1];
+      const iv = Buffer.from(ivHex, 'hex');
+
+      // Create decipher
+      const decipher = crypto.createDecipheriv(
+        this.algorithm,
+        workspaceKey,
+        iv,
+      );
+      decipher.setAuthTag(authTag);
+
+      // Decrypt
+      let plaintext = decipher.update(ciphertext, 'hex', 'utf8');
+      plaintext += decipher.final('utf8');
+
+      return plaintext;
+    } catch (error) {
+      this.logger.error('Workspace decryption failed', error);
+      throw new Error('Failed to decrypt workspace data');
+    }
+  }
 }

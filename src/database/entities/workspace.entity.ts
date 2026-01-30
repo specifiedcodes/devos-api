@@ -38,6 +38,12 @@ export class Workspace {
   @IsNotEmpty()
   schemaName!: string;
 
+  @Column({ type: 'timestamp', nullable: true, name: 'last_accessed_at' })
+  lastAccessedAt?: Date;
+
+  @Column({ type: 'boolean', default: false, name: 'is_favorite' })
+  isFavorite!: boolean;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;
 

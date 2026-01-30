@@ -1,0 +1,257 @@
+import {
+  Injectable,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity';
+import { EncryptionService } from '../../../shared/encryption/encryption.service';
+
+export interface CreateBYOKKeyDto {
+  keyName: string;
+  provider: KeyProvider;
+  apiKey: string;
+}
+
+export interface BYOKKeyResponse {
+  id: string;
+  keyName: string;
+  provider: KeyProvider;
+  createdAt: Date;
+  lastUsedAt?: Date;
+  isActive: boolean;
+}
+
+@Injectable()
+export class BYOKKeyService {
+  private readonly logger = new Logger(BYOKKeyService.name);
+
+  constructor(
+    @InjectRepository(BYOKKey)
+    private readonly byokKeyRepository: Repository<BYOKKey>,
+    private readonly encryptionService: EncryptionService,
+  ) {}
+
+  /**
+   * Create a new BYOK key for a workspace
+   */
+  async createKey(
+    workspaceId: string,
+    userId: string,
+    dto: CreateBYOKKeyDto,
+  ): Promise<BYOKKeyResponse> {
+    try {
+      // Validate API key format based on provider
+      this.validateApiKey(dto.provider, dto.apiKey);
+
+      // Encrypt the API key with workspace-specific encryption
+      const { encryptedData, iv } =
+        this.encryptionService.encryptWithWorkspaceKey(
+          workspaceId,
+          dto.apiKey,
+        );
+
+      const byokKey = this.byokKeyRepository.create({
+        workspaceId,
+        keyName: dto.keyName,
+        provider: dto.provider,
+        encryptedKey: encryptedData,
+        encryptionIV: iv,
+        createdByUserId: userId,
+        isActive: true,
+      });
+
+      const saved = await this.byokKeyRepository.save(byokKey);
+
+      this.logger.log(
+        `BYOK key created: ${saved.id} for workspace ${workspaceId} by user ${userId}`,
+      );
+
+      return this.toResponse(saved);
+    } catch (error) {
+      this.logger.error('Failed to create BYOK key', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all active keys for a workspace (without decrypted values)
+   */
+  async getWorkspaceKeys(workspaceId: string): Promise<BYOKKeyResponse[]> {
+    const keys = await this.byokKeyRepository.find({
+      where: { workspaceId, isActive: true },
+      select: [
+        'id',
+        'keyName',
+        'provider',
+        'createdAt',
+        'lastUsedAt',
+        'isActive',
+      ],
+      order: { createdAt: 'DESC' },
+    });
+
+    return keys.map((key) => this.toResponse(key));
+  }
+
+  /**
+   * Get a specific key by ID (for the workspace)
+   */
+  async getKeyById(
+    keyId: string,
+    workspaceId: string,
+  ): Promise<BYOKKeyResponse> {
+    const key = await this.byokKeyRepository.findOne({
+      where: { id: keyId, workspaceId, isActive: true },
+      select: [
+        'id',
+        'keyName',
+        'provider',
+        'createdAt',
+        'lastUsedAt',
+        'isActive',
+      ],
+    });
+
+    if (!key) {
+      throw new NotFoundException('API key not found');
+    }
+
+    return this.toResponse(key);
+  }
+
+  /**
+   * Decrypt and return the API key (for internal use by agents)
+   * SECURITY: This should only be called by trusted internal services
+   */
+  async decryptKey(keyId: string, workspaceId: string): Promise<string> {
+    const byokKey = await this.byokKeyRepository.findOne({
+      where: { id: keyId, workspaceId, isActive: true },
+    });
+
+    if (!byokKey) {
+      throw new ForbiddenException('API key not found or not accessible');
+    }
+
+    try {
+      // Decrypt with workspace-specific key
+      const decryptedKey = this.encryptionService.decryptWithWorkspaceKey(
+        workspaceId,
+        byokKey.encryptedKey,
+        byokKey.encryptionIV,
+      );
+
+      // Update last used timestamp
+      await this.byokKeyRepository.update(keyId, {
+        lastUsedAt: new Date(),
+      });
+
+      this.logger.log(`BYOK key ${keyId} decrypted for workspace ${workspaceId}`);
+
+      return decryptedKey;
+    } catch (error) {
+      this.logger.error(
+        `Failed to decrypt BYOK key ${keyId} for workspace ${workspaceId}`,
+        error,
+      );
+      throw new ForbiddenException('Failed to decrypt API key');
+    }
+  }
+
+  /**
+   * Delete (soft delete) a BYOK key
+   */
+  async deleteKey(
+    keyId: string,
+    workspaceId: string,
+    userId: string,
+  ): Promise<void> {
+    const byokKey = await this.byokKeyRepository.findOne({
+      where: { id: keyId, workspaceId },
+    });
+
+    if (!byokKey) {
+      throw new NotFoundException('API key not found');
+    }
+
+    // Soft delete by marking inactive
+    await this.byokKeyRepository.update(keyId, {
+      isActive: false,
+    });
+
+    this.logger.log(
+      `BYOK key ${keyId} deleted by user ${userId} in workspace ${workspaceId}`,
+    );
+  }
+
+  /**
+   * Get the active key for a provider (for a workspace)
+   * Returns the most recently created active key for the provider
+   */
+  async getActiveKeyForProvider(
+    workspaceId: string,
+    provider: KeyProvider,
+  ): Promise<string | null> {
+    const byokKey = await this.byokKeyRepository.findOne({
+      where: { workspaceId, provider, isActive: true },
+      order: { createdAt: 'DESC' },
+    });
+
+    if (!byokKey) {
+      return null;
+    }
+
+    return this.decryptKey(byokKey.id, workspaceId);
+  }
+
+  /**
+   * Validate API key format based on provider
+   */
+  private validateApiKey(provider: KeyProvider, apiKey: string): void {
+    switch (provider) {
+      case KeyProvider.ANTHROPIC:
+        // Anthropic keys start with 'sk-ant-'
+        if (!apiKey.startsWith('sk-ant-')) {
+          throw new BadRequestException(
+            'Invalid Anthropic API key format. Key should start with "sk-ant-"',
+          );
+        }
+        if (apiKey.length < 40) {
+          throw new BadRequestException('Anthropic API key is too short');
+        }
+        break;
+
+      case KeyProvider.OPENAI:
+        // OpenAI keys start with 'sk-'
+        if (!apiKey.startsWith('sk-')) {
+          throw new BadRequestException(
+            'Invalid OpenAI API key format. Key should start with "sk-"',
+          );
+        }
+        if (apiKey.length < 40) {
+          throw new BadRequestException('OpenAI API key is too short');
+        }
+        break;
+
+      default:
+        throw new BadRequestException('Unsupported provider');
+    }
+  }
+
+  /**
+   * Convert entity to response DTO (excluding sensitive data)
+   */
+  private toResponse(key: BYOKKey): BYOKKeyResponse {
+    return {
+      id: key.id,
+      keyName: key.keyName,
+      provider: key.provider,
+      createdAt: key.createdAt,
+      lastUsedAt: key.lastUsedAt,
+      isActive: key.isActive,
+    };
+  }
+}
