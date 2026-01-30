@@ -137,6 +137,28 @@ export class UsageV2Controller {
   }
 
   /**
+   * Get daily usage breakdown for charting
+   * GET /api/v1/workspaces/:workspaceId/usage/daily?days=30
+   *
+   * @param workspaceId - Workspace ID
+   * @param days - Number of days to query (1-365, default: 30)
+   * @returns Array of daily usage with date and cost
+   */
+  @Get('daily')
+  async getDailyUsage(
+    @Param('workspaceId') workspaceId: string,
+    @Query('days') days?: number,
+  ) {
+    const daysToQuery = days ? parseInt(days.toString(), 10) : 30;
+
+    if (daysToQuery < 1 || daysToQuery > 365) {
+      throw new Error('Days must be between 1 and 365');
+    }
+
+    return this.usageService.getDailyUsage(workspaceId, daysToQuery);
+  }
+
+  /**
    * Get default start date (beginning of current month)
    */
   private getDefaultStartDate(): Date {

@@ -252,6 +252,37 @@ export class UsageService {
   }
 
   /**
+   * Get daily usage breakdown for charting
+   *
+   * @param workspaceId - Workspace ID
+   * @param days - Number of days to query (default: 30, max: 365)
+   * @returns Array of daily usage with date and cost
+   */
+  async getDailyUsage(
+    workspaceId: string,
+    days: number = 30,
+  ): Promise<Array<{ date: string; cost: number }>> {
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    startDate.setHours(0, 0, 0, 0);
+
+    const results = await this.apiUsageRepository
+      .createQueryBuilder('usage')
+      .select("DATE(usage.created_at)", 'date')
+      .addSelect('SUM(usage.cost_usd)', 'cost')
+      .where('usage.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('usage.created_at >= :startDate', { startDate })
+      .groupBy('DATE(usage.created_at)')
+      .orderBy('DATE(usage.created_at)', 'ASC')
+      .getRawMany();
+
+    return results.map((r) => ({
+      date: r.date,
+      cost: parseFloat(r.cost || '0'),
+    }));
+  }
+
+  /**
    * Get usage for a specific BYOK key
    * Used by Story 3.2 integration
    *
