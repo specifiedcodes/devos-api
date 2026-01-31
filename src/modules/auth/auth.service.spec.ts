@@ -16,6 +16,8 @@ import { RedisService } from '../redis/redis.service';
 import { EncryptionService } from '../../shared/encryption/encryption.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { AnomalyDetectionService } from './services/anomaly-detection.service';
+import { AuditService } from '../../shared/audit/audit.service';
+import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -150,6 +152,19 @@ describe('AuthService', () => {
         {
           provide: AnomalyDetectionService,
           useValue: mockAnomalyDetectionService,
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: getRepositoryToken(WorkspaceMember),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+          },
         },
       ],
     }).compile();
@@ -480,6 +495,7 @@ describe('AuthService', () => {
       updatedAt: new Date('2026-01-30T12:00:00Z'),
       lastLoginAt: null,
       twoFactorSecret: null,
+      currentWorkspaceId: 'workspace-uuid-001',
     };
 
     it('should successfully login existing user with correct password', async () => {
@@ -672,9 +688,11 @@ describe('AuthService', () => {
       await service.login(loginDto, '192.168.1.1', 'Mozilla/5.0');
 
       // Assert
-      expect(mockUserRepository.findOne).toHaveBeenCalledWith({
-        where: { email: 'user@example.com' },
-      });
+      expect(mockUserRepository.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { email: 'user@example.com' },
+        }),
+      );
     });
 
     it('should use generic error message for security (no field indication)', async () => {

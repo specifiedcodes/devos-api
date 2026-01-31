@@ -8,7 +8,10 @@ import { Workspace } from '../../../database/entities/workspace.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { User } from '../../../database/entities/user.entity';
 import { SecurityEvent, SecurityEventType } from '../../../database/entities/security-event.entity';
+import { WorkspaceInvitation } from '../../../database/entities/workspace-invitation.entity';
 import { RedisService } from '../../redis/redis.service';
+import { EmailService } from '../../email/email.service';
+import { AuditService } from '../../../shared/audit/audit.service';
 
 describe('WorkspacesService - Workspace Isolation Tests', () => {
   let service: WorkspacesService;
@@ -32,6 +35,7 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
             findOne: jest.fn(),
             find: jest.fn(),
             save: jest.fn(),
+            createQueryBuilder: jest.fn(),
           },
         },
         {
@@ -52,14 +56,15 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
         {
           provide: getRepositoryToken(SecurityEvent),
           useValue: {
-            create: jest.fn(),
-            save: jest.fn(),
+            create: jest.fn((entity) => entity),
+            save: jest.fn().mockResolvedValue({}),
           },
         },
         {
           provide: DataSource,
           useValue: {
             createQueryRunner: jest.fn(),
+            query: jest.fn().mockResolvedValue([{ count: 0 }]),
           },
         },
         {
@@ -71,9 +76,30 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
         {
           provide: RedisService,
           useValue: {
-            keys: jest.fn(),
-            get: jest.fn(),
-            set: jest.fn(),
+            keys: jest.fn().mockResolvedValue([]),
+            get: jest.fn().mockResolvedValue(null),
+            set: jest.fn().mockResolvedValue('OK'),
+          },
+        },
+        {
+          provide: getRepositoryToken(WorkspaceInvitation),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendEmail: jest.fn(),
+          },
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -107,6 +133,9 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
       workspaceRepository.findOne.mockResolvedValue({
         id: workspace1Id,
         name: 'Workspace 1',
+        schemaName: 'workspace_aaa',
+        description: 'Test workspace',
+        createdAt: new Date(),
       } as Workspace);
 
       workspaceMemberRepository.findOne.mockResolvedValue({
@@ -167,25 +196,40 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
   });
 
   describe('getUserWorkspaces - Isolation Tests', () => {
+    // Helper to create a mock query builder for workspaceRepository.createQueryBuilder
+    const createMockQueryBuilder = (workspaces: any[]) => ({
+      leftJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(workspaces),
+    });
+
     it('should only return workspaces where user is a member', async () => {
-      // User 1 is member of Workspace 1 only
-      workspaceMemberRepository.find.mockResolvedValue([
-        {
-          userId: user1Id,
-          workspaceId: workspace1Id,
-          role: 'owner',
-          workspace: {
-            id: workspace1Id,
-            name: 'Workspace 1',
-          } as Workspace,
-        } as WorkspaceMember,
-      ]);
+      const ws1 = {
+        id: workspace1Id,
+        name: 'Workspace 1',
+        description: 'Test',
+        schemaName: 'workspace_aaa',
+        createdAt: new Date(),
+        members: [{ role: 'owner', userId: user1Id }],
+      };
+
+      // getUserWorkspaces uses workspaceRepository.createQueryBuilder
+      workspaceRepository.findOne = jest.fn();
+      (workspaceRepository as any).createQueryBuilder = jest.fn().mockReturnValue(
+        createMockQueryBuilder([ws1]),
+      );
 
       userRepository.findOne.mockResolvedValue({
         id: user1Id,
         currentWorkspaceId: workspace1Id,
       } as User);
 
+      workspaceMemberRepository.findOne.mockResolvedValue({
+        role: 'owner',
+        userId: user1Id,
+        workspaceId: workspace1Id,
+      } as WorkspaceMember);
       workspaceMemberRepository.count.mockResolvedValue(1);
 
       const result = await service.getUserWorkspaces(user1Id);
@@ -195,40 +239,41 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
     });
 
     it('should not leak workspace data across users', async () => {
-      // User 1's workspaces
-      const user1Workspaces = [
-        {
-          userId: user1Id,
-          workspaceId: workspace1Id,
-          role: 'owner',
-          workspace: {
-            id: workspace1Id,
-            name: 'User 1 Workspace',
-          } as Workspace,
-        } as WorkspaceMember,
-      ];
+      const ws1 = {
+        id: workspace1Id,
+        name: 'User 1 Workspace',
+        description: 'Test',
+        schemaName: 'workspace_aaa',
+        createdAt: new Date(),
+        members: [{ role: 'owner', userId: user1Id }],
+      };
 
-      // User 2's workspaces
-      const user2Workspaces = [
-        {
-          userId: user2Id,
-          workspaceId: workspace2Id,
-          role: 'owner',
-          workspace: {
-            id: workspace2Id,
-            name: 'User 2 Workspace',
-          } as Workspace,
-        } as WorkspaceMember,
-      ];
+      const ws2 = {
+        id: workspace2Id,
+        name: 'User 2 Workspace',
+        description: 'Test',
+        schemaName: 'workspace_bbb',
+        createdAt: new Date(),
+        members: [{ role: 'owner', userId: user2Id }],
+      };
 
-      // Mock different responses based on userId
-      workspaceMemberRepository.find.mockImplementation((options: any) => {
-        if (options.where.userId === user1Id) {
-          return Promise.resolve(user1Workspaces);
-        } else if (options.where.userId === user2Id) {
-          return Promise.resolve(user2Workspaces);
-        }
-        return Promise.resolve([]);
+      // Track which user is being queried
+      let currentQueryUserId: string | null = null;
+      (workspaceRepository as any).createQueryBuilder = jest.fn().mockReturnValue({
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockImplementation((_condition: string, params: any) => {
+          currentQueryUserId = params.userId;
+          return {
+            select: jest.fn().mockReturnThis(),
+            getMany: jest.fn().mockImplementation(() => {
+              if (currentQueryUserId === user1Id) return Promise.resolve([ws1]);
+              if (currentQueryUserId === user2Id) return Promise.resolve([ws2]);
+              return Promise.resolve([]);
+            }),
+          };
+        }),
+        select: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
       });
 
       userRepository.findOne.mockImplementation((options: any) => {
@@ -236,6 +281,18 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
           return Promise.resolve({ id: user1Id, currentWorkspaceId: workspace1Id } as User);
         } else if (options.where.id === user2Id) {
           return Promise.resolve({ id: user2Id, currentWorkspaceId: workspace2Id } as User);
+        }
+        return Promise.resolve(null);
+      });
+
+      workspaceMemberRepository.findOne.mockImplementation((options: any) => {
+        const wsId = options.where.workspaceId;
+        const uId = options.where.userId;
+        if (wsId === workspace1Id && uId === user1Id) {
+          return Promise.resolve({ role: 'owner' } as WorkspaceMember);
+        }
+        if (wsId === workspace2Id && uId === user2Id) {
+          return Promise.resolve({ role: 'owner' } as WorkspaceMember);
         }
         return Promise.resolve(null);
       });
@@ -259,8 +316,11 @@ describe('WorkspacesService - Workspace Isolation Tests', () => {
     });
 
     it('should return empty array for user with no workspaces', async () => {
-      // User has no workspace memberships
-      workspaceMemberRepository.find.mockResolvedValue([]);
+      // User has no workspace memberships - createQueryBuilder returns empty
+      (workspaceRepository as any).createQueryBuilder = jest.fn().mockReturnValue(
+        createMockQueryBuilder([]),
+      );
+
       userRepository.findOne.mockResolvedValue({
         id: user1Id,
         currentWorkspaceId: null,

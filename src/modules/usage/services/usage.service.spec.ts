@@ -328,13 +328,15 @@ describe('UsageService', () => {
       const mockQueryBuilder = {
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         andWhere: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
+        addGroupBy: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         getRawMany: jest.fn().mockResolvedValue([
-          { projectId: 'project-1', cost: '5.5', requests: '25' },
-          { projectId: 'project-2', cost: '3.2', requests: '15' },
+          { projectId: 'project-1', projectName: 'Project 1', cost: '5.5', requests: '25' },
+          { projectId: 'project-2', projectName: 'Project 2', cost: '3.2', requests: '15' },
         ]),
       };
 
@@ -351,11 +353,13 @@ describe('UsageService', () => {
       expect(breakdown).toHaveLength(2);
       expect(breakdown[0]).toEqual({
         projectId: 'project-1',
+        projectName: 'Project 1',
         cost: 5.5,
         requests: 25,
       });
       expect(breakdown[1]).toEqual({
         projectId: 'project-2',
+        projectName: 'Project 2',
         cost: 3.2,
         requests: 15,
       });

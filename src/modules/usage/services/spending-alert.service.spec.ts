@@ -14,10 +14,31 @@ describe('SpendingAlertService', () => {
   let notificationService: NotificationService;
   let emailService: EmailService;
 
+  const mockQueryBuilder = {
+    leftJoinAndSelect: jest.fn().mockReturnThis(),
+    where: jest.fn().mockReturnThis(),
+    getMany: jest.fn(),
+  };
+
+  const mockTransactionalQueryBuilder = {
+    where: jest.fn().mockReturnThis(),
+    setLock: jest.fn().mockReturnThis(),
+    getOne: jest.fn(),
+  };
+
+  const mockTransactionalEntityManager = {
+    createQueryBuilder: jest.fn(() => mockTransactionalQueryBuilder),
+    update: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mockRepository = {
     find: jest.fn(),
     findOne: jest.fn(),
     update: jest.fn(),
+    createQueryBuilder: jest.fn(() => mockQueryBuilder),
+    manager: {
+      transaction: jest.fn((callback: any) => callback(mockTransactionalEntityManager)),
+    },
   };
 
   const mockUsageService = {
@@ -91,10 +112,16 @@ describe('SpendingAlertService', () => {
         workspace,
       };
 
-      mockRepository.find.mockResolvedValue([settings]);
+      mockQueryBuilder.getMany.mockResolvedValue([settings]);
       mockUsageService.getCurrentMonthSpend.mockResolvedValue(80.0);
       mockNotificationService.create.mockResolvedValue({});
       mockEmailService.sendSpendingAlert.mockResolvedValue(undefined);
+
+      // Mock transactional query to return the locked settings
+      mockTransactionalQueryBuilder.getOne.mockResolvedValue({
+        ...settings,
+        triggeredAlerts: {},
+      });
 
       await service.checkSpendingAlerts();
 
@@ -115,7 +142,7 @@ describe('SpendingAlertService', () => {
         100,
       );
 
-      expect(mockRepository.update).toHaveBeenCalled();
+      expect(mockTransactionalEntityManager.update).toHaveBeenCalled();
     });
 
     it('should not re-trigger alert for same threshold', async () => {
@@ -144,8 +171,18 @@ describe('SpendingAlertService', () => {
         workspace,
       };
 
-      mockRepository.find.mockResolvedValue([settings]);
+      mockQueryBuilder.getMany.mockResolvedValue([settings]);
       mockUsageService.getCurrentMonthSpend.mockResolvedValue(85.0); // Still at 85%, threshold already triggered
+
+      // Mock transactional query to return settings with 80% already triggered
+      mockTransactionalQueryBuilder.getOne.mockResolvedValue({
+        ...settings,
+        triggeredAlerts: {
+          [currentMonth]: [
+            { threshold: 80, triggered_at: '2026-01-25T10:00:00Z', spend: 80 },
+          ],
+        },
+      });
 
       await service.checkSpendingAlerts();
 
@@ -179,8 +216,18 @@ describe('SpendingAlertService', () => {
         workspace,
       };
 
-      mockRepository.find.mockResolvedValue([settings]);
+      mockQueryBuilder.getMany.mockResolvedValue([settings]);
       mockUsageService.getCurrentMonthSpend.mockResolvedValue(90.0); // Now at 90%
+
+      // Mock transactional query to return settings with 80% already triggered
+      mockTransactionalQueryBuilder.getOne.mockResolvedValue({
+        ...settings,
+        triggeredAlerts: {
+          [currentMonth]: [
+            { threshold: 80, triggered_at: '2026-01-25T10:00:00Z', spend: 80 },
+          ],
+        },
+      });
 
       await service.checkSpendingAlerts();
 

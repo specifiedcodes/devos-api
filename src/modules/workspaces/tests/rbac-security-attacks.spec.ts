@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { RedisService } from '../../redis/redis.service';
 import { EmailService } from '../../email/email.service';
+import { AuditService } from '../../../shared/audit/audit.service';
 
 describe('RBAC Security Attack Vectors', () => {
   let service: WorkspacesService;
@@ -104,6 +105,12 @@ describe('RBAC Security Attack Vectors', () => {
         {
           provide: EmailService,
           useValue: mockEmailService,
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

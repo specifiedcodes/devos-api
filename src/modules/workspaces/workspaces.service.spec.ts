@@ -7,7 +7,10 @@ import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
+import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
 import { RedisService } from '../redis/redis.service';
+import { EmailService } from '../email/email.service';
+import { AuditService } from '../../shared/audit/audit.service';
 
 describe('WorkspacesService', () => {
   let service: WorkspacesService;
@@ -120,6 +123,27 @@ describe('WorkspacesService', () => {
             set: jest.fn(),
             keys: jest.fn(),
             del: jest.fn(),
+          },
+        },
+        {
+          provide: getRepositoryToken(WorkspaceInvitation),
+          useValue: {
+            findOne: jest.fn(),
+            find: jest.fn(),
+            create: jest.fn(),
+            save: jest.fn(),
+          },
+        },
+        {
+          provide: EmailService,
+          useValue: {
+            sendEmail: jest.fn(),
+          },
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

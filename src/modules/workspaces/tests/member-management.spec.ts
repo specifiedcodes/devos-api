@@ -11,6 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
 import { RedisService } from '../../redis/redis.service';
 import { EmailService } from '../../email/email.service';
+import { AuditService } from '../../../shared/audit/audit.service';
 
 describe('Workspace Member Management', () => {
   let service: WorkspacesService;
@@ -99,6 +100,12 @@ describe('Workspace Member Management', () => {
           provide: EmailService,
           useValue: mockEmailService,
         },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
+          },
+        },
       ],
     }).compile();
 
@@ -110,6 +117,16 @@ describe('Workspace Member Management', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+    // Also reset implementations to prevent mock pollution between tests
+    mockMemberRepository.find.mockReset();
+    mockMemberRepository.findOne.mockReset();
+    mockMemberRepository.save.mockReset();
+    mockMemberRepository.remove.mockReset();
+    mockWorkspaceRepository.findOne.mockReset();
+    mockSecurityEventRepository.save.mockReset();
+    mockSecurityEventRepository.create.mockReset();
+    // Re-set the default create implementation
+    mockSecurityEventRepository.create.mockImplementation((entity) => entity);
   });
 
   describe('Task 3.1: GET /api/v1/workspaces/:id/members (list members)', () => {
@@ -276,7 +293,7 @@ describe('Workspace Member Management', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should allow owner to change their own role', async () => {
+    it('should prevent owner from changing their own role (must transfer ownership)', async () => {
       const ownerMember = {
         id: 'member-1',
         userId: 'user-1',
@@ -291,20 +308,17 @@ describe('Workspace Member Management', () => {
         ownerUserId: 'user-1',
       };
 
-      memberRepository.findOne
-        .mockResolvedValueOnce(ownerMember) // Target member
-        .mockResolvedValueOnce(ownerMember); // Requesting member (same as target)
+      memberRepository.findOne.mockResolvedValue(ownerMember);
       workspaceRepository.findOne.mockResolvedValue(workspace);
-      memberRepository.save.mockResolvedValue({ ...ownerMember, role: WorkspaceRole.ADMIN });
 
-      const result = await service.changeMemberRole(
-        'workspace-1',
-        'member-1',
-        WorkspaceRole.ADMIN,
-        'user-1',
-      );
-
-      expect(result.role).toBe(WorkspaceRole.ADMIN);
+      await expect(
+        service.changeMemberRole(
+          'workspace-1',
+          'member-1',
+          WorkspaceRole.ADMIN,
+          'user-1',
+        ),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

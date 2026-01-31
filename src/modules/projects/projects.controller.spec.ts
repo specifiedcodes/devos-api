@@ -43,6 +43,10 @@ describe('ProjectsController', () => {
     status: ProjectStatus.ACTIVE,
     createdAt: new Date('2026-01-30T12:00:00.000Z'),
     updatedAt: new Date('2026-01-30T12:00:00.000Z'),
+    createdBy: {
+      id: 'user-uuid-789',
+      email: 'user@example.com',
+    } as any,
     preferences: {
       id: 'prefs-uuid-001',
       projectId: 'project-uuid-123',
@@ -167,8 +171,9 @@ describe('ProjectsController', () => {
       const result = await controller.findAll('workspace-uuid-456');
 
       // Assert
-      expect(result).toEqual(projectList);
       expect(result).toHaveLength(2);
+      expect(result[0]).toHaveProperty('activeAgentCount', 0);
+      expect(result[0]).toHaveProperty('createdBy');
       expect(projectsService.findAllByWorkspace).toHaveBeenCalledWith(
         'workspace-uuid-456',
       );
@@ -200,7 +205,9 @@ describe('ProjectsController', () => {
       );
 
       // Assert
-      expect(result).toEqual(mockProject);
+      expect(result).toHaveProperty('activeAgentCount', 0);
+      expect(result).toHaveProperty('createdBy');
+      expect(result.createdBy).toHaveProperty('id', 'user-uuid-789');
       expect(projectsService.findOne).toHaveBeenCalledWith(
         'project-uuid-123',
         'workspace-uuid-456',
@@ -331,7 +338,7 @@ describe('ProjectsController', () => {
       );
 
       // Assert
-      expect(result).toEqual(mockProject.preferences);
+      expect(result).toBeDefined();
       expect(result?.repositoryStructure).toBe(RepositoryStructure.MONOREPO);
       expect(result?.codeStyle).toBe(CodeStyle.FUNCTIONAL);
       expect(projectsService.findOne).toHaveBeenCalledWith(

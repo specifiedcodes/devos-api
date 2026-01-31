@@ -9,6 +9,7 @@ import { ProjectsService } from './projects.service';
 import { Project, ProjectStatus } from '../../database/entities/project.entity';
 import { ProjectPreferences } from '../../database/entities/project-preferences.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
+import { AuditService } from '../../shared/audit/audit.service';
 
 describe('ProjectsService', () => {
   let service: ProjectsService;
@@ -48,6 +49,12 @@ describe('ProjectsService', () => {
         {
           provide: DataSource,
           useValue: mockDataSource,
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();

@@ -88,13 +88,12 @@ describe('CsvExportService', () => {
         {
           id: 'usage-1',
           createdAt: new Date('2024-01-15T10:30:00Z'),
-          provider: 'anthropic',
           model: 'claude-3-opus',
           projectName: 'Test Project',
+          agentName: 'Test Agent',
           inputTokens: 1000,
           outputTokens: 500,
           costUsd: '0.015000',
-          agentId: 'agent-1',
         },
       ];
 
@@ -122,17 +121,16 @@ describe('CsvExportService', () => {
       const csvContent = Buffer.concat(chunks).toString();
 
       // Check headers
-      expect(csvContent).toContain('Timestamp,Provider,Model,Project,Input Tokens,Output Tokens,Cost (USD),Agent ID');
+      expect(csvContent).toContain('Date,Project,Agent,Model,Input Tokens,Output Tokens,Cost (USD)');
 
       // Check data row
-      expect(csvContent).toContain('2024-01-15T10:30:00.000Z');
-      expect(csvContent).toContain('anthropic');
+      expect(csvContent).toContain('2024-01-15');
       expect(csvContent).toContain('claude-3-opus');
       expect(csvContent).toContain('Test Project');
+      expect(csvContent).toContain('Test Agent');
       expect(csvContent).toContain('1000');
       expect(csvContent).toContain('500');
       expect(csvContent).toContain('0.015000');
-      expect(csvContent).toContain('agent-1');
     });
 
     it('should handle null project names', async () => {
@@ -144,13 +142,12 @@ describe('CsvExportService', () => {
         {
           id: 'usage-1',
           createdAt: new Date('2024-01-15T10:30:00Z'),
-          provider: 'openai',
           model: 'gpt-4',
           projectName: null,
+          agentName: null,
           inputTokens: 2000,
           outputTokens: 1000,
           costUsd: '0.120000',
-          agentId: null,
         },
       ];
 
@@ -177,10 +174,10 @@ describe('CsvExportService', () => {
 
       const csvContent = Buffer.concat(chunks).toString();
 
-      // Should show "No Project" for null project
-      expect(csvContent).toContain('No Project');
-      // Should show empty string for null agentId (last field on line)
-      expect(csvContent).toContain(',0.120000,\n'); // Empty agent ID field at end
+      // Null values should be empty strings in CSV
+      expect(csvContent).toContain('2024-01-15,,');
+      // Should end with cost value and newline
+      expect(csvContent).toContain('0.120000\n');
     });
 
     it('should handle large datasets with streaming', async () => {
@@ -195,13 +192,12 @@ describe('CsvExportService', () => {
         return {
           id: `usage-${i}`,
           createdAt: new Date(`2024-01-${paddedDay}T10:30:00Z`),
-          provider: i % 2 === 0 ? 'anthropic' : 'openai',
           model: i % 2 === 0 ? 'claude-3-opus' : 'gpt-4',
           projectName: `Project ${i % 10}`,
+          agentName: `Agent ${i % 5}`,
           inputTokens: 1000 + i,
           outputTokens: 500 + i,
           costUsd: (0.015 + i * 0.001).toFixed(6),
-          agentId: `agent-${i % 5}`,
         };
       });
 
@@ -242,13 +238,12 @@ describe('CsvExportService', () => {
         {
           id: 'usage-1',
           createdAt: new Date('2024-01-15T10:30:00Z'),
-          provider: 'anthropic',
           model: 'claude-3-opus',
           projectName: 'Project "Test", with comma',
+          agentName: 'Test Agent',
           inputTokens: 1000,
           outputTokens: 500,
           costUsd: '0.015000',
-          agentId: 'agent-1',
         },
       ];
 

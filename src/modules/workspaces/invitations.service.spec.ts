@@ -3,6 +3,7 @@ import { getRepositoryToken, getDataSourceToken } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { WorkspacesService } from './workspaces.service';
 import { Workspace } from '../../database/entities/workspace.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
@@ -11,6 +12,7 @@ import { User } from '../../database/entities/user.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
 import { EmailService } from '../email/email.service';
 import { RedisService } from '../redis/redis.service';
+import { AuditService } from '../../shared/audit/audit.service';
 
 describe('WorkspacesService - Invitations', () => {
   let service: WorkspacesService;
@@ -39,13 +41,18 @@ describe('WorkspacesService - Invitations', () => {
     email: 'owner@example.com',
   };
 
+  // raw_token is the plaintext token that the user receives
+  // The stored token is the SHA256 hash of raw_token in hex format
+  const rawInvitationToken = 'raw_token';
+  const hashedInvitationToken = crypto.createHash('sha256').update(rawInvitationToken).digest('hex');
+
   const mockInvitation = {
     id: 'invitation-1',
     workspaceId: 'workspace-1',
     email: 'invitee@example.com',
     role: WorkspaceRole.DEVELOPER,
     inviterUserId: 'user-1',
-    token: 'hashed_token',
+    token: hashedInvitationToken,
     expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     status: InvitationStatus.PENDING,
     createdAt: new Date(),
@@ -122,6 +129,12 @@ describe('WorkspacesService - Invitations', () => {
           provide: EmailService,
           useValue: {
             sendEmail: jest.fn(),
+          },
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
@@ -205,6 +218,8 @@ describe('WorkspacesService - Invitations', () => {
         email: 'invitee@example.com',
       };
 
+      // findInvitationByToken uses invitationRepo.find() to get all pending invitations
+      jest.spyOn(invitationRepo, 'find').mockResolvedValue([mockInvitation] as any);
       jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(mockInvitation as any);
       jest.spyOn(userRepo, 'findOne').mockResolvedValue(acceptingUser as any);
       jest.spyOn(memberRepo, 'findOne').mockResolvedValue(null);
@@ -222,7 +237,7 @@ describe('WorkspacesService - Invitations', () => {
         tokens: { access_token: 'token', refresh_token: 'refresh' },
       });
 
-      const result = await service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent');
+      const result = await service.acceptInvitation(rawInvitationToken, 'user-2', '127.0.0.1', 'test-agent');
 
       expect(result.workspace).toBeDefined();
       expect(result.tokens).toBeDefined();
@@ -234,23 +249,21 @@ describe('WorkspacesService - Invitations', () => {
         expiresAt: new Date(Date.now() - 1000), // Expired
       };
 
-      jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(expiredInvitation as any);
+      // findInvitationByToken uses invitationRepo.find()
+      jest.spyOn(invitationRepo, 'find').mockResolvedValue([expiredInvitation] as any);
 
-      await expect(service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
+      await expect(service.acceptInvitation(rawInvitationToken, 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
         BadRequestException,
       );
     });
 
     it('should reject already accepted invitations', async () => {
-      const acceptedInvitation = {
-        ...mockInvitation,
-        status: InvitationStatus.ACCEPTED,
-      };
+      // findInvitationByToken only searches PENDING invitations
+      // An accepted invitation won't be found, so it returns null -> NotFoundException
+      jest.spyOn(invitationRepo, 'find').mockResolvedValue([] as any);
 
-      jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(acceptedInvitation as any);
-
-      await expect(service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
-        BadRequestException,
+      await expect(service.acceptInvitation(rawInvitationToken, 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
+        NotFoundException,
       );
     });
 
@@ -267,10 +280,12 @@ describe('WorkspacesService - Invitations', () => {
         expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
       };
 
+      // findInvitationByToken uses invitationRepo.find()
+      jest.spyOn(invitationRepo, 'find').mockResolvedValue([validInvitation] as any);
       jest.spyOn(invitationRepo, 'findOne').mockResolvedValue(validInvitation as any);
       jest.spyOn(userRepo, 'findOne').mockResolvedValue(wrongUser as any);
 
-      await expect(service.acceptInvitation('raw_token', 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
+      await expect(service.acceptInvitation(rawInvitationToken, 'user-2', '127.0.0.1', 'test-agent')).rejects.toThrow(
         ForbiddenException,
       );
     });

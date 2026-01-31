@@ -10,6 +10,7 @@ import { Reflector } from '@nestjs/core';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
 import { SecurityEvent } from '../../../database/entities/security-event.entity';
+import { AuditService } from '../../../shared/audit/audit.service';
 
 describe('RBAC Enforcement on Workspace Endpoints', () => {
   let controller: WorkspacesController;
@@ -62,6 +63,12 @@ describe('RBAC Enforcement on Workspace Endpoints', () => {
         {
           provide: getRepositoryToken(SecurityEvent),
           useValue: mockSecurityEventRepository,
+        },
+        {
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
+          },
         },
       ],
     }).compile();
