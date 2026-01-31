@@ -1,7 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AuditService, AuditAction, AuditLogFilters } from './audit.service';
+import {
+  AuditService,
+  AuditAction,
+  AuditLogFilters,
+  BYOK_AUDIT_ACTIONS,
+} from './audit.service';
 import { AuditLog } from '../../database/entities/audit-log.entity';
 
 describe('AuditService', () => {
@@ -183,6 +188,155 @@ describe('AuditService', () => {
       expect(csv).toContain("'+FORMULA");
       expect(csv).toContain("'@EXPLOIT");
       expect(csv).toContain("'-ATTACK");
+    });
+  });
+
+  describe('BYOK audit action types', () => {
+    it('should have BYOK_KEY_USED enum value', () => {
+      expect(AuditAction.BYOK_KEY_USED).toBe('byok_key_used');
+    });
+
+    it('should have BYOK_KEY_VALIDATION_FAILED enum value', () => {
+      expect(AuditAction.BYOK_KEY_VALIDATION_FAILED).toBe(
+        'byok_key_validation_failed',
+      );
+    });
+
+    it('should have BYOK_AUDIT_ACTIONS constant with all 6 BYOK actions', () => {
+      expect(BYOK_AUDIT_ACTIONS).toHaveLength(6);
+      expect(BYOK_AUDIT_ACTIONS).toContain(AuditAction.BYOK_KEY_CREATED);
+      expect(BYOK_AUDIT_ACTIONS).toContain(AuditAction.BYOK_KEY_DELETED);
+      expect(BYOK_AUDIT_ACTIONS).toContain(AuditAction.BYOK_KEY_ACCESSED);
+      expect(BYOK_AUDIT_ACTIONS).toContain(AuditAction.BYOK_KEY_UPDATED);
+      expect(BYOK_AUDIT_ACTIONS).toContain(AuditAction.BYOK_KEY_USED);
+      expect(BYOK_AUDIT_ACTIONS).toContain(
+        AuditAction.BYOK_KEY_VALIDATION_FAILED,
+      );
+    });
+  });
+
+  describe('getByokAuditSummary', () => {
+    it('should return correct BYOK audit summary', async () => {
+      const mockActionCounts = [
+        { action: 'byok_key_created', count: '5' },
+        { action: 'byok_key_accessed', count: '10' },
+        { action: 'byok_key_used', count: '100' },
+        { action: 'byok_key_validation_failed', count: '2' },
+      ];
+
+      const mockUniqueUsers = { count: '3' };
+      const mockCost = { totalCost: '47.32' };
+
+      const mockQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue(mockActionCounts),
+        getRawOne: jest.fn(),
+      };
+
+      // First call returns action counts, second call returns unique users, third returns cost
+      let callCount = 0;
+      mockRepository.createQueryBuilder.mockImplementation(() => {
+        callCount++;
+        if (callCount === 1) {
+          return {
+            ...mockQueryBuilder,
+            getRawMany: jest.fn().mockResolvedValue(mockActionCounts),
+          };
+        } else if (callCount === 2) {
+          return {
+            ...mockQueryBuilder,
+            getRawOne: jest.fn().mockResolvedValue(mockUniqueUsers),
+          };
+        } else {
+          return {
+            ...mockQueryBuilder,
+            getRawOne: jest.fn().mockResolvedValue(mockCost),
+          };
+        }
+      });
+
+      const result = await service.getByokAuditSummary('ws-1', 30);
+
+      expect(result.totalKeyAccessEvents).toBe(15); // 5 created + 10 accessed
+      expect(result.totalApiCallsViaByok).toBe(100);
+      expect(result.totalCostViaByok).toBe(47.32);
+      expect(result.uniqueUsersAccessingKeys).toBe(3);
+      expect(result.failedValidationAttempts).toBe(2);
+      expect(result.period.start).toBeDefined();
+      expect(result.period.end).toBeDefined();
+    });
+
+    it('should return zeros when no BYOK audit events exist', async () => {
+      const mockQueryBuilder = {
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        groupBy: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([]),
+        getRawOne: jest.fn().mockResolvedValue({ count: '0', totalCost: null }),
+      };
+
+      mockRepository.createQueryBuilder.mockReturnValue(mockQueryBuilder);
+
+      const result = await service.getByokAuditSummary('ws-1', 30);
+
+      expect(result.totalKeyAccessEvents).toBe(0);
+      expect(result.totalApiCallsViaByok).toBe(0);
+      expect(result.totalCostViaByok).toBe(0);
+      expect(result.uniqueUsersAccessingKeys).toBe(0);
+      expect(result.failedValidationAttempts).toBe(0);
+    });
+  });
+
+  describe('log with IP and user agent', () => {
+    it('should extract ipAddress and userAgent from metadata', async () => {
+      const mockLog = {
+        id: '1',
+        workspaceId: 'ws-1',
+        userId: 'user-1',
+        action: AuditAction.BYOK_KEY_CREATED,
+        resourceType: 'byok_key',
+        resourceId: 'key-1',
+        metadata: {
+          keyName: 'Test Key',
+          provider: 'anthropic',
+          ipAddress: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+        },
+      };
+
+      mockRepository.create.mockReturnValue(mockLog);
+      mockRepository.save.mockResolvedValue(mockLog);
+
+      await service.log(
+        'ws-1',
+        'user-1',
+        AuditAction.BYOK_KEY_CREATED,
+        'byok_key',
+        'key-1',
+        {
+          keyName: 'Test Key',
+          provider: 'anthropic',
+          ipAddress: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+        },
+      );
+
+      expect(mockRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          ipAddress: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+          metadata: expect.objectContaining({
+            ipAddress: '192.168.1.1',
+            userAgent: 'Mozilla/5.0',
+          }),
+        }),
+      );
     });
   });
 

@@ -18,6 +18,11 @@ import {
 } from '../../../shared/logging/log-sanitizer';
 import { ApiKeyValidatorService } from './api-key-validator.service';
 
+export interface RequestContext {
+  ipAddress?: string;
+  userAgent?: string;
+}
+
 export interface CreateBYOKKeyDto {
   keyName: string;
   provider: KeyProvider;
@@ -67,18 +72,55 @@ export class BYOKKeyService {
     workspaceId: string,
     userId: string,
     dto: CreateBYOKKeyDto,
+    requestContext?: RequestContext,
   ): Promise<BYOKKeyResponse> {
     try {
       // Validate API key format based on provider
       this.validateApiKey(dto.provider, dto.apiKey);
 
       // Perform live API validation
-      const validationResult = await this.apiKeyValidator.validateApiKey(
-        dto.provider,
-        dto.apiKey,
-      );
+      let validationResult;
+      try {
+        validationResult = await this.apiKeyValidator.validateApiKey(
+          dto.provider,
+          dto.apiKey,
+        );
+      } catch (validationError) {
+        // Log validation failure audit event before re-throwing
+        await this.auditService.log(
+          workspaceId,
+          userId,
+          AuditAction.BYOK_KEY_VALIDATION_FAILED,
+          'byok_key',
+          'N/A',
+          sanitizeForAudit({
+            provider: dto.provider,
+            error: validationError instanceof Error
+              ? sanitizeLogData(validationError.message)
+              : 'Unknown validation error',
+            ipAddress: requestContext?.ipAddress,
+            userAgent: requestContext?.userAgent,
+          }),
+        );
+        throw validationError;
+      }
 
       if (!validationResult.isValid) {
+        // Log validation failure audit event
+        await this.auditService.log(
+          workspaceId,
+          userId,
+          AuditAction.BYOK_KEY_VALIDATION_FAILED,
+          'byok_key',
+          'N/A',
+          sanitizeForAudit({
+            provider: dto.provider,
+            error: validationResult.error || 'Invalid API key',
+            ipAddress: requestContext?.ipAddress,
+            userAgent: requestContext?.userAgent,
+          }),
+        );
+
         throw new BadRequestException(
           `API key validation failed: ${validationResult.error || 'Invalid API key'}`,
         );
@@ -118,7 +160,13 @@ export class BYOKKeyService {
         AuditAction.BYOK_KEY_CREATED,
         'byok_key',
         saved.id,
-        sanitizeForAudit({ keyName: dto.keyName, provider: dto.provider }),
+        sanitizeForAudit({
+          keyName: dto.keyName,
+          provider: dto.provider,
+          keyId: saved.id,
+          ipAddress: requestContext?.ipAddress,
+          userAgent: requestContext?.userAgent,
+        }),
       );
 
       this.logger.log(
@@ -187,7 +235,11 @@ export class BYOKKeyService {
    * Decrypt and return the API key (for internal use by agents)
    * SECURITY: This should only be called by trusted internal services
    */
-  async decryptKey(keyId: string, workspaceId: string): Promise<string> {
+  async decryptKey(
+    keyId: string,
+    workspaceId: string,
+    requestContext?: RequestContext,
+  ): Promise<string> {
     // Rate limiting: Configurable via environment variables
     const rateLimitKey = `byok:decrypt:${workspaceId}:${keyId}`;
     await this.rateLimiter.checkLimit(
@@ -224,7 +276,12 @@ export class BYOKKeyService {
         AuditAction.BYOK_KEY_ACCESSED,
         'byok_key',
         keyId,
-        sanitizeForAudit({ action: 'decrypt', keyId }),
+        sanitizeForAudit({
+          action: 'decrypt',
+          keyId,
+          ipAddress: requestContext?.ipAddress,
+          userAgent: requestContext?.userAgent,
+        }),
       );
 
       this.logger.log(`BYOK key ${keyId} decrypted for workspace ${workspaceId}`);
@@ -247,6 +304,7 @@ export class BYOKKeyService {
     keyId: string,
     workspaceId: string,
     userId: string,
+    requestContext?: RequestContext,
   ): Promise<void> {
     const byokKey = await this.byokKeyRepository.findOne({
       where: { id: keyId, workspaceId },
@@ -268,7 +326,13 @@ export class BYOKKeyService {
       AuditAction.BYOK_KEY_DELETED,
       'byok_key',
       keyId,
-      sanitizeForAudit({ keyName: byokKey.keyName, provider: byokKey.provider }),
+      sanitizeForAudit({
+        keyName: byokKey.keyName,
+        provider: byokKey.provider,
+        keyId,
+        ipAddress: requestContext?.ipAddress,
+        userAgent: requestContext?.userAgent,
+      }),
     );
 
     this.logger.log(
@@ -283,6 +347,7 @@ export class BYOKKeyService {
   async getActiveKeyForProvider(
     workspaceId: string,
     provider: KeyProvider,
+    requestContext?: RequestContext,
   ): Promise<string | null> {
     const byokKey = await this.byokKeyRepository.findOne({
       where: { workspaceId, provider, isActive: true },
@@ -293,7 +358,7 @@ export class BYOKKeyService {
       return null;
     }
 
-    return this.decryptKey(byokKey.id, workspaceId);
+    return this.decryptKey(byokKey.id, workspaceId, requestContext);
   }
 
   /**

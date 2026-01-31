@@ -7,7 +7,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
-import { AuditService, AuditAction } from './audit.service';
+import { AuditService, AuditAction, ByokAuditSummary } from './audit.service';
 import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 import { WorkspaceAccessGuard } from '../guards/workspace-access.guard';
@@ -58,6 +58,15 @@ export class AuditController {
       limit: parsedLimit,
       offset: parsedOffset,
     };
+  }
+
+  @Get('byok-summary')
+  async getByokAuditSummary(
+    @Param('workspaceId') workspaceId: string,
+    @Query('days') days?: string,
+  ): Promise<ByokAuditSummary> {
+    const parsedDays = days ? parseInt(days, 10) : 30;
+    return this.auditService.getByokAuditSummary(workspaceId, parsedDays);
   }
 
   @Get('export')

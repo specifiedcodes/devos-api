@@ -17,9 +17,10 @@ import { RoleGuard } from '../../../common/guards/role.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
-import { BYOKKeyService } from '../services/byok-key.service';
+import { BYOKKeyService, RequestContext } from '../services/byok-key.service';
 import { CreateBYOKKeyDto } from '../dto/create-byok-key.dto';
 import { UsageService } from '../../usage/services/usage.service';
+import { Request } from 'express';
 
 @Controller('api/v1/workspaces/:workspaceId/byok-keys')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard)
@@ -42,7 +43,11 @@ export class BYOKKeyController {
     @Req() req: any,
   ) {
     const userId = req.user.userId;
-    return this.byokKeyService.createKey(workspaceId, userId, dto);
+    const requestContext: RequestContext = {
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers?.['user-agent'],
+    };
+    return this.byokKeyService.createKey(workspaceId, userId, dto, requestContext);
   }
 
   /**
@@ -78,7 +83,11 @@ export class BYOKKeyController {
     @Req() req: any,
   ) {
     const userId = req.user.userId;
-    await this.byokKeyService.deleteKey(keyId, workspaceId, userId);
+    const requestContext: RequestContext = {
+      ipAddress: req.ip || req.connection?.remoteAddress,
+      userAgent: req.headers?.['user-agent'],
+    };
+    await this.byokKeyService.deleteKey(keyId, workspaceId, userId, requestContext);
   }
 
   /**

@@ -131,15 +131,33 @@ export class UsageService {
             agentId: agentId || undefined,
           },
         );
+
+        // If BYOK key was used, create a specific byok_key_used audit event
+        if (byokKeyId) {
+          await this.auditService.log(
+            workspaceId,
+            'system',
+            AuditAction.BYOK_KEY_USED,
+            'byok_key',
+            byokKeyId,
+            {
+              keyId: byokKeyId,
+              provider,
+              model,
+              costUsd,
+              inputTokens,
+              outputTokens,
+              projectId: projectId || undefined,
+              agentId: agentId || undefined,
+            },
+          );
+        }
       } catch (auditError) {
         // SECURITY: Audit failures for security-critical operations are ERROR level
         // For usage tracking (which creates audit trail), this is important
         this.logger.error(
           `AUDIT FAILURE: Failed to log usage creation for workspace ${workspaceId}: ${auditError instanceof Error ? auditError.message : 'Unknown error'}`,
         );
-        // TODO: Add metric tracking for audit failure rate
-        // TODO: Consider alerting if audit failure rate exceeds threshold
-        // Note: We don't throw to avoid blocking usage tracking, but failures are visible
       }
 
       this.logger.log(

@@ -3,7 +3,7 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { Repository } from 'typeorm';
 import { ForbiddenException, BadRequestException } from '@nestjs/common';
-import { BYOKKeyService } from './byok-key.service';
+import { BYOKKeyService, RequestContext } from './byok-key.service';
 import { BYOKKey, KeyProvider } from '../../../database/entities/byok-key.entity';
 import { EncryptionService } from '../../../shared/encryption/encryption.service';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -266,6 +266,176 @@ describe('BYOKKeyService', () => {
       expect(result[0].keyName).toBe('Key 1');
       expect(result[0].maskedKey).toBeDefined();
       expect(result[0].maskedKey).toContain('...');
+    });
+  });
+
+  describe('createKey with requestContext', () => {
+    it('should pass IP and user agent to audit log', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Test Key',
+        provider: KeyProvider.ANTHROPIC,
+        apiKey: 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz',
+      };
+      const requestContext: RequestContext = {
+        ipAddress: '192.168.1.1',
+        userAgent: 'Mozilla/5.0',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: true,
+      });
+      mockRepository.find.mockResolvedValue([]);
+      mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
+        encryptedData: 'encrypted',
+        iv: 'iv123',
+      });
+      mockRepository.create.mockReturnValue({
+        id: 'key-123',
+        ...dto,
+        workspaceId,
+        createdByUserId: userId,
+      });
+      mockRepository.save.mockResolvedValue({
+        id: 'key-123',
+        keyName: dto.keyName,
+        provider: dto.provider,
+        createdAt: new Date(),
+        keyPrefix: 'sk-ant-',
+        keySuffix: 'wxyz',
+      });
+
+      await service.createKey(workspaceId, userId, dto, requestContext);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        workspaceId,
+        userId,
+        'byok_key_created',
+        'byok_key',
+        'key-123',
+        expect.objectContaining({
+          keyName: 'Test Key',
+          provider: 'anthropic',
+          keyId: 'key-123',
+          ipAddress: '192.168.1.1',
+          userAgent: 'Mozilla/5.0',
+        }),
+      );
+    });
+
+    it('should log validation failure with audit event when API validation fails', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Test Key',
+        provider: KeyProvider.ANTHROPIC,
+        apiKey: 'sk-ant-api03-invalid-key-1234567890abcdefghijklmnopqrstuvwxyz',
+      };
+      const requestContext: RequestContext = {
+        ipAddress: '10.0.0.1',
+        userAgent: 'TestAgent',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: false,
+        error: 'Invalid API key',
+      });
+
+      await expect(
+        service.createKey(workspaceId, userId, dto, requestContext),
+      ).rejects.toThrow(BadRequestException);
+
+      // Should have logged a validation failure audit event
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        workspaceId,
+        userId,
+        'byok_key_validation_failed',
+        'byok_key',
+        'N/A',
+        expect.objectContaining({
+          provider: 'anthropic',
+          error: 'Invalid API key',
+          ipAddress: '10.0.0.1',
+          userAgent: 'TestAgent',
+        }),
+      );
+    });
+  });
+
+  describe('deleteKey with requestContext', () => {
+    it('should pass IP and user agent to audit log on delete', async () => {
+      const requestContext: RequestContext = {
+        ipAddress: '10.0.0.5',
+        userAgent: 'TestAgent/2.0',
+      };
+
+      mockRepository.findOne.mockResolvedValue({
+        id: 'key-123',
+        workspaceId: 'workspace-123',
+        keyName: 'Test Key',
+        provider: KeyProvider.ANTHROPIC,
+      });
+      mockRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.deleteKey(
+        'key-123',
+        'workspace-123',
+        'user-123',
+        requestContext,
+      );
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        'workspace-123',
+        'user-123',
+        'byok_key_deleted',
+        'byok_key',
+        'key-123',
+        expect.objectContaining({
+          keyName: 'Test Key',
+          provider: 'anthropic',
+          keyId: 'key-123',
+          ipAddress: '10.0.0.5',
+          userAgent: 'TestAgent/2.0',
+        }),
+      );
+    });
+  });
+
+  describe('decryptKey with requestContext', () => {
+    it('should pass requestContext to audit log on decrypt', async () => {
+      const requestContext: RequestContext = {
+        ipAddress: '172.16.0.1',
+        userAgent: 'InternalService/1.0',
+      };
+
+      mockRepository.findOne.mockResolvedValue({
+        id: 'key-123',
+        workspaceId: 'workspace-123',
+        encryptedKey: 'encrypted',
+        encryptionIV: 'iv123',
+        isActive: true,
+      });
+      mockEncryptionService.decryptWithWorkspaceKey.mockReturnValue(
+        'sk-ant-decrypted',
+      );
+      mockRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.decryptKey('key-123', 'workspace-123', requestContext);
+
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        'workspace-123',
+        'system',
+        'byok_key_accessed',
+        'byok_key',
+        'key-123',
+        expect.objectContaining({
+          action: 'decrypt',
+          keyId: 'key-123',
+          ipAddress: '172.16.0.1',
+          userAgent: 'InternalService/1.0',
+        }),
+      );
     });
   });
 
