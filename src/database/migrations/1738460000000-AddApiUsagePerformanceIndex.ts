@@ -14,9 +14,17 @@ export class AddApiUsagePerformanceIndex1738460000000
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add composite index on (workspace_id, created_at) for fast date range queries
-    await queryRunner.query(
-      `CREATE INDEX "idx_api_usage_workspace_date" ON "api_usage" ("workspace_id", "created_at" DESC)`,
-    );
+    // Check if index exists first (it was created in CreateApiUsageTable migration)
+    const indexExists = await queryRunner.query(`
+      SELECT 1 FROM pg_indexes
+      WHERE indexname = 'idx_api_usage_workspace_date'
+    `);
+
+    if (indexExists.length === 0) {
+      await queryRunner.query(
+        `CREATE INDEX "idx_api_usage_workspace_date" ON "api_usage" ("workspace_id", "created_at" DESC)`,
+      );
+    }
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {

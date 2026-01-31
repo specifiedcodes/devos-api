@@ -203,18 +203,18 @@ export class UsageV2Controller {
     );
 
     // Log export action to audit trail
-    await this.auditService.log({
+    await this.auditService.log(
       workspaceId,
-      userId: (req as any).user?.id || 'system',
-      action: 'usage_export',
-      resourceType: 'usage',
-      resourceId: workspaceId,
-      metadata: {
+      (req as any).user?.id || 'system',
+      'usage_export' as any,
+      'usage',
+      workspaceId,
+      {
         startDate: query.startDate,
         endDate: query.endDate,
         estimatedRows,
       },
-    });
+    );
 
     if (estimatedRows === 0) {
       // Return empty CSV with headers matching AC spec

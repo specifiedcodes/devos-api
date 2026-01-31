@@ -5,12 +5,14 @@ import { UsageService } from './usage.service';
 import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.entity';
 import { PricingService } from './pricing.service';
 import { RedisService } from '../../../modules/redis/redis.service';
+import { AuditService } from '../../../shared/audit/audit.service';
 
 describe('UsageService', () => {
   let service: UsageService;
   let repository: jest.Mocked<Repository<ApiUsage>>;
   let pricingService: jest.Mocked<PricingService>;
   let redisService: jest.Mocked<RedisService>;
+  let auditService: jest.Mocked<AuditService>;
 
   beforeEach(async () => {
     const mockRepository = {
@@ -32,6 +34,10 @@ describe('UsageService', () => {
       expire: jest.fn(),
     };
 
+    const mockAuditService = {
+      log: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         UsageService,
@@ -47,6 +53,10 @@ describe('UsageService', () => {
           provide: RedisService,
           useValue: mockRedisService,
         },
+        {
+          provide: AuditService,
+          useValue: mockAuditService,
+        },
       ],
     }).compile();
 
@@ -54,6 +64,7 @@ describe('UsageService', () => {
     repository = module.get(getRepositoryToken(ApiUsage));
     pricingService = module.get(PricingService);
     redisService = module.get(RedisService);
+    auditService = module.get(AuditService);
   });
 
   it('should be defined', () => {
