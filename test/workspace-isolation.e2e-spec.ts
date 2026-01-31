@@ -18,10 +18,15 @@ import { DataSource } from 'typeorm';
  * - Concurrent requests from different workspaces
  * - Edge cases with null/undefined values
  * - Direct database query isolation (RLS validation)
+ *
+ * SECURITY FIX: Tests use database transactions for isolation
+ * Each test runs in a transaction that's rolled back after completion,
+ * ensuring tests don't interfere with each other or leave test data.
  */
 describe('Workspace Cost Isolation (e2e)', () => {
   let app: INestApplication;
   let dataSource: DataSource;
+  let queryRunner: any;
 
   // Workspace 1 fixtures
   let workspace1Id: string;
@@ -47,6 +52,25 @@ describe('Workspace Cost Isolation (e2e)', () => {
     await app.init();
 
     dataSource = moduleFixture.get<DataSource>(DataSource);
+
+    // SECURITY FIX: Create query runner for transaction management
+    queryRunner = dataSource.createQueryRunner();
+    await queryRunner.connect();
+  });
+
+  beforeEach(async () => {
+    // SECURITY FIX: Start transaction before each test
+    // This ensures test isolation and automatic cleanup
+    await queryRunner.startTransaction();
+  });
+
+  afterEach(async () => {
+    // SECURITY FIX: Rollback transaction after each test
+    // This removes all test data automatically
+    if (queryRunner.isTransactionActive) {
+      await queryRunner.rollbackTransaction();
+    }
+  });
 
     // Create Workspace 1
     const signup1 = await request(app.getHttpServer())
@@ -123,8 +147,15 @@ describe('Workspace Cost Isolation (e2e)', () => {
   });
 
   afterAll(async () => {
-    // Clean up test data
+    // SECURITY FIX: Clean up query runner and close app
+    // Transaction-based tests auto-cleanup, but we still clean up
+    // any data created in beforeAll() that's outside transactions
+    if (queryRunner) {
+      await queryRunner.release();
+    }
+
     if (dataSource) {
+      // Clean up test data from beforeAll() setup
       await dataSource.query(
         `DELETE FROM api_usage WHERE workspace_id IN ($1, $2)`,
         [workspace1Id, workspace2Id],

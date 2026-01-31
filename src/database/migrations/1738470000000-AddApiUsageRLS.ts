@@ -26,42 +26,42 @@ export class AddApiUsageRLS1738470000000 implements MigrationInterface {
     );
 
     // Policy 1: SELECT - Only allow reading rows from current workspace
+    // SECURITY: Removed IS NULL bypass - context MUST be set
     await queryRunner.query(`
       CREATE POLICY workspace_isolation_select_policy ON api_usage
         FOR SELECT
         USING (
           workspace_id::text = current_setting('app.current_workspace_id', TRUE)
-          OR current_setting('app.current_workspace_id', TRUE) IS NULL
         )
     `);
 
     // Policy 2: INSERT - Only allow inserting rows for current workspace
+    // SECURITY: Removed IS NULL bypass - context MUST be set
     await queryRunner.query(`
       CREATE POLICY workspace_isolation_insert_policy ON api_usage
         FOR INSERT
         WITH CHECK (
           workspace_id::text = current_setting('app.current_workspace_id', TRUE)
-          OR current_setting('app.current_workspace_id', TRUE) IS NULL
         )
     `);
 
     // Policy 3: UPDATE - Prevent updates across workspaces
+    // SECURITY: Removed IS NULL bypass - context MUST be set
     await queryRunner.query(`
       CREATE POLICY workspace_isolation_update_policy ON api_usage
         FOR UPDATE
         USING (
           workspace_id::text = current_setting('app.current_workspace_id', TRUE)
-          OR current_setting('app.current_workspace_id', TRUE) IS NULL
         )
     `);
 
     // Policy 4: DELETE - Prevent deletes across workspaces
+    // SECURITY: Removed IS NULL bypass - context MUST be set
     await queryRunner.query(`
       CREATE POLICY workspace_isolation_delete_policy ON api_usage
         FOR DELETE
         USING (
           workspace_id::text = current_setting('app.current_workspace_id', TRUE)
-          OR current_setting('app.current_workspace_id', TRUE) IS NULL
         )
     `);
 

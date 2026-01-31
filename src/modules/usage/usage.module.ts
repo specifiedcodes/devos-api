@@ -10,6 +10,7 @@ import { SpendingAlertService } from './services/spending-alert.service';
 import { CsvExportService } from './services/csv-export.service';
 import { SpendingAlertJob } from './jobs/spending-alert.job';
 import { UsageV2Controller } from './controllers/usage-v2.controller';
+import { UsageHealthController } from './controllers/usage-health.controller';
 import { RedisModule } from '../redis/redis.module';
 import { AuditModule } from '../../shared/audit/audit.module';
 import { NotificationModule } from '../notification/notification.module';
@@ -31,7 +32,7 @@ import { EmailModule } from '../email/email.module';
     CsvExportService,
     SpendingAlertJob,
   ],
-  controllers: [UsageV2Controller],
+  controllers: [UsageV2Controller, UsageHealthController],
   exports: [
     UsageTrackingService,
     UsageService,

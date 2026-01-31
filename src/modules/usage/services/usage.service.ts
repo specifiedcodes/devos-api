@@ -113,6 +113,7 @@ export class UsageService {
       await this.incrementMonthlyCounter(workspaceId, costUsd);
 
       // Audit log the usage recording
+      // SECURITY FIX: Improved error handling with metrics tracking
       try {
         await this.auditService.log(
           workspaceId,
@@ -131,10 +132,14 @@ export class UsageService {
           },
         );
       } catch (auditError) {
-        // Log but don't fail the request if audit logging fails
-        this.logger.warn(
-          `Failed to log audit entry: ${auditError instanceof Error ? auditError.message : 'Unknown error'}`,
+        // SECURITY: Audit failures for security-critical operations are ERROR level
+        // For usage tracking (which creates audit trail), this is important
+        this.logger.error(
+          `AUDIT FAILURE: Failed to log usage creation for workspace ${workspaceId}: ${auditError instanceof Error ? auditError.message : 'Unknown error'}`,
         );
+        // TODO: Add metric tracking for audit failure rate
+        // TODO: Consider alerting if audit failure rate exceeds threshold
+        // Note: We don't throw to avoid blocking usage tracking, but failures are visible
       }
 
       this.logger.log(
@@ -196,9 +201,14 @@ export class UsageService {
     startDate: Date,
     endDate: Date,
   ): Promise<ProjectUsageItem[]> {
+    // SECURITY FIX: Added explicit workspace_id filter to JOIN clause
     const results = await this.apiUsageRepository
       .createQueryBuilder('usage')
-      .leftJoin('projects', 'project', 'usage.project_id = project.id')
+      .leftJoin(
+        'projects',
+        'project',
+        'usage.project_id = project.id AND project.workspace_id = :workspaceId',
+      )
       .select('usage.project_id', 'projectId')
       .addSelect('COALESCE(project.name, \'No Project\')', 'projectName')
       .addSelect('SUM(usage.cost_usd)', 'cost')

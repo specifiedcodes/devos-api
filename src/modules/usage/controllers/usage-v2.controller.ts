@@ -12,6 +12,7 @@ import {
   Header,
   Req,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
 import { UsageService } from '../services/usage.service';
 import { CsvExportService } from '../services/csv-export.service';
@@ -38,11 +39,15 @@ export class UsageV2Controller {
    * Record API usage transaction
    * POST /api/v1/workspaces/:workspaceId/usage
    *
+   * SECURITY: Rate limited to prevent abuse
+   * Limit: 100 requests per minute (high limit for agent usage tracking)
+   *
    * @param workspaceId - Workspace ID from route
    * @param dto - Usage data
    * @returns Created usage record with calculated cost
    */
   @Post()
+  @Throttle({ default: { limit: 100, ttl: 60000 } }) // 100 requests per minute
   @HttpCode(HttpStatus.CREATED)
   async recordUsage(
     @Param('workspaceId') workspaceId: string,
@@ -173,6 +178,9 @@ export class UsageV2Controller {
    * Export usage data as CSV
    * GET /api/v1/workspaces/:workspaceId/usage/export?startDate=2024-01-01&endDate=2024-01-31
    *
+   * SECURITY: Rate limited to prevent DoS attacks via streaming queries
+   * Limit: 10 exports per minute per workspace
+   *
    * @param workspaceId - Workspace ID
    * @param query - Export query parameters with date range
    * @param req - Express request object for user context
@@ -180,6 +188,7 @@ export class UsageV2Controller {
    * @returns CSV file stream
    */
   @Get('export')
+  @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
   @Header('Content-Type', 'text/csv')
   async exportUsageData(
     @Param('workspaceId') workspaceId: string,

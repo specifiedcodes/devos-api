@@ -4,9 +4,10 @@ import {
   ExecutionContext,
   CallHandler,
   Logger,
+  InternalServerErrorException,
 } from '@nestjs/common';
-import { Observable } from 'rxjs';
-import { tap, finalize } from 'rxjs/operators';
+import { Observable, from, throwError } from 'rxjs';
+import { tap, finalize, mergeMap, catchError } from 'rxjs/operators';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -39,31 +40,43 @@ export class WorkspaceContextInterceptor implements NestInterceptor {
     if (workspaceId) {
       request.workspaceId = workspaceId;
 
-      // Set PostgreSQL session variable for RLS policies
-      // This is done asynchronously and doesn't block the request
-      this.setDatabaseWorkspaceContext(workspaceId).catch((error) => {
-        this.logger.warn(
-          `Failed to set database workspace context: ${error.message}`,
-        );
-      });
-    }
-
-    return next.handle().pipe(
-      finalize(() => {
-        // Clean up database context after request completes
-        if (workspaceId) {
+      // SECURITY FIX: Set database context SYNCHRONOUSLY before proceeding
+      // This prevents race conditions where queries execute before context is set
+      return from(this.setDatabaseWorkspaceContext(workspaceId)).pipe(
+        catchError((error) => {
+          this.logger.error(
+            `CRITICAL: Failed to set database workspace context: ${error.message}`,
+          );
+          return throwError(
+            () =>
+              new InternalServerErrorException(
+                'Security context initialization failed',
+              ),
+          );
+        }),
+        mergeMap(() => next.handle()),
+        finalize(() => {
+          // Clean up database context after request completes
+          // Cleanup failures are logged but don't fail the request
           this.clearDatabaseWorkspaceContext().catch((error) => {
             this.logger.warn(
               `Failed to clear database workspace context: ${error.message}`,
             );
           });
-        }
-      }),
-    );
+        }),
+      );
+    }
+
+    // If no workspaceId, proceed without setting context
+    return next.handle();
   }
 
   /**
    * Set PostgreSQL session variable for Row-Level Security
+   *
+   * SECURITY: Uses transaction-scoped context (third param = TRUE)
+   * This ensures context is automatically cleared when transaction ends,
+   * preventing context pollution across concurrent requests.
    *
    * @param workspaceId - Workspace ID to set in database session
    */
@@ -71,10 +84,14 @@ export class WorkspaceContextInterceptor implements NestInterceptor {
     workspaceId: string,
   ): Promise<void> {
     try {
+      // Use TRUE for transaction-scoped context (SET LOCAL behavior)
+      // This prevents timing vulnerabilities in concurrent requests
       await this.dataSource.query(
-        `SELECT set_config('app.current_workspace_id', $1, FALSE)`,
+        `SELECT set_config('app.current_workspace_id', $1, TRUE)`,
         [workspaceId],
       );
+
+      this.logger.debug(`Set workspace context: ${workspaceId}`);
     } catch (error) {
       this.logger.error(
         `Error setting workspace context in database: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -85,12 +102,17 @@ export class WorkspaceContextInterceptor implements NestInterceptor {
 
   /**
    * Clear PostgreSQL session variable after request
+   *
+   * Note: With transaction-scoped context (TRUE in setDatabaseWorkspaceContext),
+   * this is mostly redundant as the context is automatically cleared.
+   * We keep it for defense-in-depth and explicit cleanup.
    */
   private async clearDatabaseWorkspaceContext(): Promise<void> {
     try {
       await this.dataSource.query(
-        `SELECT set_config('app.current_workspace_id', NULL, FALSE)`,
+        `SELECT set_config('app.current_workspace_id', NULL, TRUE)`,
       );
+      this.logger.debug('Cleared workspace context');
     } catch (error) {
       this.logger.error(
         `Error clearing workspace context in database: ${error instanceof Error ? error.message : 'Unknown error'}`,

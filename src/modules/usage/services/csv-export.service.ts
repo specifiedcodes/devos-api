@@ -60,10 +60,20 @@ export class CsvExportService {
     );
 
     // Create streaming query
+    // SECURITY FIX: Added explicit workspace_id filters to JOIN clauses
+    // This ensures defense-in-depth even if joined tables lack RLS
     const queryStream = await this.apiUsageRepository
       .createQueryBuilder('usage')
-      .leftJoin('projects', 'project', 'usage.project_id = project.id')
-      .leftJoin('agents', 'agent', 'usage.agent_id = agent.id')
+      .leftJoin(
+        'projects',
+        'project',
+        'usage.project_id = project.id AND project.workspace_id = :workspaceId',
+      )
+      .leftJoin(
+        'agents',
+        'agent',
+        'usage.agent_id = agent.id AND agent.workspace_id = :workspaceId',
+      )
       .select('usage.id', 'id')
       .addSelect('usage.created_at', 'createdAt')
       .addSelect('COALESCE(project.name, NULL)', 'projectName')
