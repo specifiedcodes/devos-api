@@ -31,7 +31,10 @@ import {
  * - BYOK audit actions constant is correct
  */
 
-// Skip: Requires PostgreSQL test database (integration test)
+// TODO: Implement integration tests when PostgreSQL test environment is available.
+// These tests require a running database instance with the audit_logs table.
+// The unit tests below cover the same logic without database dependency.
+// Tracked as tech debt: integration tests should be added before production deployment.
 describe.skip('BYOK Audit Logging (Integration)', () => {
   let app: INestApplication | undefined;
   let auditService: AuditService;

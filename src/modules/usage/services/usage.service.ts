@@ -5,6 +5,7 @@ import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.enti
 import { PricingService } from './pricing.service';
 import { RedisService } from '../../../modules/redis/redis.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { sanitizeForAudit } from '../../../shared/logging/log-sanitizer';
 
 /**
  * Usage summary response interface
@@ -140,7 +141,7 @@ export class UsageService {
             AuditAction.BYOK_KEY_USED,
             'byok_key',
             byokKeyId,
-            {
+            sanitizeForAudit({
               keyId: byokKeyId,
               provider,
               model,
@@ -149,7 +150,7 @@ export class UsageService {
               outputTokens,
               projectId: projectId || undefined,
               agentId: agentId || undefined,
-            },
+            }),
           );
         }
       } catch (auditError) {

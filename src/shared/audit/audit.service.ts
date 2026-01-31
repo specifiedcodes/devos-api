@@ -374,14 +374,17 @@ export class AuditService {
     const failedValidationAttempts =
       countsMap[AuditAction.BYOK_KEY_VALIDATION_FAILED] || 0;
 
+    const parsedCost = parseFloat(costResult?.totalCost || '0');
+    const parsedUniqueUsers = parseInt(
+      uniqueUsersResult?.count || '0',
+      10,
+    );
+
     return {
       totalKeyAccessEvents,
       totalApiCallsViaByok,
-      totalCostViaByok: parseFloat(costResult?.totalCost || '0'),
-      uniqueUsersAccessingKeys: parseInt(
-        uniqueUsersResult?.count || '0',
-        10,
-      ),
+      totalCostViaByok: isNaN(parsedCost) ? 0 : parsedCost,
+      uniqueUsersAccessingKeys: isNaN(parsedUniqueUsers) ? 0 : parsedUniqueUsers,
       failedValidationAttempts,
       period: {
         start: startDate.toISOString(),

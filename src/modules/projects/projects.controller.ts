@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -26,6 +27,11 @@ import { UpdateProjectDto } from './dto/update-project.dto';
 import { ProjectResponseDto } from './dto/project-response.dto';
 import { CreateProjectPreferencesDto } from './dto/create-project-preferences.dto';
 import { UpdateProjectPreferencesDto } from './dto/update-project-preferences.dto';
+import {
+  UpdateAiConfigDto,
+  AiConfigResponseDto,
+  AVAILABLE_PROVIDERS,
+} from './dto/update-ai-config.dto';
 
 @Controller('api/v1/workspaces/:workspaceId/projects')
 @UseGuards(JwtAuthGuard, RoleGuard)
@@ -287,5 +293,87 @@ export class ProjectsController {
       workspaceId,
       preferencesDto,
     );
+  }
+
+  /**
+   * Get AI configuration for a project
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project
+   * @returns Current AI provider and model configuration
+   */
+  @Get(':projectId/ai-config')
+  @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Get AI configuration for a project' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
+  @ApiParam({ name: 'projectId', description: 'Project ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'AI configuration',
+    type: AiConfigResponseDto,
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - not a workspace member' })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async getAiConfig(
+    @Param('workspaceId') workspaceId: string,
+    @Param('projectId') projectId: string,
+  ) {
+    return this.projectsService.getAiConfig(projectId, workspaceId);
+  }
+
+  /**
+   * Update AI configuration for a project
+   *
+   * @param workspaceId - UUID of the workspace
+   * @param projectId - UUID of the project
+   * @param dto - AI configuration update (provider + model)
+   * @returns Updated AI configuration
+   * @throws BadRequestException if model is invalid for provider
+   */
+  @Put(':projectId/ai-config')
+  @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Update AI configuration for a project' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
+  @ApiParam({ name: 'projectId', description: 'Project ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'AI configuration updated successfully',
+    type: AiConfigResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid model for provider',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - requires Developer role or higher',
+  })
+  @ApiResponse({ status: 404, description: 'Project not found' })
+  async updateAiConfig(
+    @Param('workspaceId') workspaceId: string,
+    @Param('projectId') projectId: string,
+    @Body() dto: UpdateAiConfigDto,
+  ) {
+    return this.projectsService.updateAiConfig(projectId, workspaceId, dto);
+  }
+
+  /**
+   * Get all available AI providers and models
+   *
+   * Returns a list of supported providers and their models.
+   * This is a reference/static data endpoint.
+   */
+  @Get('available-models/list')
+  @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Get available AI providers and models' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of available AI providers and models',
+  })
+  async getAvailableModels() {
+    return { providers: AVAILABLE_PROVIDERS };
   }
 }

@@ -42,8 +42,18 @@ export class AuditController {
       endDate: endDate ? new Date(endDate) : undefined,
     };
 
-    const parsedLimit = limit ? parseInt(limit, 10) : 100;
-    const parsedOffset = offset ? parseInt(offset, 10) : 0;
+    let parsedLimit = limit ? parseInt(limit, 10) : 100;
+    let parsedOffset = offset ? parseInt(offset, 10) : 0;
+    // Validate limit: must be positive integer, max 1000
+    if (isNaN(parsedLimit) || parsedLimit < 1) {
+      parsedLimit = 100;
+    } else if (parsedLimit > 1000) {
+      parsedLimit = 1000;
+    }
+    // Validate offset: must be non-negative integer
+    if (isNaN(parsedOffset) || parsedOffset < 0) {
+      parsedOffset = 0;
+    }
 
     const result = await this.auditService.getWorkspaceLogsWithFilters(
       workspaceId,
@@ -65,7 +75,13 @@ export class AuditController {
     @Param('workspaceId') workspaceId: string,
     @Query('days') days?: string,
   ): Promise<ByokAuditSummary> {
-    const parsedDays = days ? parseInt(days, 10) : 30;
+    let parsedDays = days ? parseInt(days, 10) : 30;
+    // Validate days parameter: must be positive integer, max 365
+    if (isNaN(parsedDays) || parsedDays < 1) {
+      parsedDays = 30;
+    } else if (parsedDays > 365) {
+      parsedDays = 365;
+    }
     return this.auditService.getByokAuditSummary(workspaceId, parsedDays);
   }
 

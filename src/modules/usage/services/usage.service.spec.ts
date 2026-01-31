@@ -5,7 +5,7 @@ import { UsageService } from './usage.service';
 import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.entity';
 import { PricingService } from './pricing.service';
 import { RedisService } from '../../../modules/redis/redis.service';
-import { AuditService } from '../../../shared/audit/audit.service';
+import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
 
 describe('UsageService', () => {
   let service: UsageService;
@@ -246,6 +246,109 @@ describe('UsageService', () => {
       );
 
       expect(result.byokKeyId).toBe('byok-key-id');
+    });
+
+    it('should create byok_key_used audit event when byokKeyId is provided', async () => {
+      const pricing = {
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
+        effectiveDate: '2026-01-01',
+      };
+
+      pricingService.getCurrentPricing.mockResolvedValue(pricing);
+      pricingService.calculateCost.mockReturnValue(0.0165);
+
+      const usage = {
+        id: 'usage-id',
+        workspaceId: 'workspace-id',
+        projectId: 'project-id',
+        byokKeyId: 'byok-key-id',
+        provider: ApiProvider.ANTHROPIC,
+        model: 'claude-3-5-sonnet-20241022',
+        inputTokens: 1500,
+        outputTokens: 800,
+        costUsd: 0.0165,
+      };
+
+      repository.create.mockReturnValue(usage as ApiUsage);
+      repository.save.mockResolvedValue(usage as ApiUsage);
+      redisService.increment.mockResolvedValue(0.0165);
+      redisService.expire.mockResolvedValue(true);
+
+      await service.recordUsage(
+        'workspace-id',
+        'project-id',
+        ApiProvider.ANTHROPIC,
+        'claude-3-5-sonnet-20241022',
+        1500,
+        800,
+        'byok-key-id',
+      );
+
+      // Should have logged both CREATE and BYOK_KEY_USED audit events
+      expect(auditService.log).toHaveBeenCalledWith(
+        'workspace-id',
+        'system',
+        AuditAction.BYOK_KEY_USED,
+        'byok_key',
+        'byok-key-id',
+        expect.objectContaining({
+          keyId: 'byok-key-id',
+          provider: ApiProvider.ANTHROPIC,
+          model: 'claude-3-5-sonnet-20241022',
+          costUsd: 0.0165,
+        }),
+      );
+    });
+
+    it('should NOT create byok_key_used audit event when byokKeyId is absent', async () => {
+      const pricing = {
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
+        effectiveDate: '2026-01-01',
+      };
+
+      pricingService.getCurrentPricing.mockResolvedValue(pricing);
+      pricingService.calculateCost.mockReturnValue(0.0165);
+
+      const usage = {
+        id: 'usage-id',
+        workspaceId: 'workspace-id',
+        projectId: null,
+        provider: ApiProvider.ANTHROPIC,
+        model: 'claude-3-5-sonnet-20241022',
+        inputTokens: 1500,
+        outputTokens: 800,
+        costUsd: 0.0165,
+      };
+
+      repository.create.mockReturnValue(usage as ApiUsage);
+      repository.save.mockResolvedValue(usage as ApiUsage);
+      redisService.increment.mockResolvedValue(0.0165);
+      redisService.expire.mockResolvedValue(true);
+
+      await service.recordUsage(
+        'workspace-id',
+        null,
+        ApiProvider.ANTHROPIC,
+        'claude-3-5-sonnet-20241022',
+        1500,
+        800,
+      );
+
+      // Should only have one audit call (CREATE), not BYOK_KEY_USED
+      expect(auditService.log).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        AuditAction.BYOK_KEY_USED,
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
     });
   });
 

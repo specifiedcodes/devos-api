@@ -1,11 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { NotFoundException, ConflictException } from '@nestjs/common';
+import { NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { ProjectsController } from './projects.controller';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateProjectPreferencesDto } from './dto/create-project-preferences.dto';
 import { UpdateProjectPreferencesDto } from './dto/update-project-preferences.dto';
+import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 import {
   Project,
   ProjectStatus,
@@ -32,6 +33,8 @@ describe('ProjectsController', () => {
     softDelete: jest.fn(),
     archive: jest.fn(),
     updatePreferences: jest.fn(),
+    getAiConfig: jest.fn(),
+    updateAiConfig: jest.fn(),
   };
 
   const mockProject: Partial<Project> = {
@@ -431,6 +434,188 @@ describe('ProjectsController', () => {
           preferencesDto,
         ),
       ).rejects.toThrow('Project preferences not found');
+    });
+  });
+
+  describe('GET /api/v1/workspaces/:workspaceId/projects/:projectId/ai-config', () => {
+    it('should return AI configuration for a project', async () => {
+      // Arrange
+      const aiConfig = {
+        aiProvider: 'anthropic',
+        aiModel: 'claude-sonnet-4-5-20250929',
+      };
+      mockProjectsService.getAiConfig.mockResolvedValue(aiConfig);
+
+      // Act
+      const result = await controller.getAiConfig(
+        'workspace-uuid-456',
+        'project-uuid-123',
+      );
+
+      // Assert
+      expect(result).toEqual(aiConfig);
+      expect(result.aiProvider).toBe('anthropic');
+      expect(result.aiModel).toBe('claude-sonnet-4-5-20250929');
+      expect(projectsService.getAiConfig).toHaveBeenCalledWith(
+        'project-uuid-123',
+        'workspace-uuid-456',
+      );
+    });
+
+    it('should return default AI config when no preference set', async () => {
+      // Arrange
+      const defaultConfig = {
+        aiProvider: 'anthropic',
+        aiModel: 'claude-sonnet-4-5-20250929',
+      };
+      mockProjectsService.getAiConfig.mockResolvedValue(defaultConfig);
+
+      // Act
+      const result = await controller.getAiConfig(
+        'workspace-uuid-456',
+        'project-uuid-123',
+      );
+
+      // Assert
+      expect(result.aiProvider).toBe('anthropic');
+      expect(result.aiModel).toBe('claude-sonnet-4-5-20250929');
+    });
+
+    it('should throw NotFoundException if project not found', async () => {
+      // Arrange
+      mockProjectsService.getAiConfig.mockRejectedValue(
+        new NotFoundException('Project not found'),
+      );
+
+      // Act & Assert
+      await expect(
+        controller.getAiConfig('workspace-uuid-456', 'nonexistent-id'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('PUT /api/v1/workspaces/:workspaceId/projects/:projectId/ai-config', () => {
+    it('should update AI config to openai successfully', async () => {
+      // Arrange
+      const dto: UpdateAiConfigDto = {
+        aiProvider: 'openai',
+        aiModel: 'gpt-4-turbo',
+      };
+      const updatedConfig = {
+        aiProvider: 'openai',
+        aiModel: 'gpt-4-turbo',
+      };
+      mockProjectsService.updateAiConfig.mockResolvedValue(updatedConfig);
+
+      // Act
+      const result = await controller.updateAiConfig(
+        'workspace-uuid-456',
+        'project-uuid-123',
+        dto,
+      );
+
+      // Assert
+      expect(result).toEqual(updatedConfig);
+      expect(result.aiProvider).toBe('openai');
+      expect(result.aiModel).toBe('gpt-4-turbo');
+      expect(projectsService.updateAiConfig).toHaveBeenCalledWith(
+        'project-uuid-123',
+        'workspace-uuid-456',
+        dto,
+      );
+    });
+
+    it('should update AI config to anthropic successfully', async () => {
+      // Arrange
+      const dto: UpdateAiConfigDto = {
+        aiProvider: 'anthropic',
+        aiModel: 'claude-opus-4-5-20251101',
+      };
+      const updatedConfig = {
+        aiProvider: 'anthropic',
+        aiModel: 'claude-opus-4-5-20251101',
+      };
+      mockProjectsService.updateAiConfig.mockResolvedValue(updatedConfig);
+
+      // Act
+      const result = await controller.updateAiConfig(
+        'workspace-uuid-456',
+        'project-uuid-123',
+        dto,
+      );
+
+      // Assert
+      expect(result.aiProvider).toBe('anthropic');
+      expect(result.aiModel).toBe('claude-opus-4-5-20251101');
+    });
+
+    it('should throw BadRequestException for invalid model', async () => {
+      // Arrange
+      const dto: UpdateAiConfigDto = {
+        aiProvider: 'anthropic',
+        aiModel: 'gpt-4-turbo',
+      };
+      mockProjectsService.updateAiConfig.mockRejectedValue(
+        new BadRequestException(
+          'Invalid model "gpt-4-turbo" for provider "anthropic"',
+        ),
+      );
+
+      // Act & Assert
+      await expect(
+        controller.updateAiConfig(
+          'workspace-uuid-456',
+          'project-uuid-123',
+          dto,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw NotFoundException if project not found', async () => {
+      // Arrange
+      const dto: UpdateAiConfigDto = {
+        aiProvider: 'openai',
+        aiModel: 'gpt-3.5-turbo',
+      };
+      mockProjectsService.updateAiConfig.mockRejectedValue(
+        new NotFoundException('Project not found'),
+      );
+
+      // Act & Assert
+      await expect(
+        controller.updateAiConfig('workspace-uuid-456', 'nonexistent-id', dto),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('GET /api/v1/workspaces/:workspaceId/projects/available-models/list', () => {
+    it('should return available providers and models', async () => {
+      // Act
+      const result = await controller.getAvailableModels();
+
+      // Assert
+      expect(result).toHaveProperty('providers');
+      expect(result.providers).toHaveLength(2);
+
+      // Check Anthropic provider
+      const anthropic = result.providers.find(
+        (p: any) => p.id === 'anthropic',
+      );
+      expect(anthropic).toBeDefined();
+      expect(anthropic!.name).toBe('Anthropic (Claude)');
+      expect(anthropic!.models).toHaveLength(4);
+      expect(anthropic!.models[0].id).toBe('claude-sonnet-4-5-20250929');
+      expect(anthropic!.models[0].tier).toBe('recommended');
+
+      // Check OpenAI provider
+      const openai = result.providers.find((p: any) => p.id === 'openai');
+      expect(openai).toBeDefined();
+      expect(openai!.name).toBe('OpenAI (GPT)');
+      expect(openai!.models).toHaveLength(2);
+      expect(openai!.models[0].id).toBe('gpt-4-turbo');
+      expect(openai!.models[0].tier).toBe('recommended');
+      expect(openai!.models[1].id).toBe('gpt-3.5-turbo');
+      expect(openai!.models[1].tier).toBe('standard');
     });
   });
 });

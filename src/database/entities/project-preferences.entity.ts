@@ -5,7 +5,7 @@ import {
   OneToOne,
   JoinColumn,
 } from 'typeorm';
-import { IsEnum, IsUUID } from 'class-validator';
+import { IsEnum, IsUUID, IsString } from 'class-validator';
 import { Project } from './project.entity';
 
 export enum RepositoryStructure {
@@ -28,6 +28,31 @@ export enum TestingStrategy {
   BALANCED = 'balanced',
   E2E_HEAVY = 'e2e_heavy',
 }
+
+export enum AiProvider {
+  ANTHROPIC = 'anthropic',
+  OPENAI = 'openai',
+}
+
+/**
+ * Valid model identifiers per AI provider.
+ * Used for validation when setting per-project AI configuration.
+ */
+export const VALID_MODELS_BY_PROVIDER: Record<AiProvider, string[]> = {
+  [AiProvider.ANTHROPIC]: [
+    'claude-sonnet-4-5-20250929',
+    'claude-opus-4-5-20251101',
+    'claude-3-5-sonnet-20241022',
+    'claude-3-opus-20240229',
+  ],
+  [AiProvider.OPENAI]: [
+    'gpt-4-turbo',
+    'gpt-3.5-turbo',
+  ],
+};
+
+export const DEFAULT_AI_PROVIDER = AiProvider.ANTHROPIC;
+export const DEFAULT_AI_MODEL = 'claude-sonnet-4-5-20250929';
 
 @Entity('project_preferences')
 export class ProjectPreferences {
@@ -79,4 +104,22 @@ export class ProjectPreferences {
   })
   @IsEnum(TestingStrategy)
   testingStrategy!: TestingStrategy;
+
+  @Column({
+    type: 'varchar',
+    length: 20,
+    default: DEFAULT_AI_PROVIDER,
+    name: 'ai_provider',
+  })
+  @IsString()
+  aiProvider!: string;
+
+  @Column({
+    type: 'varchar',
+    length: 100,
+    default: DEFAULT_AI_MODEL,
+    name: 'ai_model',
+  })
+  @IsString()
+  aiModel!: string;
 }

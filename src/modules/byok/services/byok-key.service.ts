@@ -115,7 +115,7 @@ export class BYOKKeyService {
           'N/A',
           sanitizeForAudit({
             provider: dto.provider,
-            error: validationResult.error || 'Invalid API key',
+            error: sanitizeLogData(validationResult.error || 'Invalid API key'),
             ipAddress: requestContext?.ipAddress,
             userAgent: requestContext?.userAgent,
           }),

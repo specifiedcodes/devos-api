@@ -4,15 +4,23 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource } from 'typeorm';
 import { Project, ProjectStatus } from '../../database/entities/project.entity';
-import { ProjectPreferences } from '../../database/entities/project-preferences.entity';
+import {
+  ProjectPreferences,
+  VALID_MODELS_BY_PROVIDER,
+  AiProvider,
+  DEFAULT_AI_PROVIDER,
+  DEFAULT_AI_MODEL,
+} from '../../database/entities/project-preferences.entity';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { CreateProjectPreferencesDto } from './dto/create-project-preferences.dto';
 import { UpdateProjectPreferencesDto } from './dto/update-project-preferences.dto';
+import { UpdateAiConfigDto, AiConfigResponseDto } from './dto/update-ai-config.dto';
 import { AuditService, AuditAction } from '../../shared/audit/audit.service';
 
 @Injectable()
@@ -282,5 +290,84 @@ export class ProjectsService {
     const updated = await this.preferencesRepository.save(project.preferences);
     this.logger.log(`Project ${projectId} preferences updated`);
     return updated;
+  }
+
+  /**
+   * Get AI configuration for a project
+   * Returns the current AI provider and model, or defaults if not set.
+   *
+   * @param projectId - Project ID
+   * @param workspaceId - Workspace ID for isolation
+   * @returns AI configuration (provider + model)
+   */
+  async getAiConfig(
+    projectId: string,
+    workspaceId: string,
+  ): Promise<AiConfigResponseDto> {
+    const project = await this.findOne(projectId, workspaceId);
+
+    if (!project.preferences) {
+      return {
+        aiProvider: DEFAULT_AI_PROVIDER,
+        aiModel: DEFAULT_AI_MODEL,
+      };
+    }
+
+    return {
+      aiProvider: project.preferences.aiProvider || DEFAULT_AI_PROVIDER,
+      aiModel: project.preferences.aiModel || DEFAULT_AI_MODEL,
+    };
+  }
+
+  /**
+   * Update AI configuration for a project
+   * Validates that the model is valid for the chosen provider.
+   *
+   * @param projectId - Project ID
+   * @param workspaceId - Workspace ID for isolation
+   * @param dto - AI config update data (provider + model)
+   * @returns Updated AI configuration
+   * @throws BadRequestException if model is invalid for provider
+   * @throws NotFoundException if project not found
+   */
+  async updateAiConfig(
+    projectId: string,
+    workspaceId: string,
+    dto: UpdateAiConfigDto,
+  ): Promise<AiConfigResponseDto> {
+    // Validate model is valid for the chosen provider
+    const provider = dto.aiProvider as AiProvider;
+    const validModels = VALID_MODELS_BY_PROVIDER[provider];
+
+    if (!validModels) {
+      throw new BadRequestException(
+        `Invalid AI provider: ${dto.aiProvider}. Valid providers: ${Object.values(AiProvider).join(', ')}`,
+      );
+    }
+
+    if (!validModels.includes(dto.aiModel)) {
+      throw new BadRequestException(
+        `Invalid model "${dto.aiModel}" for provider "${dto.aiProvider}". Valid models: ${validModels.join(', ')}`,
+      );
+    }
+
+    const project = await this.findOne(projectId, workspaceId);
+
+    if (!project.preferences) {
+      throw new NotFoundException('Project preferences not found');
+    }
+
+    project.preferences.aiProvider = dto.aiProvider;
+    project.preferences.aiModel = dto.aiModel;
+
+    await this.preferencesRepository.save(project.preferences);
+    this.logger.log(
+      `Project ${projectId} AI config updated: provider=${dto.aiProvider}, model=${dto.aiModel}`,
+    );
+
+    return {
+      aiProvider: dto.aiProvider,
+      aiModel: dto.aiModel,
+    };
   }
 }

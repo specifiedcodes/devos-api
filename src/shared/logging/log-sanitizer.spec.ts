@@ -224,5 +224,20 @@ describe('Log Sanitizer', () => {
       expect(output.decryptedKey).toBeUndefined();
       expect(output.encrypted_key).toBeUndefined();
     });
+
+    it('should redact API key patterns embedded in non-sensitive string field values', () => {
+      const metadata = {
+        error: 'Failed with key sk-ant-api03-secret-value-12345678901234567890',
+        provider: 'anthropic',
+        keyId: 'key-123',
+      };
+
+      const output = sanitizeForAudit(metadata);
+
+      expect(output.error).toContain('sk-ant-[REDACTED]');
+      expect(output.error).not.toContain('secret-value');
+      expect(output.provider).toBe('anthropic');
+      expect(output.keyId).toBe('key-123');
+    });
   });
 });

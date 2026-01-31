@@ -142,8 +142,13 @@ export function sanitizeForAudit(metadata: any): any {
           continue;
         }
 
-        // Include safe fields
-        sanitized[key] = metadata[key];
+        // Sanitize string values to redact any embedded API key patterns
+        const value = metadata[key];
+        if (typeof value === 'string') {
+          sanitized[key] = sanitizeLogData(value);
+        } else {
+          sanitized[key] = value;
+        }
       }
     }
 
