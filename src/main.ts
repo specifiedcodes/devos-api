@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';
+import * as session from 'express-session';
 import { AppModule } from './app.module';
 import { validateEnvironmentVariables } from './common/config/env.validation';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
@@ -14,6 +15,25 @@ async function bootstrap() {
 
   // Enable cookie parsing for JWT token management
   app.use(cookieParser());
+
+  // Configure session for password-protected shared links
+  const sessionTTL = parseInt(
+    process.env.SHARED_LINK_SESSION_TTL || '1800',
+    10,
+  ); // 30 minutes default
+  app.use(
+    session({
+      secret: process.env.SESSION_SECRET || 'devos-session-secret-change-in-production',
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        maxAge: sessionTTL * 1000, // Convert to milliseconds
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+      },
+    }),
+  );
 
   // Apply global exception filter for standardized error responses
   app.useGlobalFilters(new HttpExceptionFilter());

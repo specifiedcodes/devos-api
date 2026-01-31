@@ -35,17 +35,36 @@ development_status:
         E2E tests require test environment configuration to run.
         All security code implemented and ready for review.
 
+    - id: "3-8-shareable-read-only-project-links"
+      title: "Shareable Read-Only Project Links"
+      status: "ready-for-dev"
+      assigned_to: null
+      story_points: 8
+      created_at: "2026-01-31T11:00:00Z"
+      notes: |
+        Story created with comprehensive acceptance criteria and technical specs.
+        Ready for implementation. Includes:
+        - Shared links database schema
+        - Token generation with crypto security
+        - Password protection with bcrypt
+        - Rate limiting for password attempts
+        - Public view endpoint (no auth required)
+        - Link management APIs (CRUD)
+        - Workspace isolation enforcement
+        - Comprehensive test coverage requirements
+
 epic_progress:
   total_stories: 7
   completed: 0
   in_progress: 0
-  ready_for_dev: 0
+  ready_for_dev: 1
   review: 1
   done: 0
-  backlog: 6
+  backlog: 5
 
 next_actions:
   - "Code review for story 3-7"
   - "QA testing of workspace isolation"
+  - "Story 3-8 ready for dev: Shareable Read-Only Project Links"
   - "Set up test environment for E2E tests"
   - "Run security penetration tests"
