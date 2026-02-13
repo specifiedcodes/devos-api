@@ -18,6 +18,7 @@ import { WorkspacesService } from '../workspaces/workspaces.service';
 import { AnomalyDetectionService } from './services/anomaly-detection.service';
 import { AuditService } from '../../shared/audit/audit.service';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { OnboardingService } from '../onboarding/services/onboarding.service';
 
 describe('AuthService', () => {
   let service: AuthService;
@@ -164,6 +165,13 @@ describe('AuthService', () => {
           useValue: {
             findOne: jest.fn(),
             find: jest.fn(),
+          },
+        },
+        {
+          provide: OnboardingService,
+          useValue: {
+            createOnboardingStatus: jest.fn().mockResolvedValue(undefined),
+            updateStep: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

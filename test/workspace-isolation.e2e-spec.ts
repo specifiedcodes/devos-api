@@ -72,6 +72,7 @@ describe('Workspace Cost Isolation (e2e)', () => {
     }
   });
 
+  beforeAll(async () => {
     // Create Workspace 1
     const signup1 = await request(app.getHttpServer())
       .post('/api/v1/auth/signup')

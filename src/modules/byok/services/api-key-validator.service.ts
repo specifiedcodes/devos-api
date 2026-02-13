@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { KeyProvider } from '../../../database/entities/byok-key.entity';
+import { sanitizeLogData } from '../../../shared/logging/log-sanitizer';
 
 export interface ValidationResult {
   isValid: boolean;
@@ -54,7 +55,7 @@ export class ApiKeyValidatorService {
     } catch (error) {
       this.logger.error(
         `API key validation failed for provider ${provider}`,
-        error,
+        sanitizeLogData(error),
       );
       return {
         isValid: false,
@@ -83,7 +84,7 @@ export class ApiKeyValidatorService {
       return { isValid: true };
     } catch (error: any) {
       this.logger.warn(
-        `Anthropic API key validation failed: ${error.message}`,
+        `Anthropic API key validation failed: ${sanitizeLogData(error.message)}`,
       );
 
       // Provide specific error messages based on error type
@@ -125,7 +126,7 @@ export class ApiKeyValidatorService {
 
       return { isValid: true };
     } catch (error: any) {
-      this.logger.warn(`OpenAI API key validation failed: ${error.message}`);
+      this.logger.warn(`OpenAI API key validation failed: ${sanitizeLogData(error.message)}`);
 
       // Provide specific error messages based on error type
       let errorMessage = 'Validation failed';

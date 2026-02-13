@@ -5,6 +5,9 @@ import {
   CodeStyle,
   GitWorkflow,
   TestingStrategy,
+  AiProvider,
+  DEFAULT_AI_PROVIDER,
+  DEFAULT_AI_MODEL,
 } from './project-preferences.entity';
 
 describe('ProjectPreferences Entity', () => {
@@ -87,8 +90,20 @@ describe('ProjectPreferences Entity', () => {
     preferences.codeStyle = CodeStyle.FUNCTIONAL;
     preferences.gitWorkflow = GitWorkflow.GITHUB_FLOW;
     preferences.testingStrategy = TestingStrategy.BALANCED;
+    preferences.aiProvider = AiProvider.ANTHROPIC;
+    preferences.aiModel = DEFAULT_AI_MODEL;
 
     const errors = await validate(preferences);
     expect(errors.length).toBe(0);
+  });
+
+  it('should accept all AiProvider enum values', () => {
+    const preferences = new ProjectPreferences();
+
+    preferences.aiProvider = AiProvider.ANTHROPIC;
+    expect(preferences.aiProvider).toBe('anthropic');
+
+    preferences.aiProvider = AiProvider.OPENAI;
+    expect(preferences.aiProvider).toBe('openai');
   });
 });

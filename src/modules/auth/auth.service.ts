@@ -35,6 +35,7 @@ import { Session } from './interfaces/session.interface';
 import { AnomalyDetectionService } from './services/anomaly-detection.service';
 import { WorkspacesService } from '../workspaces/workspaces.service';
 import { AuditService, AuditAction } from '../../shared/audit/audit.service';
+import { OnboardingService } from '../onboarding/services/onboarding.service';
 
 @Injectable()
 export class AuthService {
@@ -61,6 +62,7 @@ export class AuthService {
     private anomalyDetectionService: AnomalyDetectionService,
     private workspacesService: WorkspacesService,
     private auditService: AuditService,
+    private onboardingService: OnboardingService,
   ) {}
 
   /**
@@ -346,6 +348,23 @@ export class AuthService {
       this.logger.log(
         `User registered successfully: ${savedUser.id} (${normalizedEmail}) with workspace: ${workspace.id}`,
       );
+
+      // 8a. Create onboarding status (Story 4.1 - outside transaction, idempotent)
+      try {
+        await this.onboardingService.createOnboardingStatus(
+          savedUser.id,
+          workspace.id,
+        );
+        this.logger.log(
+          `Onboarding status created for user: ${savedUser.id}`,
+        );
+      } catch (error) {
+        // Log error but don't fail registration if onboarding creation fails
+        this.logger.error(
+          `Failed to create onboarding status for user: ${savedUser.id}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
 
       // 9. Generate JWT tokens with session (including workspace_id)
       const tokens = await this.generateTokens(savedUser, ipAddress, userAgent, workspace.id);
@@ -653,6 +672,8 @@ export class AuthService {
       const payload = this.jwtService.verify(refreshToken) as {
         sub: string;
         email: string;
+        workspaceId?: string;
+        jti?: string;
       };
 
       // 2. Check if token is blacklisted (logged out)
@@ -673,15 +694,20 @@ export class AuthService {
         throw new UnauthorizedException('User not found');
       }
 
-      // 4. Generate new access token
+      // 3a. Determine workspace context: prefer token's workspaceId, fall back to user's currentWorkspaceId
+      const workspaceId = payload.workspaceId || user.currentWorkspaceId;
+
+      // 4. Generate new access token (preserving workspace context from Story 2.3)
+      const accessTokenJti = uuidv4();
       const newAccessToken = this.jwtService.sign(
-        { sub: user.id, email: user.email },
+        { sub: user.id, email: user.email, jti: accessTokenJti, workspaceId },
         { expiresIn: this.ACCESS_TOKEN_EXPIRY },
       );
 
       // 5. Optionally rotate refresh token (security best practice)
+      const refreshTokenJti = uuidv4();
       const newRefreshToken = this.jwtService.sign(
-        { sub: user.id, email: user.email },
+        { sub: user.id, jti: refreshTokenJti, workspaceId },
         { expiresIn: this.REFRESH_TOKEN_EXPIRY },
       );
 
@@ -690,7 +716,7 @@ export class AuthService {
         await this.redisService.blacklistToken(refreshToken, 30 * 24 * 60 * 60); // 30 days TTL
       }
 
-      this.logger.log(`Access token refreshed for user: ${user.id}`);
+      this.logger.log(`Access token refreshed for user: ${user.id}, workspace: ${workspaceId}`);
 
       return {
         user: {

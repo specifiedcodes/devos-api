@@ -31,10 +31,15 @@ import {
  * - BYOK audit actions constant is correct
  */
 
-// TODO: Implement integration tests when PostgreSQL test environment is available.
+// NOTE: Integration tests are SKIPPED - require PostgreSQL test environment.
 // These tests require a running database instance with the audit_logs table.
 // The unit tests below cover the same logic without database dependency.
-// Tracked as tech debt: integration tests should be added before production deployment.
+// Tech Debt: Integration tests must be implemented before production deployment.
+// All BYOK audit logic is covered by unit tests in:
+//   - audit.service.spec.ts (summary, filtering, CSV export)
+//   - byok-key.service.spec.ts (IP/user agent, validation failure audit)
+//   - usage.service.spec.ts (byok_key_used audit event)
+//   - byok-audit.e2e-spec.ts unit section (sanitization, security)
 describe.skip('BYOK Audit Logging (Integration)', () => {
   let app: INestApplication | undefined;
   let auditService: AuditService;
@@ -323,6 +328,84 @@ describe('BYOK Audit Logging - Unit Tests', () => {
       expect(csvCell).not.toContain('sk-ant-secret-key');
       expect(csvCell).toContain('Test Key');
       expect(csvCell).toContain('uuid-123');
+    });
+
+    it('should not expose key values when error message contains embedded keys', () => {
+      const sanitizedMetadata = sanitizeForAudit({
+        provider: 'openai',
+        error: sanitizeLogData(
+          'Connection failed for sk-proj-mykey-abcdefghijklmnopqrstuvwxyz1234567890',
+        ),
+      });
+
+      const csvCell = JSON.stringify(sanitizedMetadata);
+
+      expect(csvCell).not.toContain('abcdefghijklmnop');
+      expect(csvCell).toContain('[REDACTED]');
+    });
+  });
+
+  describe('RequestContext interface', () => {
+    it('should accept valid request context', () => {
+      const ctx: RequestContext = {
+        ipAddress: '10.0.0.1',
+        userAgent: 'Mozilla/5.0',
+      };
+      expect(ctx.ipAddress).toBe('10.0.0.1');
+      expect(ctx.userAgent).toBe('Mozilla/5.0');
+    });
+
+    it('should accept undefined values in request context', () => {
+      const ctx: RequestContext = {};
+      expect(ctx.ipAddress).toBeUndefined();
+      expect(ctx.userAgent).toBeUndefined();
+    });
+  });
+
+  describe('BYOK_AUDIT_ACTIONS filtering', () => {
+    it('should only contain byok-prefixed actions', () => {
+      for (const action of BYOK_AUDIT_ACTIONS) {
+        expect(action).toMatch(/^byok_key_/);
+      }
+    });
+
+    it('should not contain non-BYOK actions like CREATE or UPDATE', () => {
+      expect(BYOK_AUDIT_ACTIONS).not.toContain(AuditAction.CREATE);
+      expect(BYOK_AUDIT_ACTIONS).not.toContain(AuditAction.UPDATE);
+      expect(BYOK_AUDIT_ACTIONS).not.toContain(AuditAction.DELETE);
+      expect(BYOK_AUDIT_ACTIONS).not.toContain(
+        AuditAction.PROJECT_CREATED,
+      );
+    });
+  });
+
+  describe('Deep sanitization edge cases', () => {
+    it('should sanitize API key embedded in a longer string value', () => {
+      const metadata = {
+        debugInfo:
+          'Key sk-ant-api03-longkey-abcdefghijklmnopqrstuvwxyz1234567890 was used',
+      };
+      const sanitized = sanitizeForAudit(metadata);
+
+      expect(sanitized.debugInfo).not.toContain('abcdefghijklmnop');
+      expect(sanitized.debugInfo).toContain('sk-ant-[REDACTED]');
+    });
+
+    it('should handle nested sanitization for error objects', () => {
+      const error = new Error(
+        'Auth failed: sk-ant-api03-realkey-abcdefghijklmnopqrstuvwxyz123456',
+      );
+      const sanitized = sanitizeLogData(error);
+
+      expect(sanitized.message).not.toContain('abcdefghijklmnop');
+      expect(sanitized.message).toContain('sk-ant-[REDACTED]');
+    });
+
+    it('should handle null and undefined metadata gracefully', () => {
+      expect(sanitizeForAudit(null)).toBeNull();
+      expect(sanitizeForAudit(undefined)).toBeUndefined();
+      expect(sanitizeLogData(null)).toBeNull();
+      expect(sanitizeLogData(undefined)).toBeUndefined();
     });
   });
 });

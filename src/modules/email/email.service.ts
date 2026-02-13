@@ -212,13 +212,19 @@ export class EmailService {
     threshold: number,
     currentSpend: number,
     limit: number,
+    workspaceId?: string,
   ): Promise<void> {
     const percentageUsed = Math.round((currentSpend / limit) * 100);
     const critical = threshold >= 100;
 
     const subject = critical
-      ? `⛔ Monthly Budget Reached - ${workspaceName}`
-      : `⚠️ Spending Alert: ${threshold}% Budget Used - ${workspaceName}`;
+      ? `Monthly Budget Reached - ${workspaceName}`
+      : `Spending Alert: ${threshold}% Budget Used - ${workspaceName}`;
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const dashboardPath = workspaceId
+      ? `/workspace/${workspaceId}/settings/usage`
+      : '/workspace/settings/usage';
 
     await this.sendEmail({
       to,
@@ -231,7 +237,7 @@ export class EmailService {
         limit: limit.toFixed(2),
         percentageUsed,
         critical,
-        dashboardUrl: `${process.env.FRONTEND_URL}/workspace/settings/usage`,
+        dashboardUrl: `${frontendUrl}${dashboardPath}`,
       },
     });
   }

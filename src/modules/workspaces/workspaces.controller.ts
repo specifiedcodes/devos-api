@@ -76,8 +76,10 @@ export class WorkspacesController {
     workspace: WorkspaceResponseDto;
     tokens: { access_token: string; refresh_token: string };
   }> {
+    // Use req.user.userId (from JWT payload sub claim) which is always guaranteed
+    // req.user.id comes from the entity spread and could be undefined if DB load fails
     return this.workspacesService.switchWorkspace(
-      req.user.id,
+      req.user.userId,
       workspaceId,
       req.user.jti,
       req.ip,
@@ -112,8 +114,9 @@ export class WorkspacesController {
   async renameWorkspace(
     @Param('id') id: string,
     @Body() dto: RenameWorkspaceDto,
+    @Request() req: any,
   ): Promise<WorkspaceResponseDto> {
-    return this.workspacesService.renameWorkspace(id, dto.name);
+    return this.workspacesService.renameWorkspace(id, dto.name, req.user.id);
   }
 
   @Delete(':id')

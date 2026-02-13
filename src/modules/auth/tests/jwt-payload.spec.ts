@@ -13,6 +13,7 @@ import { EncryptionService } from '../../../shared/encryption/encryption.service
 import { AnomalyDetectionService } from '../services/anomaly-detection.service';
 import { WorkspacesService } from '../../workspaces/workspaces.service';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { OnboardingService } from '../../onboarding/services/onboarding.service';
 
 describe('AuthService - JWT Payload with workspace_id', () => {
   let authService: AuthService;
@@ -136,6 +137,13 @@ describe('AuthService - JWT Payload with workspace_id', () => {
           provide: AuditService,
           useValue: {
             log: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: OnboardingService,
+          useValue: {
+            createOnboardingStatus: jest.fn().mockResolvedValue(undefined),
+            updateStep: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

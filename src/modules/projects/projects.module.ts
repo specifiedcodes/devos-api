@@ -7,6 +7,8 @@ import { ProjectPreferences } from '../../database/entities/project-preferences.
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
 import { AuditModule } from '../../shared/audit/audit.module';
+import { OnboardingModule } from '../onboarding/onboarding.module';
+import { ProvisioningModule } from '../provisioning/provisioning.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { AuditModule } from '../../shared/audit/audit.module';
       SecurityEvent,
     ]),
     AuditModule,
+    OnboardingModule,
+    ProvisioningModule,
   ],
   controllers: [ProjectsController],
   providers: [ProjectsService],

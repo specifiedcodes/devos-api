@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, IsNull } from 'typeorm';
 import { Notification } from '../../database/entities/notification.entity';
 
 export interface CreateNotificationDto {
@@ -54,7 +54,7 @@ export class NotificationService {
       where: {
         workspaceId,
         userId,
-        readAt: null as any,
+        readAt: IsNull(),
       },
       order: {
         createdAt: 'DESC',
@@ -64,9 +64,23 @@ export class NotificationService {
   }
 
   /**
-   * Mark notification as read
+   * Mark notification as read (only if it belongs to the requesting user)
    */
-  async markAsRead(notificationId: string): Promise<void> {
+  async markAsRead(notificationId: string, userId: string): Promise<void> {
+    const notification = await this.notificationRepository.findOne({
+      where: { id: notificationId },
+    });
+
+    if (!notification) {
+      throw new NotFoundException('Notification not found');
+    }
+
+    if (notification.userId && notification.userId !== userId) {
+      throw new ForbiddenException(
+        'You do not have permission to modify this notification',
+      );
+    }
+
     await this.notificationRepository.update(
       { id: notificationId },
       { readAt: new Date() },

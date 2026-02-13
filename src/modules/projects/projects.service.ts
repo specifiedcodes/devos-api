@@ -22,6 +22,8 @@ import { CreateProjectPreferencesDto } from './dto/create-project-preferences.dt
 import { UpdateProjectPreferencesDto } from './dto/update-project-preferences.dto';
 import { UpdateAiConfigDto, AiConfigResponseDto } from './dto/update-ai-config.dto';
 import { AuditService, AuditAction } from '../../shared/audit/audit.service';
+import { OnboardingService } from '../onboarding/services/onboarding.service';
+import { ProvisioningOrchestratorService } from '../provisioning/services/provisioning-orchestrator.service';
 
 @Injectable()
 export class ProjectsService {
@@ -34,6 +36,8 @@ export class ProjectsService {
     private readonly preferencesRepository: Repository<ProjectPreferences>,
     private readonly dataSource: DataSource,
     private readonly auditService: AuditService,
+    private readonly onboardingService: OnboardingService,
+    private readonly provisioningOrchestrator: ProvisioningOrchestratorService,
   ) {}
 
   /**
@@ -106,6 +110,39 @@ export class ProjectsService {
           projectName: savedProject.name,
           description: savedProject.description,
         },
+      );
+
+      // Update onboarding status (Story 4.1)
+      try {
+        await this.onboardingService.updateStep(
+          userId,
+          workspaceId,
+          'firstProjectCreated',
+          true,
+        );
+        this.logger.log(
+          `Onboarding step 'firstProjectCreated' updated for user ${userId}`,
+        );
+      } catch (error) {
+        // Log error but don't fail project creation if onboarding update fails
+        this.logger.warn(
+          `Failed to update onboarding step for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
+
+      // Start provisioning workflow (Story 4.7 Issue #7 Fix)
+      // Run asynchronously - don't wait for provisioning to complete
+      this.provisioningOrchestrator
+        .startProvisioning(savedProject.id, workspaceId, preferencesDto || {})
+        .catch((error) => {
+          this.logger.error(
+            `Provisioning failed for project ${savedProject.id}: ${error.message}`,
+            error.stack,
+          );
+        });
+
+      this.logger.log(
+        `Provisioning started for project ${savedProject.id} (async)`,
       );
 
       return projectWithPreferences!;
@@ -334,6 +371,7 @@ export class ProjectsService {
     projectId: string,
     workspaceId: string,
     dto: UpdateAiConfigDto,
+    userId?: string,
   ): Promise<AiConfigResponseDto> {
     // Validate model is valid for the chosen provider
     const provider = dto.aiProvider as AiProvider;
@@ -357,13 +395,34 @@ export class ProjectsService {
       throw new NotFoundException('Project preferences not found');
     }
 
-    project.preferences.aiProvider = dto.aiProvider;
+    const previousProvider = project.preferences.aiProvider;
+    const previousModel = project.preferences.aiModel;
+
+    project.preferences.aiProvider = dto.aiProvider as AiProvider;
     project.preferences.aiModel = dto.aiModel;
 
     await this.preferencesRepository.save(project.preferences);
     this.logger.log(
       `Project ${projectId} AI config updated: provider=${dto.aiProvider}, model=${dto.aiModel}`,
     );
+
+    // Audit log for AI configuration changes
+    if (userId) {
+      await this.auditService.log(
+        workspaceId,
+        userId,
+        AuditAction.PROJECT_SETTINGS_UPDATED,
+        'project',
+        projectId,
+        {
+          setting: 'ai_config',
+          changes: {
+            aiProvider: { old: previousProvider, new: dto.aiProvider },
+            aiModel: { old: previousModel, new: dto.aiModel },
+          },
+        },
+      );
+    }
 
     return {
       aiProvider: dto.aiProvider,

@@ -12,7 +12,7 @@ import {
  * This table stores individual API usage transactions with calculated costs.
  * Differs from usage_tracking table which aggregates daily usage.
  */
-export class CreateApiUsageTable1738320000000 implements MigrationInterface {
+export class CreateApiUsageTable1738365000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create api_usage table
     await queryRunner.createTable(
@@ -87,12 +87,18 @@ export class CreateApiUsageTable1738320000000 implements MigrationInterface {
       true,
     );
 
-    // Add CHECK constraint for provider enum
-    await queryRunner.query(`
-      ALTER TABLE api_usage
-      ADD CONSTRAINT chk_api_usage_provider
-      CHECK (provider IN ('anthropic', 'openai'))
+    // Add CHECK constraint for provider enum (if not exists)
+    const constraintExists = await queryRunner.query(`
+      SELECT 1 FROM pg_constraint WHERE conname = 'chk_api_usage_provider'
     `);
+
+    if (!constraintExists || constraintExists.length === 0) {
+      await queryRunner.query(`
+        ALTER TABLE api_usage
+        ADD CONSTRAINT chk_api_usage_provider
+        CHECK (provider IN ('anthropic', 'openai'))
+      `);
+    }
 
     // Create indexes for fast aggregation queries
     await queryRunner.createIndex(

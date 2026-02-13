@@ -343,6 +343,86 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Publish a message to a Redis channel (Story 7.2 - Real-time Kanban updates)
+   * @param channel - Redis channel name
+   * @param message - Message to publish (will be serialized as-is)
+   * @returns Number of subscribers that received the message, or null on failure
+   */
+  async publish(channel: string, message: string): Promise<number | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot publish message');
+      return null;
+    }
+    try {
+      const result = await this.client.publish(channel, message);
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to publish to channel ${channel}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Add element to sorted set with score (Story 9.8 - Metrics time series)
+   * @param key - Redis sorted set key
+   * @param score - Score for ordering (typically timestamp)
+   * @param member - Member value
+   * @returns Number of new elements added
+   */
+  async zadd(key: string, score: number, member: string): Promise<number | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zadd');
+      return null;
+    }
+    try {
+      return await this.client.zadd(key, score, member);
+    } catch (error) {
+      this.logger.error(`Failed to zadd to ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Get elements from sorted set by score range (Story 9.8 - Metrics time series)
+   * @param key - Redis sorted set key
+   * @param min - Minimum score (use '-inf' for no minimum)
+   * @param max - Maximum score (use '+inf' for no maximum)
+   * @returns Array of members in the score range
+   */
+  async zrangebyscore(key: string, min: number | string, max: number | string): Promise<string[]> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zrangebyscore');
+      return [];
+    }
+    try {
+      return await this.client.zrangebyscore(key, min, max);
+    } catch (error) {
+      this.logger.error(`Failed to zrangebyscore from ${key}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Remove elements from sorted set by score range (Story 9.8 - Metrics time series)
+   * @param key - Redis sorted set key
+   * @param min - Minimum score
+   * @param max - Maximum score
+   * @returns Number of elements removed
+   */
+  async zremrangebyscore(key: string, min: number | string, max: number | string): Promise<number | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zremrangebyscore');
+      return null;
+    }
+    try {
+      return await this.client.zremrangebyscore(key, min, max);
+    } catch (error) {
+      this.logger.error(`Failed to zremrangebyscore from ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
    * Cleanup on module destroy
    */
   async onModuleDestroy() {

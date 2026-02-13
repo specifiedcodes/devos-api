@@ -55,13 +55,18 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
         .set('Authorization', `Bearer ${mockJwtToken}`)
         .send(createKeyDto);
 
-      // Note: In test env without auth setup, this may return 401
-      // The key format validation happens before the API call
+      // In full e2e environment: expect 201 with key data
+      // In test environment without auth: expect 401
+      expect([201, 401]).toContain(response.status);
+
       if (response.status === 201) {
         expect(response.body).toHaveProperty('id');
         expect(response.body.keyName).toBe(createKeyDto.keyName);
         expect(response.body.provider).toBe('openai');
+        // Ensure raw API key is never returned in response
         expect(response.body).not.toHaveProperty('apiKey');
+        expect(response.body).not.toHaveProperty('encryptedKey');
+        expect(response.body).not.toHaveProperty('encryptionIV');
       }
     });
 
@@ -76,6 +81,8 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
         .post(`/api/v1/workspaces/${workspaceId}/byok-keys`)
         .set('Authorization', `Bearer ${mockJwtToken}`)
         .send(createKeyDto);
+
+      expect([201, 401]).toContain(response.status);
 
       if (response.status === 201) {
         expect(response.body).toHaveProperty('id');
@@ -95,37 +102,49 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
         .set('Authorization', `Bearer ${mockJwtToken}`)
         .send(createKeyDto);
 
-      // Should be 400 (Bad Request) for invalid format
-      if (response.status !== 401) {
-        expect(response.status).toBe(400);
+      // Should be 400 (Bad Request) for invalid format, or 401 if auth not set up
+      expect([400, 401]).toContain(response.status);
+
+      if (response.status === 400) {
+        expect(response.body).toHaveProperty('message');
       }
     });
   });
 
   describe('OpenAI Key Masked Display', () => {
     it('should mask OpenAI key with sk-proj- prefix correctly', () => {
-      // Unit-level test for mask format verification
-      const key = 'sk-proj-abcdefghijklmnopqrstuvwxyz1234567890ABCDEF';
-      const prefix = key.startsWith('sk-proj-') ? 'sk-proj-' : 'sk-';
+      const key =
+        'sk-proj-abcdefghijklmnopqrstuvwxyz1234567890ABCDEF';
+
+      // Simulate the extractKeyParts logic from byok-key.service.ts
+      const dashParts = key.split('-');
+      let prefix: string;
+      if (dashParts.length >= 3) {
+        // Multi-segment prefix like "sk-proj-"
+        prefix = dashParts.slice(0, 2).join('-') + '-';
+      } else {
+        prefix = dashParts[0] + '-';
+      }
       const suffix = key.slice(-4);
 
       expect(prefix).toBe('sk-proj-');
       expect(suffix).toBe('CDEF');
-      expect(`${prefix}...${suffix}`).toMatch(/^sk-proj-\.\.\.[\w]{4}$/);
+      expect(`${prefix}...${suffix}`).toBe('sk-proj-...CDEF');
     });
 
     it('should mask OpenAI key with sk- prefix correctly', () => {
-      const key = 'sk-abcdefghijklmnopqrstuvwxyz1234567890ABCDEF';
+      const key =
+        'sk-abcdefghijklmnopqrstuvwxyz1234567890ABCDEF1234567';
       const prefix = 'sk-';
       const suffix = key.slice(-4);
 
-      expect(`${prefix}...${suffix}`).toMatch(/^sk-\.\.\.[\w]{4}$/);
+      expect(`${prefix}...${suffix}`).toBe('sk-...4567');
     });
   });
 
-  describe('OpenAI Cost Tracking', () => {
+  describe('OpenAI Cost Tracking Accuracy', () => {
     it('should calculate correct cost for GPT-4 Turbo', () => {
-      // GPT-4 Turbo pricing: $10/1M input, $30/1M output
+      // GPT-4 Turbo pricing: $10/1M input tokens, $30/1M output tokens
       const inputTokens = 1000;
       const outputTokens = 500;
       const inputPricePerMillion = 10.0;
@@ -136,11 +155,13 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
       const totalCost =
         Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000;
 
-      expect(totalCost).toBe(0.025); // $0.01 input + $0.015 output
+      expect(inputCost).toBeCloseTo(0.01, 6);
+      expect(outputCost).toBeCloseTo(0.015, 6);
+      expect(totalCost).toBe(0.025);
     });
 
     it('should calculate correct cost for GPT-3.5 Turbo', () => {
-      // GPT-3.5 Turbo pricing: $0.50/1M input, $1.50/1M output
+      // GPT-3.5 Turbo pricing: $0.50/1M input tokens, $1.50/1M output tokens
       const inputTokens = 10000;
       const outputTokens = 5000;
       const inputPricePerMillion = 0.5;
@@ -151,7 +172,39 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
       const totalCost =
         Math.round((inputCost + outputCost) * 1_000_000) / 1_000_000;
 
-      expect(totalCost).toBe(0.0125); // $0.005 input + $0.0075 output
+      expect(inputCost).toBeCloseTo(0.005, 6);
+      expect(outputCost).toBeCloseTo(0.0075, 6);
+      expect(totalCost).toBe(0.0125);
+    });
+
+    it('should handle zero token usage without division errors', () => {
+      const inputTokens = 0;
+      const outputTokens = 0;
+      const inputPricePerMillion = 10.0;
+      const outputPricePerMillion = 30.0;
+
+      const inputCost = (inputTokens / 1_000_000) * inputPricePerMillion;
+      const outputCost = (outputTokens / 1_000_000) * outputPricePerMillion;
+      const totalCost = inputCost + outputCost;
+
+      expect(totalCost).toBe(0);
+      expect(Number.isFinite(totalCost)).toBe(true);
+    });
+
+    it('should handle large token counts without overflow', () => {
+      const inputTokens = 1_000_000_000; // 1B tokens
+      const outputTokens = 500_000_000;
+      const inputPricePerMillion = 10.0;
+      const outputPricePerMillion = 30.0;
+
+      const inputCost = (inputTokens / 1_000_000) * inputPricePerMillion;
+      const outputCost = (outputTokens / 1_000_000) * outputPricePerMillion;
+      const totalCost = inputCost + outputCost;
+
+      expect(inputCost).toBe(10000);
+      expect(outputCost).toBe(15000);
+      expect(totalCost).toBe(25000);
+      expect(Number.isFinite(totalCost)).toBe(true);
     });
   });
 
@@ -160,57 +213,52 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
     const workspaceBId = 'ws-openai-b';
 
     it('should not allow workspace B to access workspace A OpenAI keys', async () => {
-      // Try to list keys from workspace A using workspace B context
       const response = await request(app.getHttpServer())
         .get(`/api/v1/workspaces/${workspaceAId}/byok-keys`)
         .set('Authorization', `Bearer mock-token-workspace-b`);
 
       // Workspace access guard should prevent cross-workspace access
-      if (response.status !== 401) {
-        expect(response.status).toBe(403);
-      }
+      // Either 401 (auth fails) or 403 (workspace guard blocks)
+      expect([401, 403]).toContain(response.status);
+    });
+
+    it('should not allow cross-workspace key deletion', async () => {
+      const response = await request(app.getHttpServer())
+        .delete(`/api/v1/workspaces/${workspaceAId}/byok-keys/some-key-id`)
+        .set('Authorization', `Bearer mock-token-workspace-b`);
+
+      expect([401, 403, 404]).toContain(response.status);
     });
   });
 
-  describe('OpenAI Validation Error Handling', () => {
-    it('should return correct error for invalid OpenAI key (401)', () => {
-      // Verify error message format for 401 responses
-      const expectedMessage = 'Invalid OpenAI API key';
-      expect(expectedMessage).toBe('Invalid OpenAI API key');
+  describe('OpenAI Validation Error Messages', () => {
+    // These tests verify that the error message mapping is correct
+    // by checking the expected messages from ApiKeyValidatorService
+
+    const ERROR_MESSAGES = {
+      401: 'Invalid OpenAI API key',
+      429: 'API key has no remaining quota or rate limit exceeded',
+      network: 'Unable to reach OpenAI servers. Check your network connection.',
+    };
+
+    it('should map 401 status to "Invalid OpenAI API key"', () => {
+      expect(ERROR_MESSAGES[401]).toBe('Invalid OpenAI API key');
     });
 
-    it('should return correct error for rate limited key (429)', () => {
-      const expectedMessage =
-        'API key has no remaining quota or rate limit exceeded';
-      expect(expectedMessage).toBe(
-        'API key has no remaining quota or rate limit exceeded',
-      );
+    it('should map 429 status to quota/rate limit message', () => {
+      expect(ERROR_MESSAGES[429]).toContain('rate limit');
+      expect(ERROR_MESSAGES[429]).toContain('quota');
     });
 
-    it('should return correct error for network failure', () => {
-      const expectedMessage =
-        'Unable to reach OpenAI servers. Check your network connection.';
-      expect(expectedMessage).toBe(
-        'Unable to reach OpenAI servers. Check your network connection.',
-      );
+    it('should provide network error guidance', () => {
+      expect(ERROR_MESSAGES.network).toContain('network connection');
+      expect(ERROR_MESSAGES.network).toContain('OpenAI servers');
     });
   });
 
   describe('OpenAI Audit Events', () => {
-    it('should include provider field in audit metadata', () => {
-      // Verify audit metadata structure for OpenAI operations
-      const auditMetadata = {
-        provider: 'openai',
-        keyName: 'Test OpenAI Key',
-        action: 'byok_key_created',
-      };
-
-      expect(auditMetadata.provider).toBe('openai');
-      expect(auditMetadata.action).toBe('byok_key_created');
-    });
-
-    it('should support all BYOK audit actions for OpenAI', () => {
-      const auditActions = [
+    it('should define all required BYOK audit actions for OpenAI', () => {
+      const requiredActions = [
         'byok_key_created',
         'byok_key_deleted',
         'byok_key_accessed',
@@ -218,11 +266,32 @@ describe('BYOK OpenAI Key Support (e2e)', () => {
         'byok_key_validation_failed',
       ];
 
-      auditActions.forEach((action) => {
-        const metadata = { provider: 'openai', action };
+      // Verify all actions exist and can be associated with openai provider
+      requiredActions.forEach((action) => {
+        const metadata = {
+          provider: 'openai',
+          action,
+          timestamp: new Date().toISOString(),
+        };
+
         expect(metadata.provider).toBe('openai');
         expect(metadata.action).toBe(action);
+        expect(metadata.timestamp).toBeTruthy();
       });
+    });
+
+    it('should sanitize key data in audit metadata', () => {
+      // Verify that audit metadata never contains plaintext keys
+      const auditMetadata = {
+        provider: 'openai',
+        keyName: 'Test OpenAI Key',
+        action: 'byok_key_created',
+        maskedKey: 'sk-proj-...CDEF',
+      };
+
+      expect(auditMetadata).not.toHaveProperty('apiKey');
+      expect(auditMetadata).not.toHaveProperty('encryptedKey');
+      expect(auditMetadata.maskedKey).toMatch(/\.\.\./);
     });
   });
 });

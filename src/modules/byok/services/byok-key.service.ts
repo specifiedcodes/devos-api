@@ -17,6 +17,7 @@ import {
   sanitizeForAudit,
 } from '../../../shared/logging/log-sanitizer';
 import { ApiKeyValidatorService } from './api-key-validator.service';
+import { OnboardingService } from '../../onboarding/services/onboarding.service';
 
 export interface RequestContext {
   ipAddress?: string;
@@ -53,6 +54,7 @@ export class BYOKKeyService {
     private readonly rateLimiter: RateLimiterService,
     private readonly configService: ConfigService,
     private readonly apiKeyValidator: ApiKeyValidatorService,
+    private readonly onboardingService: OnboardingService,
   ) {
     // Load rate limit configuration from environment (with sensible defaults)
     this.decryptRateLimit = this.configService.get<number>(
@@ -172,6 +174,24 @@ export class BYOKKeyService {
       this.logger.log(
         `BYOK key created: ${saved.id} for workspace ${workspaceId} by user ${userId}`,
       );
+
+      // Update onboarding status (Story 4.1)
+      try {
+        await this.onboardingService.updateStep(
+          userId,
+          workspaceId,
+          'aiKeyAdded',
+          true,
+        );
+        this.logger.log(
+          `Onboarding step 'aiKeyAdded' updated for user ${userId}`,
+        );
+      } catch (error) {
+        // Log error but don't fail key creation if onboarding update fails
+        this.logger.warn(
+          `Failed to update onboarding step for user ${userId}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        );
+      }
 
       return this.toResponse(saved);
     } catch (error) {

@@ -20,8 +20,8 @@ export class AuditLog {
   @IsUUID()
   workspaceId!: string;
 
-  @Column({ type: 'uuid', name: 'user_id' })
-  @IsUUID()
+  @Column({ type: 'varchar', length: 255, name: 'user_id' })
+  @IsNotEmpty()
   userId!: string;
 
   @Column({ type: 'varchar', length: 100 })

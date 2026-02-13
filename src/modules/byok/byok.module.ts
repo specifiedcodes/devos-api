@@ -9,6 +9,7 @@ import { AuditModule } from '../../shared/audit/audit.module';
 import { RateLimiterModule } from '../../shared/cache/rate-limiter.module';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { UsageModule } from '../usage/usage.module';
+import { OnboardingModule } from '../onboarding/onboarding.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { UsageModule } from '../usage/usage.module';
     AuditModule,
     RateLimiterModule,
     forwardRef(() => UsageModule),
+    OnboardingModule,
   ],
   providers: [BYOKKeyService, ApiKeyValidatorService],
   controllers: [BYOKKeyController],

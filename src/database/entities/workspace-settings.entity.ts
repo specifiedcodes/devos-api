@@ -56,7 +56,17 @@ export class WorkspaceSettings {
   };
 
   // Spending limits (Story 3.5)
-  @Column({ type: 'decimal', precision: 10, scale: 2, nullable: true, name: 'monthly_limit_usd' })
+  @Column({
+    type: 'decimal',
+    precision: 10,
+    scale: 2,
+    nullable: true,
+    name: 'monthly_limit_usd',
+    transformer: {
+      to: (value: number | undefined) => value,
+      from: (value: string | null) => (value !== null && value !== undefined ? parseFloat(value) : undefined),
+    },
+  })
   @IsOptional()
   monthlyLimitUsd?: number;
 

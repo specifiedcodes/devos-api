@@ -9,6 +9,7 @@ import { EncryptionService } from '../../../shared/encryption/encryption.service
 import { AuditService } from '../../../shared/audit/audit.service';
 import { RateLimiterService } from '../../../shared/cache/rate-limiter.service';
 import { ApiKeyValidatorService } from './api-key-validator.service';
+import { OnboardingService } from '../../onboarding/services/onboarding.service';
 
 describe('BYOKKeyService', () => {
   let service: BYOKKeyService;
@@ -44,6 +45,11 @@ describe('BYOKKeyService', () => {
     validateApiKey: jest.fn(),
   };
 
+  const mockOnboardingService = {
+    createOnboardingStatus: jest.fn().mockResolvedValue(undefined),
+    updateStep: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -71,6 +77,10 @@ describe('BYOKKeyService', () => {
         {
           provide: ApiKeyValidatorService,
           useValue: mockApiKeyValidatorService,
+        },
+        {
+          provide: OnboardingService,
+          useValue: mockOnboardingService,
         },
       ],
     }).compile();

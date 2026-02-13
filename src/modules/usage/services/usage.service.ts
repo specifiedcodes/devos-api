@@ -326,7 +326,7 @@ export class UsageService {
   async getKeyUsage(
     keyId: string,
     workspaceId: string,
-  ): Promise<{ requests: number; cost: number }> {
+  ): Promise<{ requests: number; cost: number; totalTokens: number }> {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
@@ -339,6 +339,7 @@ export class UsageService {
       .createQueryBuilder('usage')
       .select('COUNT(*)', 'requests')
       .addSelect('SUM(usage.cost_usd)', 'cost')
+      .addSelect('SUM(usage.input_tokens + usage.output_tokens)', 'totalTokens')
       .where('usage.byok_key_id = :keyId', { keyId })
       .andWhere('usage.workspace_id = :workspaceId', { workspaceId })
       .andWhere('usage.created_at BETWEEN :startOfMonth AND :endOfMonth', {
@@ -350,6 +351,7 @@ export class UsageService {
     return {
       requests: parseInt(result.requests || '0', 10),
       cost: parseFloat(result.cost || '0'),
+      totalTokens: parseInt(result.totalTokens || '0', 10),
     };
   }
 

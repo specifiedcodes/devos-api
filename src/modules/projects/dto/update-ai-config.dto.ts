@@ -16,7 +16,7 @@ export class UpdateAiConfigDto {
   @ApiProperty({
     description: 'AI provider identifier',
     example: 'anthropic',
-    enum: Object.values(AiProvider),
+    enum: AiProvider,
   })
   @IsString()
   @IsNotEmpty()

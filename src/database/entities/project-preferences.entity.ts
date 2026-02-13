@@ -34,6 +34,12 @@ export enum AiProvider {
   OPENAI = 'openai',
 }
 
+export enum DeploymentApprovalMode {
+  AUTOMATIC = 'automatic',
+  MANUAL = 'manual',
+  STAGING_AUTO_PRODUCTION_MANUAL = 'staging_auto_production_manual',
+}
+
 /**
  * Valid model identifiers per AI provider.
  * Used for validation when setting per-project AI configuration.
@@ -111,8 +117,8 @@ export class ProjectPreferences {
     default: DEFAULT_AI_PROVIDER,
     name: 'ai_provider',
   })
-  @IsString()
-  aiProvider!: string;
+  @IsEnum(AiProvider)
+  aiProvider!: AiProvider;
 
   @Column({
     type: 'varchar',
@@ -122,4 +128,13 @@ export class ProjectPreferences {
   })
   @IsString()
   aiModel!: string;
+
+  @Column({
+    type: 'enum',
+    enum: DeploymentApprovalMode,
+    default: DeploymentApprovalMode.AUTOMATIC,
+    name: 'deployment_approval_mode',
+  })
+  @IsEnum(DeploymentApprovalMode)
+  deploymentApprovalMode!: DeploymentApprovalMode;
 }

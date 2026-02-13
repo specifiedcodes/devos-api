@@ -41,6 +41,28 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   /**
+   * Get all available AI providers and models
+   *
+   * Returns a list of supported providers and their models.
+   * This is a reference/static data endpoint.
+   *
+   * IMPORTANT: This static route MUST be declared before any :projectId
+   * parameterized routes to prevent NestJS from matching "available-models"
+   * as a projectId parameter.
+   */
+  @Get('available-models/list')
+  @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Get available AI providers and models' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of available AI providers and models',
+  })
+  async getAvailableModels() {
+    return { providers: AVAILABLE_PROVIDERS };
+  }
+
+  /**
    * Create a new project within a workspace
    *
    * @param workspaceId - UUID of the workspace to create the project in
@@ -355,25 +377,9 @@ export class ProjectsController {
     @Param('workspaceId') workspaceId: string,
     @Param('projectId') projectId: string,
     @Body() dto: UpdateAiConfigDto,
+    @Req() req: any,
   ) {
-    return this.projectsService.updateAiConfig(projectId, workspaceId, dto);
+    return this.projectsService.updateAiConfig(projectId, workspaceId, dto, req.user.id);
   }
 
-  /**
-   * Get all available AI providers and models
-   *
-   * Returns a list of supported providers and their models.
-   * This is a reference/static data endpoint.
-   */
-  @Get('available-models/list')
-  @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
-  @ApiOperation({ summary: 'Get available AI providers and models' })
-  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of available AI providers and models',
-  })
-  async getAvailableModels() {
-    return { providers: AVAILABLE_PROVIDERS };
-  }
 }

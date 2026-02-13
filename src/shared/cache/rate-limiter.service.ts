@@ -1,4 +1,4 @@
-import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 
 interface RateLimitEntry {
   count: number;
@@ -6,13 +6,32 @@ interface RateLimitEntry {
 }
 
 /**
- * Simple in-memory rate limiter
- * For production, use Redis-based rate limiting
+ * Simple in-memory rate limiter with automatic cleanup
+ * For production, consider Redis-based rate limiting for multi-instance deployments
  */
 @Injectable()
-export class RateLimiterService {
+export class RateLimiterService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(RateLimiterService.name);
   private readonly limits = new Map<string, RateLimitEntry>();
+  private cleanupInterval: ReturnType<typeof setInterval> | null = null;
+  private static readonly CLEANUP_INTERVAL_MS = 60000; // 1 minute
+
+  onModuleInit(): void {
+    // Start periodic cleanup to prevent memory leaks
+    this.cleanupInterval = setInterval(() => {
+      this.cleanup();
+    }, RateLimiterService.CLEANUP_INTERVAL_MS);
+    this.logger.log('Rate limiter cleanup interval started');
+  }
+
+  onModuleDestroy(): void {
+    // Clear the interval to prevent memory leaks on shutdown
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = null;
+      this.logger.log('Rate limiter cleanup interval stopped');
+    }
+  }
 
   /**
    * Check if request is allowed under rate limit

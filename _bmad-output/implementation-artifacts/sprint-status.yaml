@@ -1,87 +1,51 @@
 sprint_info:
-  sprint_id: sprint-1
-  epic_id: epic-3-cost-tracking
-  epic_name: "Cost Tracking & Usage Analytics"
-  start_date: "2026-01-31"
+  sprint_id: sprint-2
+  epic_id: epic-5-autonomous-ai-agent-orchestration
+  epic_name: "Autonomous AI Agent Orchestration"
+  start_date: "2026-02-01"
+
+# STATUS DEFINITIONS:
+# - backlog: Story identified but not yet detailed/created
+# - ready-for-dev: Story file created with full context, ready for implementation
+# - in-progress: Development actively underway
+# - review: Implementation complete, awaiting code review and QA
+# - done: Code reviewed, QA passed, merged to main
 
 development_status:
-  stories:
-    - id: "3-7-per-workspace-cost-isolation"
-      title: "Per-Workspace Cost Isolation"
-      status: "review"
-      assigned_to: "Claude Sonnet 4.5"
-      started_at: "2026-01-31T06:00:00Z"
-      completed_at: "2026-01-31T08:30:00Z"
-      commit_hash: "e304c49"
-      files_changed:
-        - "src/database/migrations/1738470000000-AddApiUsageRLS.ts"
-        - "src/common/interceptors/workspace-context.interceptor.ts"
-        - "src/modules/usage/services/usage.service.spec.ts"
-        - "src/database/migrations/1738460000000-AddApiUsagePerformanceIndex.ts"
-        - "src/modules/usage/controllers/usage-v2.controller.ts"
-        - "test/workspace-isolation.e2e-spec.ts"
-        - "test/security-attack-scenarios.e2e-spec.ts"
-        - "docs/WORKSPACE_SECURITY_ARCHITECTURE.md"
-        - "STORY_3_7_IMPLEMENTATION_SUMMARY.md"
-      tests_written: 51
-      tests_passing: 10  # Unit tests passing, E2E require environment setup
-      notes: |
-        Implemented comprehensive workspace cost isolation with defense-in-depth:
-        - 4 security layers (JWT, Guards, Interceptors, RLS)
-        - Row-Level Security policies on api_usage table
-        - 51 test cases (18 integration + 33 attack scenarios)
-        - Complete security architecture documentation
+  # Epic 5: Autonomous AI Agent Orchestration
+  epic-5: in-progress
+  5-1-bullmq-task-queue-setup: ready-for-dev
+  5-2-agent-entity-lifecycle-management: backlog
+  5-3-dev-agent-implementation: backlog
+  5-4-planner-agent-implementation: backlog
+  5-5-qa-agent-implementation: backlog
+  5-6-devops-agent-implementation: backlog
+  5-7-three-tier-context-recovery: backlog
+  5-8-super-orchestrator-coordination: backlog
+  5-9-agent-task-assignment-ui: backlog
+  5-10-agent-failure-detection-recovery: backlog
+  epic-5-retrospective: backlog
 
-        E2E tests require test environment configuration to run.
-        All security code implemented and ready for review.
+  # Epic 3: Cost Tracking & Usage Analytics (Previous Sprint)
+  epic-3: in-progress
+  3-7-per-workspace-cost-isolation: review
+  3-8-shareable-read-only-project-links: review
 
-    - id: "3-8-shareable-read-only-project-links"
-      title: "Shareable Read-Only Project Links"
-      status: "review"
-      assigned_to: "Claude Sonnet 4.5"
-      story_points: 8
-      created_at: "2026-01-31T11:00:00Z"
-      started_at: "2026-01-31T12:00:00Z"
-      completed_at: "2026-01-31T20:00:00Z"
-      commit_hash: "a286b65"
-      files_changed:
-        - "src/database/migrations/1738480000000-CreateSharedLinksTable.ts"
-        - "src/database/entities/shared-link.entity.ts"
-        - "src/modules/shared-links/shared-links.module.ts"
-        - "src/modules/shared-links/services/shared-links.service.ts"
-        - "src/modules/shared-links/services/shared-links.service.spec.ts"
-        - "src/modules/shared-links/controllers/shared-links.controller.ts"
-        - "src/modules/shared-links/controllers/shared-links.controller.spec.ts"
-        - "src/modules/shared-links/controllers/shared-view.controller.ts"
-        - "src/modules/shared-links/controllers/shared-view.controller.spec.ts"
-        - "src/modules/shared-links/dto/create-shared-link.dto.ts"
-        - "src/modules/shared-links/dto/shared-link-response.dto.ts"
-        - "src/modules/shared-links/dto/shared-project-view.dto.ts"
-        - "src/modules/shared-links/dto/validate-password.dto.ts"
-        - "src/modules/shared-links/exceptions/shared-link.exceptions.ts"
-        - "test/shared-links.e2e-spec.ts"
-        - "test/shared-links-security.e2e-spec.ts"
-        - "src/app.module.ts"
-        - "src/main.ts"
-        - "package.json"
-        - "STORY_3_8_IMPLEMENTATION_SUMMARY.md"
-      tests_written: 52
-      tests_passing: 52
-      notes: |
-        Implemented comprehensive shareable link functionality with full TDD approach:
-        - Cryptographically secure token generation (256-bit entropy)
-        - Password protection with bcrypt and rate limiting
-        - Public view endpoint with data sanitization
-        - Link management APIs (create, list, get, revoke)
-        - Session-based authentication for password-protected links
-        - 100% workspace isolation enforcement
-        - 52 unit tests + comprehensive E2E tests (all passing)
-        - Security: token security, password protection, data filtering, workspace isolation
-        - Added express-session for password-protected link sessions
+  # Epic 9: Agent Communication & Collaboration
+  epic-9: in-progress
+  9-3-agent-status-updates: review
+  9-5-conversation-history-storage: review
 
-        Ready for code review and QA testing.
+epic_5_progress:
+  total_stories: 10
+  completed: 0
+  in_progress: 0
+  ready_for_dev: 1
+  review: 0
+  done: 0
+  backlog: 9
 
-epic_progress:
+epic_3_progress:
   total_stories: 7
   completed: 0
   in_progress: 0
@@ -91,11 +55,130 @@ epic_progress:
   backlog: 5
 
 next_actions:
+  - "Implement story 5-1: BullMQ Task Queue Setup"
   - "Code review for story 3-7: Per-Workspace Cost Isolation"
   - "Code review for story 3-8: Shareable Read-Only Project Links"
-  - "QA testing of workspace isolation"
-  - "QA testing of shareable links"
-  - "Run database migration for shared_links table"
-  - "Set SESSION_SECRET environment variable"
-  - "Set up test environment for E2E tests"
-  - "Run security penetration tests"
+
+story_details:
+  5-1-bullmq-task-queue-setup:
+    title: "BullMQ Task Queue Setup"
+    epic: "Epic 5: Autonomous AI Agent Orchestration"
+    story_file: "_bmad-output/implementation-artifacts/5-1-bullmq-task-queue-setup.md"
+    status: "ready-for-dev"
+    created_at: "2026-02-01T00:00:00Z"
+    story_points: 8
+    description: "Set up BullMQ task queue infrastructure with Redis for asynchronous agent task orchestration"
+
+  3-7-per-workspace-cost-isolation:
+    title: "Per-Workspace Cost Isolation"
+    epic: "Epic 3: Cost Tracking & Usage Analytics"
+    status: "review"
+    assigned_to: "Claude Sonnet 4.5"
+    started_at: "2026-01-31T06:00:00Z"
+    completed_at: "2026-01-31T08:30:00Z"
+    commit_hash: "e304c49"
+    tests_written: 51
+    tests_passing: 10
+
+  3-8-shareable-read-only-project-links:
+    title: "Shareable Read-Only Project Links"
+    epic: "Epic 3: Cost Tracking & Usage Analytics"
+    status: "review"
+    assigned_to: "Claude Sonnet 4.5"
+    started_at: "2026-01-31T12:00:00Z"
+    completed_at: "2026-01-31T20:00:00Z"
+    commit_hash: "a286b65"
+    tests_written: 52
+    tests_passing: 52
+
+  9-3-agent-status-updates:
+    title: "Agent Status Updates"
+    epic: "Epic 9: Agent Communication & Collaboration"
+    story_file: "_bmad-output/implementation-artifacts/9-3-agent-status-updates.md"
+    status: "review"
+    assigned_to: "Claude Opus 4.5"
+    started_at: "2026-02-13T22:00:00Z"
+    completed_at: "2026-02-13T22:45:00Z"
+    story_points: 13
+    tests_written: 33
+    tests_passing: 33
+    description: "Agent status updates with real-time WebSocket broadcasting, status history API, and frontend components"
+    files_created:
+      - "devos-api/src/modules/agents/enums/agent-activity-status.enum.ts"
+      - "devos-api/src/modules/agents/enums/index.ts"
+      - "devos-api/src/database/entities/agent-status-update.entity.ts"
+      - "devos-api/src/database/migrations/1739500000000-AddAgentActivityStatus.ts"
+      - "devos-api/src/database/migrations/1739500100000-CreateAgentStatusUpdates.ts"
+      - "devos-api/src/modules/agents/services/agent-status.service.ts"
+      - "devos-api/src/modules/agents/controllers/agent-status.controller.ts"
+      - "devos-api/src/modules/agents/dto/get-agent-status.dto.ts"
+      - "devos-api/src/modules/agents/dto/get-status-history-query.dto.ts"
+      - "devos-api/src/modules/agents/dto/status-update-response.dto.ts"
+      - "devos-api/src/modules/agents/agent-status.module.ts"
+      - "devos-websocket/src/types/agent-status.types.ts"
+      - "devos-websocket/src/handlers/agent-status-events.handler.ts"
+      - "devos-websocket/src/subscribers/agent-status-subscriber.ts"
+      - "devos-frontend/types/agent-status.ts"
+      - "devos-frontend/components/chat/ActivityStatusBadge.tsx"
+      - "devos-frontend/components/chat/StatusUpdateMessage.tsx"
+      - "devos-frontend/hooks/useAgentStatus.ts"
+    files_modified:
+      - "devos-api/src/database/entities/agent.entity.ts"
+      - "devos-api/src/app.module.ts"
+      - "devos-websocket/src/index.ts"
+      - "devos-frontend/components/chat/ChatHeader.tsx"
+      - "devos-frontend/components/chat/index.ts"
+
+  9-5-conversation-history-storage:
+    title: "Conversation History Storage"
+    epic: "Epic 9: Agent Communication & Collaboration"
+    story_file: "_bmad-output/implementation-artifacts/9-5-conversation-history-storage.md"
+    status: "review"
+    assigned_to: "Claude Opus 4.5"
+    started_at: "2026-02-13T23:00:00Z"
+    completed_at: "2026-02-13T23:55:00Z"
+    story_points: 13
+    tests_written: 275
+    tests_passing: 275
+    description: "Conversation history storage with threading, full-text search, export, and archival"
+    files_created:
+      # Backend
+      - "devos-api/src/database/entities/conversation-thread.entity.ts"
+      - "devos-api/src/database/entities/conversation-thread.entity.spec.ts"
+      - "devos-api/src/database/migrations/1739600000000-AddConversationHistory.ts"
+      - "devos-api/src/modules/chat/services/conversation.service.ts"
+      - "devos-api/src/modules/chat/services/conversation.service.spec.ts"
+      - "devos-api/src/modules/chat/services/chat-search.service.ts"
+      - "devos-api/src/modules/chat/services/chat-search.service.spec.ts"
+      - "devos-api/src/modules/chat/services/chat-export.service.ts"
+      - "devos-api/src/modules/chat/services/chat-export.service.spec.ts"
+      - "devos-api/src/modules/chat/services/chat-archival.service.ts"
+      - "devos-api/src/modules/chat/services/chat-archival.service.spec.ts"
+      - "devos-api/src/modules/chat/dto/search-messages.dto.ts"
+      - "devos-api/src/modules/chat/dto/export-conversation.dto.ts"
+      - "devos-api/src/modules/chat/dto/conversation.dto.ts"
+      # Frontend
+      - "devos-frontend/hooks/useConversations.ts"
+      - "devos-frontend/hooks/useMessageSearch.ts"
+      - "devos-frontend/hooks/useExportConversation.ts"
+      - "devos-frontend/hooks/__tests__/useConversations.test.ts"
+      - "devos-frontend/hooks/__tests__/useMessageSearch.test.ts"
+      - "devos-frontend/hooks/__tests__/useExportConversation.test.ts"
+      - "devos-frontend/components/chat/ConversationList.tsx"
+      - "devos-frontend/components/chat/SearchMessages.tsx"
+      - "devos-frontend/components/chat/ExportDialog.tsx"
+      - "devos-frontend/components/chat/__tests__/ConversationList.test.tsx"
+      - "devos-frontend/components/chat/__tests__/SearchMessages.test.tsx"
+      - "devos-frontend/components/chat/__tests__/ExportDialog.test.tsx"
+      - "devos-frontend/types/__tests__/conversation-history.test.ts"
+    files_modified:
+      - "devos-api/src/database/entities/chat-message.entity.ts"
+      - "devos-api/src/modules/chat/chat.service.ts"
+      - "devos-api/src/modules/chat/chat.service.spec.ts"
+      - "devos-api/src/modules/chat/chat.controller.ts"
+      - "devos-api/src/modules/chat/chat.controller.spec.ts"
+      - "devos-api/src/modules/chat/chat.module.ts"
+      - "devos-api/src/modules/chat/dto/index.ts"
+      - "devos-frontend/types/chat.ts"
+      - "devos-frontend/lib/api/chat.ts"
+      - "devos-frontend/components/chat/index.ts"

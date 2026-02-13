@@ -53,6 +53,25 @@ export enum AuditAction {
   WORKSPACE_CREATED = 'workspace_created',
   WORKSPACE_DELETED = 'workspace_deleted',
   WORKSPACE_RENAMED = 'workspace_renamed',
+
+  // Onboarding actions (Story 4.1)
+  ONBOARDING_STARTED = 'onboarding_started',
+  ONBOARDING_COMPLETED = 'onboarding_completed',
+  ONBOARDING_STEP_UPDATED = 'onboarding_step_updated',
+
+  // Deployment approval actions (Story 6.9)
+  DEPLOYMENT_APPROVAL_SETTINGS_UPDATED = 'deployment.approval_settings_updated',
+  DEPLOYMENT_APPROVAL_REQUESTED = 'deployment.approval_requested',
+  DEPLOYMENT_APPROVED = 'deployment.approved',
+  DEPLOYMENT_REJECTED = 'deployment.rejected',
+
+  // Deployment rollback actions (Story 6.10)
+  DEPLOYMENT_ROLLBACK_INITIATED = 'deployment.rollback_initiated',
+  DEPLOYMENT_ROLLBACK_COMPLETED = 'deployment.rollback_completed',
+  DEPLOYMENT_ROLLBACK_FAILED = 'deployment.rollback_failed',
+
+  // Chat export actions (Story 9.5) - HIGH-4 FIX: Audit logging for data export
+  CHAT_EXPORT_REQUESTED = 'chat.export_requested',
 }
 
 /**

@@ -107,15 +107,17 @@ export class WorkspaceSettingsService {
         triggeredAlerts: {},
       });
     } else {
+      // Reset triggered alerts if limit is being disabled or amount changed
+      // Must check BEFORE overwriting the values
+      const limitAmountChanged = settings.monthlyLimitUsd !== monthlyLimitUsd;
+      if (!limitEnabled || limitAmountChanged) {
+        settings.triggeredAlerts = {};
+      }
+
       // Update existing settings
       settings.monthlyLimitUsd = monthlyLimitUsd;
       settings.alertThresholds = alertThresholds;
       settings.limitEnabled = limitEnabled;
-
-      // Reset triggered alerts if limit is being disabled or changed
-      if (!limitEnabled || settings.monthlyLimitUsd !== monthlyLimitUsd) {
-        settings.triggeredAlerts = {};
-      }
     }
 
     const saved = await this.settingsRepository.save(settings);

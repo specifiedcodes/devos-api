@@ -65,7 +65,9 @@ export class SpendingAlertService {
 
   /**
    * Check spending limit for a single workspace
-   * Uses transaction with row-level locking to prevent race conditions
+   * Uses transaction with row-level locking to prevent race conditions.
+   * Alert sending (email/notification) happens OUTSIDE the transaction
+   * to avoid holding the lock during slow network operations.
    */
   private async checkWorkspaceLimit(
     settings: WorkspaceSettings,
@@ -90,65 +92,85 @@ export class SpendingAlertService {
       return;
     }
 
+    // Collect thresholds that need alerts sent (determined inside transaction)
+    const thresholdsToAlert: number[] = [];
+
     for (const threshold of alertThresholds) {
       if (percentageUsed >= threshold) {
-        // Use transaction with row-level locking to prevent duplicate alerts
-        await this.workspaceSettingsRepo.manager.transaction(
-          async (transactionalEntityManager) => {
-            // Lock the row for update
-            const lockedSettings = await transactionalEntityManager
-              .createQueryBuilder(WorkspaceSettings, 'ws')
-              .where('ws.workspaceId = :workspaceId', { workspaceId })
-              .setLock('pessimistic_write')
-              .getOne();
+        // Use transaction with row-level locking to atomically check and mark triggered
+        const shouldAlert =
+          await this.workspaceSettingsRepo.manager.transaction(
+            async (transactionalEntityManager) => {
+              // Lock the row for update
+              const lockedSettings = await transactionalEntityManager
+                .createQueryBuilder(WorkspaceSettings, 'ws')
+                .where('ws.workspaceId = :workspaceId', { workspaceId })
+                .setLock('pessimistic_write')
+                .getOne();
 
-            if (!lockedSettings) {
-              return;
-            }
+              if (!lockedSettings) {
+                return false;
+              }
 
-            // Re-check triggered alerts with locked data
-            const triggeredAlerts =
-              (lockedSettings.triggeredAlerts as any)?.[currentMonth] || [];
-            const triggeredThresholds = new Set(
-              triggeredAlerts.map((a: any) => a.threshold),
-            );
+              // Re-check triggered alerts with locked data
+              const triggeredAlerts =
+                (lockedSettings.triggeredAlerts as any)?.[currentMonth] || [];
+              const triggeredThresholds = new Set(
+                triggeredAlerts.map((a: any) => a.threshold),
+              );
 
-            // If already triggered, skip
-            if (triggeredThresholds.has(threshold)) {
-              return;
-            }
+              // If already triggered, skip
+              if (triggeredThresholds.has(threshold)) {
+                return false;
+              }
 
-            // Send alert (outside transaction to avoid long locks)
-            await this.sendAlert(
-              settings,
-              threshold,
-              currentMonthSpend,
-              monthlyLimitUsd,
-            );
+              // Mark as triggered atomically
+              const newAlert = {
+                threshold,
+                triggered_at: new Date().toISOString(),
+                spend: currentMonthSpend,
+              };
 
-            // Mark as triggered
-            const newAlert = {
-              threshold,
-              triggered_at: new Date().toISOString(),
-              spend: currentMonthSpend,
-            };
+              const updatedAlerts = {
+                ...(lockedSettings.triggeredAlerts || {}),
+                [currentMonth]: [...triggeredAlerts, newAlert],
+              };
 
-            const updatedAlerts = {
-              ...(lockedSettings.triggeredAlerts || {}),
-              [currentMonth]: [...triggeredAlerts, newAlert],
-            };
+              // Update within transaction
+              await transactionalEntityManager.update(
+                WorkspaceSettings,
+                { workspaceId },
+                { triggeredAlerts: updatedAlerts },
+              );
 
-            // Update within transaction
-            await transactionalEntityManager.update(
-              WorkspaceSettings,
-              { workspaceId },
-              { triggeredAlerts: updatedAlerts },
-            );
+              this.logger.log(
+                `Alert triggered at ${threshold}% for workspace ${workspaceId}`,
+              );
 
-            this.logger.log(
-              `Alert triggered at ${threshold}% for workspace ${workspaceId}`,
-            );
-          },
+              return true;
+            },
+          );
+
+        if (shouldAlert) {
+          thresholdsToAlert.push(threshold);
+        }
+      }
+    }
+
+    // Send alerts OUTSIDE the transaction to avoid holding locks during network I/O
+    for (const threshold of thresholdsToAlert) {
+      try {
+        await this.sendAlert(
+          settings,
+          threshold,
+          currentMonthSpend,
+          monthlyLimitUsd,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send alert for threshold ${threshold}% in workspace ${workspaceId}: ${
+            error instanceof Error ? error.message : 'Unknown error'
+          }`,
         );
       }
     }
@@ -221,6 +243,7 @@ export class SpendingAlertService {
           threshold,
           currentSpend,
           limit,
+          workspace.id,
         );
       } catch (error) {
         this.logger.error(

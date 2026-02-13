@@ -136,6 +136,20 @@ export class WorkspacesService {
   }
 
   /**
+   * Validates that a schema name matches the expected pattern (defense in depth for SQL injection prevention)
+   * @param schemaName - The schema name to validate
+   * @returns true if the schema name is valid
+   * @throws Error if the schema name is invalid
+   */
+  private validateSchemaName(schemaName: string): boolean {
+    const schemaPattern = /^workspace_[a-f0-9]{32}$/;
+    if (!schemaPattern.test(schemaName)) {
+      throw new Error(`Invalid schema name format: ${schemaName}`);
+    }
+    return true;
+  }
+
+  /**
    * Creates a PostgreSQL schema for the workspace
    * Schema name format: workspace_{uuid without dashes}
    */
@@ -304,12 +318,15 @@ export class WorkspacesService {
           'workspace.id',
           'workspace.name',
           'workspace.description',
+          'workspace.schemaName',
           'workspace.createdAt',
           'member.role',
         ])
         .getMany();
 
       // Get counts for each workspace
+      // NOTE: member role is already available from the initial JOIN query (workspace.members[0].role)
+      // so we avoid a redundant per-workspace role query (N+1 fix)
       const workspaceDtos: WorkspaceResponseDto[] = await Promise.all(
         workspaces.map(async (workspace) => {
           // Get member count
@@ -317,10 +334,11 @@ export class WorkspacesService {
             where: { workspaceId: workspace.id },
           });
 
-          // Get project count from workspace schema
+          // Get project count from workspace schema (validate schema name for SQL injection prevention)
           let projectCount = 0;
           try {
             const schemaName = workspace.schemaName;
+            this.validateSchemaName(schemaName);
             const result = await this.dataSource.query(
               `SELECT COUNT(*)::int as count FROM "${schemaName}".projects WHERE status = 'active'`,
             );
@@ -330,16 +348,14 @@ export class WorkspacesService {
             projectCount = 0;
           }
 
-          // Get user's role for this workspace
-          const member = await this.workspaceMemberRepository.findOne({
-            where: { workspaceId: workspace.id, userId },
-          });
+          // Use role from the initial JOIN query instead of a separate query (N+1 fix)
+          const role = workspace.members?.[0]?.role || WorkspaceRole.VIEWER;
 
           return {
             id: workspace.id,
             name: workspace.name,
             description: workspace.description,
-            role: member?.role || WorkspaceRole.VIEWER,
+            role,
             projectCount,
             memberCount,
             createdAt: workspace.createdAt,
@@ -463,7 +479,7 @@ export class WorkspacesService {
    * @param newName - New workspace name
    * @returns Updated workspace
    */
-  async renameWorkspace(workspaceId: string, newName: string): Promise<WorkspaceResponseDto> {
+  async renameWorkspace(workspaceId: string, newName: string, userId?: string): Promise<WorkspaceResponseDto> {
     try {
       // Validate name length
       if (newName.length < 3 || newName.length > 50) {
@@ -490,9 +506,10 @@ export class WorkspacesService {
         where: { workspaceId },
       });
 
-      // Get project count
+      // Get project count (validate schema name for SQL injection prevention)
       let projectCount = 0;
       try {
+        this.validateSchemaName(workspace.schemaName);
         const result = await this.dataSource.query(
           `SELECT COUNT(*)::int as count FROM "${workspace.schemaName}".projects WHERE status = 'active'`,
         );
@@ -501,11 +518,20 @@ export class WorkspacesService {
         this.logger.warn(`Failed to get project count for workspace ${workspaceId}: ${error}`);
       }
 
+      // Look up the actual requester role if userId is provided
+      let role = WorkspaceRole.OWNER;
+      if (userId) {
+        const member = await this.workspaceMemberRepository.findOne({
+          where: { workspaceId, userId },
+        });
+        role = member?.role || WorkspaceRole.OWNER;
+      }
+
       return {
         id: updatedWorkspace.id,
         name: updatedWorkspace.name,
         description: updatedWorkspace.description,
-        role: WorkspaceRole.OWNER, // Role will be determined by guard
+        role,
         projectCount,
         memberCount,
         createdAt: updatedWorkspace.createdAt,
@@ -609,6 +635,23 @@ export class WorkspacesService {
       });
 
       if (!membership) {
+        // Log unauthorized workspace access attempt for security monitoring
+        try {
+          const securityEvent = this.securityEventRepository.create({
+            user_id: userId,
+            event_type: SecurityEventType.PERMISSION_DENIED,
+            ip_address: ipAddress,
+            user_agent: userAgent,
+            reason: 'workspace_switch_unauthorized',
+            metadata: {
+              target_workspace_id: targetWorkspaceId,
+              timestamp: new Date().toISOString(),
+            },
+          } as any);
+          await this.securityEventRepository.save(securityEvent);
+        } catch (logError) {
+          this.logger.error('Failed to log unauthorized switch attempt', logError);
+        }
         throw new ForbiddenException('You are not a member of this workspace');
       }
 
@@ -731,9 +774,10 @@ export class WorkspacesService {
 
       this.logger.log(`User ${userId} switched from workspace ${oldWorkspaceId} to ${targetWorkspaceId}`);
 
-      // 9. Get project count and member count for response
+      // 9. Get project count and member count for response (validate schema name for SQL injection prevention)
       let projectCount = 0;
       try {
+        this.validateSchemaName(workspace.schemaName);
         const result = await this.dataSource.query(
           `SELECT COUNT(*)::int as count FROM "${workspace.schemaName}".projects WHERE status = 'active'`,
         );

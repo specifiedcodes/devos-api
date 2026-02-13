@@ -13,7 +13,6 @@ import { User } from '../../database/entities/user.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
 import { WorkspaceOwnerGuard } from './guards/workspace-owner.guard';
 import { WorkspaceAdminGuard } from './guards/workspace-admin.guard';
-import { RoleGuard } from '../../common/guards/role.guard';
 import { EmailModule } from '../email/email.module';
 import { AuditModule } from '../../shared/audit/audit.module';
 
@@ -38,7 +37,6 @@ import { AuditModule } from '../../shared/audit/audit.module';
     WorkspacesCleanupService,
     WorkspaceOwnerGuard,
     WorkspaceAdminGuard,
-    RoleGuard,
   ],
   exports: [WorkspacesService],
 })

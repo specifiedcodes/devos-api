@@ -512,6 +512,7 @@ describe('ProjectsController', () => {
         'workspace-uuid-456',
         'project-uuid-123',
         dto,
+        mockRequest,
       );
 
       // Assert
@@ -522,6 +523,7 @@ describe('ProjectsController', () => {
         'project-uuid-123',
         'workspace-uuid-456',
         dto,
+        'user-uuid-789',
       );
     });
 
@@ -542,6 +544,7 @@ describe('ProjectsController', () => {
         'workspace-uuid-456',
         'project-uuid-123',
         dto,
+        mockRequest,
       );
 
       // Assert
@@ -567,6 +570,7 @@ describe('ProjectsController', () => {
           'workspace-uuid-456',
           'project-uuid-123',
           dto,
+          mockRequest,
         ),
       ).rejects.toThrow(BadRequestException);
     });
@@ -583,7 +587,7 @@ describe('ProjectsController', () => {
 
       // Act & Assert
       await expect(
-        controller.updateAiConfig('workspace-uuid-456', 'nonexistent-id', dto),
+        controller.updateAiConfig('workspace-uuid-456', 'nonexistent-id', dto, mockRequest),
       ).rejects.toThrow(NotFoundException);
     });
   });

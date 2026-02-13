@@ -47,7 +47,12 @@ export class BYOKKeyController {
       ipAddress: req.ip || req.connection?.remoteAddress,
       userAgent: req.headers?.['user-agent'],
     };
-    return this.byokKeyService.createKey(workspaceId, userId, dto, requestContext);
+    return this.byokKeyService.createKey(
+      workspaceId,
+      userId,
+      dto,
+      requestContext,
+    );
   }
 
   /**
@@ -57,6 +62,57 @@ export class BYOKKeyController {
   @Get()
   async getWorkspaceKeys(@Param('workspaceId') workspaceId: string) {
     return this.byokKeyService.getWorkspaceKeys(workspaceId);
+  }
+
+  /**
+   * Get usage statistics for a specific BYOK key
+   * Integrated with Story 3.3 real-time cost tracking
+   *
+   * NOTE: This route MUST be declared before @Get(':keyId') to prevent
+   * the parameterized route from matching '/usage' as a keyId value.
+   *
+   * Response format matches frontend BYOKKeyUsage interface:
+   * - estimatedCost (not totalCost) for frontend compatibility
+   * - totalTokens for token usage display
+   */
+  @Get(':keyId/usage')
+  async getKeyUsage(
+    @Param('workspaceId') workspaceId: string,
+    @Param('keyId') keyId: string,
+  ) {
+    // Verify the key exists and belongs to the workspace
+    const key = await this.byokKeyService.getKeyById(keyId, workspaceId);
+
+    // Get usage data from Story 3.3 UsageService
+    const usage = await this.usageService.getKeyUsage(keyId, workspaceId);
+
+    // Calculate current month period
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999,
+    );
+
+    return {
+      keyId,
+      keyName: key.keyName,
+      provider: key.provider,
+      workspaceId,
+      totalRequests: usage.requests,
+      totalTokens: usage.totalTokens,
+      estimatedCost: usage.cost,
+      lastUsedAt: key.lastUsedAt,
+      period: {
+        start: startOfMonth.toISOString(),
+        end: endOfMonth.toISOString(),
+      },
+    };
   }
 
   /**
@@ -87,41 +143,11 @@ export class BYOKKeyController {
       ipAddress: req.ip || req.connection?.remoteAddress,
       userAgent: req.headers?.['user-agent'],
     };
-    await this.byokKeyService.deleteKey(keyId, workspaceId, userId, requestContext);
-  }
-
-  /**
-   * Get usage statistics for a specific BYOK key
-   * Integrated with Story 3.3 real-time cost tracking
-   */
-  @Get(':keyId/usage')
-  async getKeyUsage(
-    @Param('workspaceId') workspaceId: string,
-    @Param('keyId') keyId: string,
-  ) {
-    // Verify the key exists and belongs to the workspace
-    const key = await this.byokKeyService.getKeyById(keyId, workspaceId);
-
-    // Get usage data from Story 3.3 UsageService
-    const usage = await this.usageService.getKeyUsage(keyId, workspaceId);
-
-    // Calculate current month period
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-
-    return {
+    await this.byokKeyService.deleteKey(
       keyId,
-      keyName: key.keyName,
-      provider: key.provider,
       workspaceId,
-      totalRequests: usage.requests,
-      totalCost: usage.cost,
-      lastUsedAt: key.lastUsedAt,
-      period: {
-        start: startOfMonth,
-        end: endOfMonth,
-      },
-    };
+      userId,
+      requestContext,
+    );
   }
 }

@@ -140,6 +140,7 @@ describe('SpendingAlertService', () => {
         80,
         80.0,
         100,
+        'workspace-1',
       );
 
       expect(mockTransactionalEntityManager.update).toHaveBeenCalled();

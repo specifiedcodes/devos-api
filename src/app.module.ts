@@ -2,6 +2,7 @@ import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bull';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard } from '@nestjs/throttler';
 import { AppController } from './app.controller';
@@ -10,6 +11,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { RedisModule } from './modules/redis/redis.module';
 import { EncryptionModule } from './shared/encryption/encryption.module';
+import { GuardsModule } from './common/guards/guards.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { BYOKModule } from './modules/byok/byok.module';
@@ -17,6 +19,20 @@ import { UsageModule } from './modules/usage/usage.module';
 import { WorkspaceSettingsModule } from './modules/workspace-settings/workspace-settings.module';
 import { NotificationModule } from './modules/notification/notification.module';
 import { SharedLinksModule } from './modules/shared-links/shared-links.module';
+import { OnboardingModule } from './modules/onboarding/onboarding.module';
+import { TemplatesModule } from './modules/templates/templates.module';
+import { ProvisioningModule } from './modules/provisioning/provisioning.module';
+import { AnalyticsModule } from './modules/analytics/analytics.module';
+import { AgentQueueModule } from './modules/agent-queue/agent-queue.module';
+import { AgentsModule } from './modules/agents/agents.module';
+import { AgentStatusModule } from './modules/agents/agent-status.module';
+import { AgentStatusUpdate } from './database/entities/agent-status-update.entity';
+import { IntegrationsModule } from './modules/integrations/integrations.module';
+import { StoriesModule } from './modules/stories/stories.module';
+import { SprintsModule } from './modules/sprints/sprints.module';
+import { KanbanPreferencesModule } from './modules/kanban-preferences/kanban-preferences.module';
+import { CliSessionsModule } from './modules/cli-sessions/cli-sessions.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { User } from './database/entities/user.entity';
 import { Workspace } from './database/entities/workspace.entity';
 import { WorkspaceMember } from './database/entities/workspace-member.entity';
@@ -31,6 +47,19 @@ import { UsageRecord } from './database/entities/usage-record.entity';
 import { WorkspaceSettings } from './database/entities/workspace-settings.entity';
 import { Notification } from './database/entities/notification.entity';
 import { SharedLink } from './database/entities/shared-link.entity';
+import { OnboardingStatus } from './database/entities/onboarding-status.entity';
+import { ProvisioningStatus } from './database/entities/provisioning-status.entity';
+import { AnalyticsEvent } from './modules/analytics/entities/analytics-event.entity';
+import { AnalyticsAggregate } from './modules/analytics/entities/analytics-aggregate.entity';
+import { AgentJob } from './modules/agent-queue/entities/agent-job.entity';
+import { Agent } from './database/entities/agent.entity';
+import { IntegrationConnection } from './database/entities/integration-connection.entity';
+import { DeploymentApproval } from './database/entities/deployment-approval.entity';
+import { Story } from './database/entities/story.entity';
+import { Sprint } from './database/entities/sprint.entity';
+import { UserKanbanPreferences } from './database/entities/user-kanban-preferences.entity';
+import { CliSession } from './database/entities/cli-session.entity';
+import { ChatMessage } from './database/entities/chat-message.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -63,6 +92,20 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         WorkspaceSettings,
         Notification,
         SharedLink,
+        OnboardingStatus,
+        ProvisioningStatus,
+        AnalyticsEvent,
+        AnalyticsAggregate,
+        AgentJob,
+        Agent,
+        IntegrationConnection,
+        DeploymentApproval,
+        Story,
+        Sprint,
+        UserKanbanPreferences,
+        CliSession,
+        ChatMessage,
+        AgentStatusUpdate,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -70,7 +113,15 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     }),
     DatabaseModule,
     RedisModule,
+    BullModule.forRoot({
+      redis: {
+        host: process.env.REDIS_HOST || 'localhost',
+        port: parseInt(process.env.REDIS_PORT || '6379', 10),
+        password: process.env.REDIS_PASSWORD || undefined,
+      },
+    }),
     EncryptionModule,
+    GuardsModule,
     AuthModule,
     WorkspacesModule,
     ProjectsModule,
@@ -79,6 +130,19 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     WorkspaceSettingsModule,
     NotificationModule,
     SharedLinksModule,
+    OnboardingModule,
+    TemplatesModule,
+    ProvisioningModule,
+    AnalyticsModule,
+    AgentQueueModule,
+    AgentsModule,
+    AgentStatusModule,
+    IntegrationsModule,
+    StoriesModule,
+    SprintsModule,
+    KanbanPreferencesModule,
+    CliSessionsModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [

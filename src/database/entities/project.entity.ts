@@ -51,6 +51,18 @@ export class Project {
   @IsUrl()
   deploymentUrl?: string;
 
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'railway_project_id' })
+  @IsOptional()
+  railwayProjectId?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'vercel_project_id' })
+  @IsOptional()
+  vercelProjectId?: string;
+
+  @Column({ type: 'varchar', length: 100, nullable: true, name: 'supabase_project_ref' })
+  @IsOptional()
+  supabaseProjectRef?: string;
+
   @Column({ type: 'uuid', name: 'workspace_id' })
   @IsUUID()
   workspaceId!: string;

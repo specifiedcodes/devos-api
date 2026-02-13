@@ -17,6 +17,7 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
 import { CleanupService } from './tasks/cleanup.service';
 import { EmailModule } from '../email/email.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
+import { OnboardingModule } from '../onboarding/onboarding.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { WorkspacesModule } from '../workspaces/workspaces.module';
     PassportModule,
     EmailModule,
     WorkspacesModule,
+    OnboardingModule,
     ThrottlerModule.forRoot([
       {
         ttl: 900000, // 15 minutes (900,000ms) - matches login rate limit requirement

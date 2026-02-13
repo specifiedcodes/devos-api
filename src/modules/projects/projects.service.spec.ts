@@ -17,6 +17,8 @@ import {
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateAiConfigDto } from './dto/update-ai-config.dto';
 import { AuditService } from '../../shared/audit/audit.service';
+import { OnboardingService } from '../onboarding/services/onboarding.service';
+import { ProvisioningOrchestratorService } from '../provisioning/services/provisioning-orchestrator.service';
 
 describe('ProjectsService', () => {
   let service: ProjectsService;
@@ -61,6 +63,19 @@ describe('ProjectsService', () => {
           provide: AuditService,
           useValue: {
             log: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: OnboardingService,
+          useValue: {
+            createOnboardingStatus: jest.fn().mockResolvedValue(undefined),
+            updateStep: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: ProvisioningOrchestratorService,
+          useValue: {
+            startProvisioning: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
