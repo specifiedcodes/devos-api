@@ -5,6 +5,12 @@
  * Integration smoke tests for the full pipeline job execution flow.
  * Tests coordination between all Story 11.3 services with mocked CLI process.
  */
+
+// Mock @octokit/rest to avoid ESM import issues in Jest (needed after Story 11.4 imports)
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';

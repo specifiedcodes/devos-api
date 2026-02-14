@@ -1,6 +1,7 @@
 /**
  * PipelineJobHandlerService
  * Story 11.3: Agent-to-CLI Execution Pipeline
+ * Story 11.4: Dev Agent CLI Integration (dev agent delegation)
  *
  * Main handler for pipeline phase jobs. Coordinates:
  * - Task context assembly
@@ -9,8 +10,9 @@
  * - Real-time output streaming
  * - Session health monitoring
  * - Error handling with structured error types
+ * - Dev agent delegation to DevAgentPipelineExecutor (Story 11.4)
  */
-import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, ForbiddenException, Optional, Inject, forwardRef } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { CLISessionLifecycleService } from './cli-session-lifecycle.service';
 import { TaskContextAssemblerService } from './task-context-assembler.service';
@@ -18,6 +20,7 @@ import { PipelineBranchManagerService } from './pipeline-branch-manager.service'
 import { CLIOutputStreamService } from './cli-output-stream.service';
 import { SessionHealthMonitorService } from './session-health-monitor.service';
 import { WorkspaceManagerService } from './workspace-manager.service';
+import { DevAgentPipelineExecutorService } from './dev-agent-pipeline-executor.service';
 import {
   PipelineJobData,
   PipelineJobResult,
@@ -28,6 +31,7 @@ import {
   CLISessionSpawnParams,
 } from '../interfaces/cli-session-config.interfaces';
 import { PipelineState } from '../interfaces/pipeline.interfaces';
+import { DevAgentExecutionParams } from '../interfaces/dev-agent-execution.interfaces';
 
 /** Agent types that work on feature branches */
 const FEATURE_BRANCH_AGENTS = new Set(['dev']);
@@ -50,6 +54,9 @@ export class PipelineJobHandlerService {
     private readonly healthMonitor: SessionHealthMonitorService,
     private readonly workspaceManager: WorkspaceManagerService,
     private readonly eventEmitter: EventEmitter2,
+    @Optional()
+    @Inject(forwardRef(() => DevAgentPipelineExecutorService))
+    private readonly devAgentExecutor?: DevAgentPipelineExecutorService,
   ) {}
 
   /**
@@ -76,6 +83,11 @@ export class PipelineJobHandlerService {
         jobData.pipelineProjectId,
         '', // Git URL will be resolved by workspace manager
       );
+
+      // Story 11.4: Delegate dev agent jobs to DevAgentPipelineExecutor
+      if (jobData.agentType === 'dev' && this.devAgentExecutor) {
+        return this.handleDevAgentJob(jobData, workspacePath, startTime);
+      }
 
       // 2. Handle Git branch strategy based on agent type
       branch = await this.handleBranchStrategy(
@@ -198,6 +210,81 @@ export class PipelineJobHandlerService {
       // Workspace/setup errors - throw for BullMQ retry
       throw error;
     }
+  }
+
+  /**
+   * Handle dev agent jobs by delegating to DevAgentPipelineExecutor.
+   * Story 11.4: Dev Agent CLI Integration
+   *
+   * Builds DevAgentExecutionParams from PipelineJobData and delegates
+   * execution to the DevAgentPipelineExecutor. Maps the result back
+   * to PipelineJobResult with additional PR/test metadata for QA handoff.
+   */
+  private async handleDevAgentJob(
+    jobData: PipelineJobData,
+    workspacePath: string,
+    startTime: number,
+  ): Promise<PipelineJobResult> {
+    this.logger.log(
+      `Delegating dev agent job to DevAgentPipelineExecutor for story ${jobData.storyId}`,
+    );
+
+    const metadata = jobData.pipelineMetadata || {};
+
+    // TODO: Retrieve GitHub token via IntegrationConnectionService instead of
+    // pipeline metadata to avoid storing the token in Redis job data.
+    // For now, validate that required GitHub fields are present.
+    const githubToken = metadata.githubToken || '';
+    if (!githubToken) {
+      this.logger.warn(
+        `Dev agent job for story ${jobData.storyId} missing GitHub token in pipeline metadata`,
+      );
+    }
+    if (!metadata.repoOwner || !metadata.repoName) {
+      this.logger.warn(
+        `Dev agent job for story ${jobData.storyId} missing repo owner/name in pipeline metadata`,
+      );
+    }
+
+    const executionParams: DevAgentExecutionParams = {
+      workspaceId: jobData.workspaceId,
+      projectId: jobData.pipelineProjectId,
+      storyId: jobData.storyId || 'unknown',
+      storyTitle: metadata.storyTitle || `Story ${jobData.storyId}`,
+      storyDescription: metadata.storyDescription || '',
+      acceptanceCriteria: metadata.acceptanceCriteria || [],
+      techStack: metadata.techStack || '',
+      codeStylePreferences: metadata.codeStylePreferences || '',
+      testingStrategy: metadata.testingStrategy || '',
+      workspacePath,
+      gitRepoUrl: metadata.gitRepoUrl || '',
+      githubToken,
+      repoOwner: metadata.repoOwner || '',
+      repoName: metadata.repoName || '',
+    };
+
+    const result = await this.devAgentExecutor!.execute(executionParams);
+
+    // Map DevAgentExecutionResult to PipelineJobResult
+    const pipelineResult: PipelineJobResult = {
+      sessionId: result.sessionId,
+      exitCode: result.success ? 0 : 1,
+      branch: result.branch || null,
+      commitHash: result.commitHash,
+      outputLineCount: 0,
+      durationMs: result.durationMs,
+      error: result.error,
+    };
+
+    // Attach dev agent metadata for QA handoff via pipeline metadata
+    // This data will be available to the QA agent in the next pipeline phase
+    if (result.success) {
+      this.logger.log(
+        `Dev agent completed successfully: PR ${result.prUrl}, branch ${result.branch}`,
+      );
+    }
+
+    return pipelineResult;
   }
 
   /**

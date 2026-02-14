@@ -5,6 +5,12 @@
  * TDD: Tests written first, then implementation.
  * Tests the main pipeline job handler that coordinates all services.
  */
+
+// Mock @octokit/rest to avoid ESM import issues in Jest (needed after Story 11.4 imports)
+jest.mock('@octokit/rest', () => ({
+  Octokit: jest.fn().mockImplementation(() => ({})),
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ForbiddenException } from '@nestjs/common';
