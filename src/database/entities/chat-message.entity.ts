@@ -13,6 +13,7 @@ import { Project } from './project.entity';
 import { Agent, AgentType } from './agent.entity';
 import { User } from './user.entity';
 import { ConversationThread } from './conversation-thread.entity';
+import { ChatRoom } from './chat-room.entity';
 
 /**
  * Sender type for chat messages
@@ -42,6 +43,7 @@ export enum ChatMessageStatus {
 @Index(['workspaceId', 'agentId', 'createdAt'])
 @Index(['workspaceId', 'userId', 'createdAt'])
 @Index(['workspaceId', 'conversationId', 'createdAt'])
+@Index(['roomId', 'createdAt'])
 export class ChatMessage {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -125,6 +127,19 @@ export class ChatMessage {
 
   @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
   archivedAt!: Date | null;
+
+  /**
+   * Story 9.10: Multi-User Chat
+   * Optional room ID for multi-user chat rooms
+   * null for legacy 1:1 direct chats
+   */
+  @Column({ name: 'room_id', type: 'uuid', nullable: true })
+  @Index()
+  roomId!: string | null;
+
+  @ManyToOne(() => ChatRoom, { onDelete: 'CASCADE', nullable: true })
+  @JoinColumn({ name: 'room_id' })
+  room!: ChatRoom | null;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
