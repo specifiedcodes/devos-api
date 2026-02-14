@@ -4,6 +4,7 @@
  * Story 11.2: Claude Code CLI Container Setup
  * Story 11.3: Agent-to-CLI Execution Pipeline
  * Story 11.4: Dev Agent CLI Integration
+ * Story 11.5: QA Agent CLI Integration
  *
  * Provides the autonomous pipeline state machine with:
  * - PipelineStateMachineService: Core state machine logic
@@ -30,6 +31,15 @@
  * - DevAgentGitOpsService: Git commit/push operations
  * - DevAgentTestExtractorService: Test result extraction
  * - DevAgentPRCreatorService: Pull request creation via GitHub API
+ *
+ * QA Agent CLI Integration (Story 11.5):
+ * - QAAgentPipelineExecutorService: Full QA agent workflow orchestration
+ * - QATestRunnerService: Test suite execution and result comparison
+ * - QAStaticAnalyzerService: Lint and type check execution
+ * - QASecurityScannerService: npm audit and secret scanning
+ * - QAAcceptanceCriteriaValidatorService: Acceptance criteria verification
+ * - QAReportGeneratorService: QA report assembly and verdict determination
+ * - QAPRReviewerService: PR review submission via GitHub API
  */
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -58,6 +68,14 @@ import { DevAgentPipelineExecutorService } from './services/dev-agent-pipeline-e
 import { DevAgentGitOpsService } from './services/dev-agent-git-ops.service';
 import { DevAgentTestExtractorService } from './services/dev-agent-test-extractor.service';
 import { DevAgentPRCreatorService } from './services/dev-agent-pr-creator.service';
+// Story 11.5: QA Agent CLI Integration services
+import { QAAgentPipelineExecutorService } from './services/qa-agent-pipeline-executor.service';
+import { QATestRunnerService } from './services/qa-test-runner.service';
+import { QAStaticAnalyzerService } from './services/qa-static-analyzer.service';
+import { QASecurityScannerService } from './services/qa-security-scanner.service';
+import { QAAcceptanceCriteriaValidatorService } from './services/qa-acceptance-validator.service';
+import { QAReportGeneratorService } from './services/qa-report-generator.service';
+import { QAPRReviewerService } from './services/qa-pr-reviewer.service';
 
 @Module({
   imports: [
@@ -89,12 +107,21 @@ import { DevAgentPRCreatorService } from './services/dev-agent-pr-creator.servic
     DevAgentGitOpsService,
     DevAgentTestExtractorService,
     DevAgentPRCreatorService,
+    // Story 11.5: QA Agent CLI Integration services
+    QAAgentPipelineExecutorService,
+    QATestRunnerService,
+    QAStaticAnalyzerService,
+    QASecurityScannerService,
+    QAAcceptanceCriteriaValidatorService,
+    QAReportGeneratorService,
+    QAPRReviewerService,
   ],
   exports: [
     PipelineStateMachineService,
     CLISessionLifecycleService,
     PipelineJobHandlerService,
     DevAgentPipelineExecutorService,
+    QAAgentPipelineExecutorService,
   ],
 })
 export class OrchestratorModule {}

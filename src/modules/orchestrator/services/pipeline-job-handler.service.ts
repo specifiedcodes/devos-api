@@ -2,6 +2,7 @@
  * PipelineJobHandlerService
  * Story 11.3: Agent-to-CLI Execution Pipeline
  * Story 11.4: Dev Agent CLI Integration (dev agent delegation)
+ * Story 11.5: QA Agent CLI Integration (qa agent delegation)
  *
  * Main handler for pipeline phase jobs. Coordinates:
  * - Task context assembly
@@ -11,6 +12,7 @@
  * - Session health monitoring
  * - Error handling with structured error types
  * - Dev agent delegation to DevAgentPipelineExecutor (Story 11.4)
+ * - QA agent delegation to QAAgentPipelineExecutor (Story 11.5)
  */
 import { Injectable, Logger, ForbiddenException, Optional, Inject, forwardRef } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -21,6 +23,7 @@ import { CLIOutputStreamService } from './cli-output-stream.service';
 import { SessionHealthMonitorService } from './session-health-monitor.service';
 import { WorkspaceManagerService } from './workspace-manager.service';
 import { DevAgentPipelineExecutorService } from './dev-agent-pipeline-executor.service';
+import { QAAgentPipelineExecutorService } from './qa-agent-pipeline-executor.service';
 import {
   PipelineJobData,
   PipelineJobResult,
@@ -32,6 +35,7 @@ import {
 } from '../interfaces/cli-session-config.interfaces';
 import { PipelineState } from '../interfaces/pipeline.interfaces';
 import { DevAgentExecutionParams } from '../interfaces/dev-agent-execution.interfaces';
+import { QAAgentExecutionParams } from '../interfaces/qa-agent-execution.interfaces';
 
 /** Agent types that work on feature branches */
 const FEATURE_BRANCH_AGENTS = new Set(['dev']);
@@ -57,6 +61,9 @@ export class PipelineJobHandlerService {
     @Optional()
     @Inject(forwardRef(() => DevAgentPipelineExecutorService))
     private readonly devAgentExecutor?: DevAgentPipelineExecutorService,
+    @Optional()
+    @Inject(forwardRef(() => QAAgentPipelineExecutorService))
+    private readonly qaAgentExecutor?: QAAgentPipelineExecutorService,
   ) {}
 
   /**
@@ -87,6 +94,11 @@ export class PipelineJobHandlerService {
       // Story 11.4: Delegate dev agent jobs to DevAgentPipelineExecutor
       if (jobData.agentType === 'dev' && this.devAgentExecutor) {
         return this.handleDevAgentJob(jobData, workspacePath, startTime);
+      }
+
+      // Story 11.5: Delegate QA agent jobs to QAAgentPipelineExecutor
+      if (jobData.agentType === 'qa' && this.qaAgentExecutor) {
+        return this.handleQAAgentJob(jobData, workspacePath, startTime);
       }
 
       // 2. Handle Git branch strategy based on agent type
@@ -281,6 +293,74 @@ export class PipelineJobHandlerService {
     if (result.success) {
       this.logger.log(
         `Dev agent completed successfully: PR ${result.prUrl}, branch ${result.branch}`,
+      );
+    }
+
+    return pipelineResult;
+  }
+
+  /**
+   * Handle QA agent jobs by delegating to QAAgentPipelineExecutor.
+   * Story 11.5: QA Agent CLI Integration
+   *
+   * Builds QAAgentExecutionParams from PipelineJobData and delegates
+   * execution to the QAAgentPipelineExecutor. Maps the result back
+   * to PipelineJobResult with verdict and report metadata for handoff.
+   */
+  private async handleQAAgentJob(
+    jobData: PipelineJobData,
+    workspacePath: string,
+    startTime: number,
+  ): Promise<PipelineJobResult> {
+    this.logger.log(
+      `Delegating QA agent job to QAAgentPipelineExecutor for story ${jobData.storyId}`,
+    );
+
+    const metadata = jobData.pipelineMetadata || {};
+
+    const githubToken = metadata.githubToken || '';
+    if (!githubToken) {
+      this.logger.warn(
+        `QA agent job for story ${jobData.storyId} missing GitHub token in pipeline metadata`,
+      );
+    }
+
+    const executionParams: QAAgentExecutionParams = {
+      workspaceId: jobData.workspaceId,
+      projectId: jobData.pipelineProjectId,
+      storyId: jobData.storyId || 'unknown',
+      storyTitle: metadata.storyTitle || `Story ${jobData.storyId}`,
+      storyDescription: metadata.storyDescription || '',
+      acceptanceCriteria: metadata.acceptanceCriteria || [],
+      techStack: metadata.techStack || '',
+      testingStrategy: metadata.testingStrategy || '',
+      workspacePath,
+      gitRepoUrl: metadata.gitRepoUrl || '',
+      githubToken,
+      repoOwner: metadata.repoOwner || '',
+      repoName: metadata.repoName || '',
+      prUrl: metadata.prUrl || '',
+      prNumber: metadata.prNumber || 0,
+      devBranch: metadata.devBranch || '',
+      devTestResults: metadata.devTestResults || null,
+    };
+
+    const result = await this.qaAgentExecutor!.execute(executionParams);
+
+    // Map QAAgentExecutionResult to PipelineJobResult
+    const pipelineResult: PipelineJobResult = {
+      sessionId: result.sessionId,
+      exitCode: result.success ? 0 : 1,
+      branch: executionParams.devBranch || null,
+      commitHash: null,
+      outputLineCount: 0,
+      durationMs: result.durationMs,
+      error: result.error,
+    };
+
+    if (result.success) {
+      this.logger.log(
+        `QA agent completed with verdict: ${result.verdict} for story ${jobData.storyId}`,
       );
     }
 
