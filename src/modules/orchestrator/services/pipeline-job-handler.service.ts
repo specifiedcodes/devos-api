@@ -3,6 +3,7 @@
  * Story 11.3: Agent-to-CLI Execution Pipeline
  * Story 11.4: Dev Agent CLI Integration (dev agent delegation)
  * Story 11.5: QA Agent CLI Integration (qa agent delegation)
+ * Story 11.6: Planner Agent CLI Integration (planner agent delegation)
  *
  * Main handler for pipeline phase jobs. Coordinates:
  * - Task context assembly
@@ -13,6 +14,7 @@
  * - Error handling with structured error types
  * - Dev agent delegation to DevAgentPipelineExecutor (Story 11.4)
  * - QA agent delegation to QAAgentPipelineExecutor (Story 11.5)
+ * - Planner agent delegation to PlannerAgentPipelineExecutor (Story 11.6)
  */
 import { Injectable, Logger, ForbiddenException, Optional, Inject, forwardRef } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -24,6 +26,7 @@ import { SessionHealthMonitorService } from './session-health-monitor.service';
 import { WorkspaceManagerService } from './workspace-manager.service';
 import { DevAgentPipelineExecutorService } from './dev-agent-pipeline-executor.service';
 import { QAAgentPipelineExecutorService } from './qa-agent-pipeline-executor.service';
+import { PlannerAgentPipelineExecutorService } from './planner-agent-pipeline-executor.service';
 import {
   PipelineJobData,
   PipelineJobResult,
@@ -36,6 +39,7 @@ import {
 import { PipelineState } from '../interfaces/pipeline.interfaces';
 import { DevAgentExecutionParams } from '../interfaces/dev-agent-execution.interfaces';
 import { QAAgentExecutionParams } from '../interfaces/qa-agent-execution.interfaces';
+import { PlannerAgentExecutionParams } from '../interfaces/planner-agent-execution.interfaces';
 
 /** Agent types that work on feature branches */
 const FEATURE_BRANCH_AGENTS = new Set(['dev']);
@@ -64,6 +68,9 @@ export class PipelineJobHandlerService {
     @Optional()
     @Inject(forwardRef(() => QAAgentPipelineExecutorService))
     private readonly qaAgentExecutor?: QAAgentPipelineExecutorService,
+    @Optional()
+    @Inject(forwardRef(() => PlannerAgentPipelineExecutorService))
+    private readonly plannerAgentExecutor?: PlannerAgentPipelineExecutorService,
   ) {}
 
   /**
@@ -99,6 +106,11 @@ export class PipelineJobHandlerService {
       // Story 11.5: Delegate QA agent jobs to QAAgentPipelineExecutor
       if (jobData.agentType === 'qa' && this.qaAgentExecutor) {
         return this.handleQAAgentJob(jobData, workspacePath, startTime);
+      }
+
+      // Story 11.6: Delegate planner agent jobs to PlannerAgentPipelineExecutor
+      if (jobData.agentType === 'planner' && this.plannerAgentExecutor) {
+        return this.handlePlannerAgentJob(jobData, workspacePath, startTime);
       }
 
       // 2. Handle Git branch strategy based on agent type
@@ -361,6 +373,77 @@ export class PipelineJobHandlerService {
     if (result.success) {
       this.logger.log(
         `QA agent completed with verdict: ${result.verdict} for story ${jobData.storyId}`,
+      );
+    }
+
+    return pipelineResult;
+  }
+
+  /**
+   * Handle planner agent jobs by delegating to PlannerAgentPipelineExecutor.
+   * Story 11.6: Planner Agent CLI Integration
+   *
+   * Builds PlannerAgentExecutionParams from PipelineJobData and delegates
+   * execution to the PlannerAgentPipelineExecutor. Maps the result back
+   * to PipelineJobResult with document and story metadata for Dev Agent handoff.
+   */
+  private async handlePlannerAgentJob(
+    jobData: PipelineJobData,
+    workspacePath: string,
+    startTime: number,
+  ): Promise<PipelineJobResult> {
+    this.logger.log(
+      `Delegating planner agent job to PlannerAgentPipelineExecutor for project ${jobData.pipelineProjectId}`,
+    );
+
+    const metadata = jobData.pipelineMetadata || {};
+
+    const githubToken = metadata.githubToken || '';
+    if (!githubToken) {
+      this.logger.warn(
+        `Planner agent job for project ${jobData.pipelineProjectId} missing GitHub token in pipeline metadata`,
+      );
+    }
+
+    const executionParams: PlannerAgentExecutionParams = {
+      workspaceId: jobData.workspaceId,
+      projectId: jobData.pipelineProjectId,
+      storyId: jobData.storyId,
+      projectName: metadata.projectName || `Project ${jobData.pipelineProjectId}`,
+      projectDescription: metadata.projectDescription || '',
+      projectGoals: metadata.projectGoals || [],
+      epicId: metadata.epicId || null,
+      epicDescription: metadata.epicDescription || null,
+      planningTask: metadata.planningTask || 'create-project-plan',
+      techStack: metadata.techStack || '',
+      codeStylePreferences: metadata.codeStylePreferences || '',
+      templateType: metadata.templateType || null,
+      workspacePath,
+      gitRepoUrl: metadata.gitRepoUrl || '',
+      githubToken,
+      repoOwner: metadata.repoOwner || '',
+      repoName: metadata.repoName || '',
+      existingEpics: metadata.existingEpics || [],
+      existingStories: metadata.existingStories || [],
+      previousPlannerOutput: metadata.previousPlannerOutput || null,
+    };
+
+    const result = await this.plannerAgentExecutor!.execute(executionParams);
+
+    // Map PlannerAgentExecutionResult to PipelineJobResult
+    const pipelineResult: PipelineJobResult = {
+      sessionId: result.sessionId,
+      exitCode: result.success ? 0 : 1,
+      branch: null, // Planner works on main, no feature branch
+      commitHash: result.commitHash,
+      outputLineCount: 0,
+      durationMs: result.durationMs,
+      error: result.error,
+    };
+
+    if (result.success) {
+      this.logger.log(
+        `Planner agent completed: ${result.documentsGenerated.length} documents, ${result.storiesCreated.length} stories created`,
       );
     }
 

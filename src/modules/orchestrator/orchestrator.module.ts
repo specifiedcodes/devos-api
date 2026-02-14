@@ -5,6 +5,7 @@
  * Story 11.3: Agent-to-CLI Execution Pipeline
  * Story 11.4: Dev Agent CLI Integration
  * Story 11.5: QA Agent CLI Integration
+ * Story 11.6: Planner Agent CLI Integration
  *
  * Provides the autonomous pipeline state machine with:
  * - PipelineStateMachineService: Core state machine logic
@@ -40,6 +41,12 @@
  * - QAAcceptanceCriteriaValidatorService: Acceptance criteria verification
  * - QAReportGeneratorService: QA report assembly and verdict determination
  * - QAPRReviewerService: PR review submission via GitHub API
+ *
+ * Planner Agent CLI Integration (Story 11.6):
+ * - PlannerAgentPipelineExecutorService: Full planner agent workflow orchestration
+ * - PlannerDocumentValidatorService: BMAD template document validation
+ * - PlannerSprintStatusUpdaterService: Sprint status YAML management
+ * - PlannerGitOpsService: Git staging/commit/push for planning documents
  */
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -76,6 +83,11 @@ import { QASecurityScannerService } from './services/qa-security-scanner.service
 import { QAAcceptanceCriteriaValidatorService } from './services/qa-acceptance-validator.service';
 import { QAReportGeneratorService } from './services/qa-report-generator.service';
 import { QAPRReviewerService } from './services/qa-pr-reviewer.service';
+// Story 11.6: Planner Agent CLI Integration services
+import { PlannerAgentPipelineExecutorService } from './services/planner-agent-pipeline-executor.service';
+import { PlannerDocumentValidatorService } from './services/planner-document-validator.service';
+import { PlannerSprintStatusUpdaterService } from './services/planner-sprint-status-updater.service';
+import { PlannerGitOpsService } from './services/planner-git-ops.service';
 
 @Module({
   imports: [
@@ -115,6 +127,11 @@ import { QAPRReviewerService } from './services/qa-pr-reviewer.service';
     QAAcceptanceCriteriaValidatorService,
     QAReportGeneratorService,
     QAPRReviewerService,
+    // Story 11.6: Planner Agent CLI Integration services
+    PlannerAgentPipelineExecutorService,
+    PlannerDocumentValidatorService,
+    PlannerSprintStatusUpdaterService,
+    PlannerGitOpsService,
   ],
   exports: [
     PipelineStateMachineService,
@@ -122,6 +139,7 @@ import { QAPRReviewerService } from './services/qa-pr-reviewer.service';
     PipelineJobHandlerService,
     DevAgentPipelineExecutorService,
     QAAgentPipelineExecutorService,
+    PlannerAgentPipelineExecutorService,
   ],
 })
 export class OrchestratorModule {}
