@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
@@ -36,6 +37,7 @@ import { CliSessionsModule } from './modules/cli-sessions/cli-sessions.module';
 import { ChatModule } from './modules/chat/chat.module';
 import { PushModule } from './modules/push/push.module';
 import { ChatRoomModule } from './modules/chat-room/chat-room.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { User } from './database/entities/user.entity';
 import { Workspace } from './database/entities/workspace.entity';
 import { WorkspaceMember } from './database/entities/workspace-member.entity';
@@ -85,6 +87,12 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
       envFilePath: '.env',
     }),
     ScheduleModule.forRoot(), // Enable cron jobs for background tasks
+    EventEmitterModule.forRoot({
+      wildcard: true,
+      delimiter: '.',
+      maxListeners: 20,
+      verboseMemoryLeak: true,
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: process.env.DATABASE_HOST || 'localhost',
@@ -180,6 +188,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     ChatModule,
     PushModule,
     ChatRoomModule,
+    NotificationsModule,
   ],
   controllers: [AppController],
   providers: [

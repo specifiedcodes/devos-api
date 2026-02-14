@@ -116,7 +116,6 @@ export class AgentsService {
   async getAgent(agentId: string, workspaceId: string): Promise<Agent> {
     const agent = await this.agentRepository.findOne({
       where: { id: agentId, workspaceId },
-      relations: ['workspace', 'project', 'creator'],
     });
 
     if (!agent) {
@@ -141,8 +140,6 @@ export class AgentsService {
   ): Promise<{ agents: Agent[]; total: number }> {
     const queryBuilder = this.agentRepository
       .createQueryBuilder('agent')
-      .leftJoinAndSelect('agent.creator', 'creator')
-      .leftJoinAndSelect('agent.project', 'project')
       .where('agent.workspaceId = :workspaceId', { workspaceId });
 
     if (options?.projectId) {
