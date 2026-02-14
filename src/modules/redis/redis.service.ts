@@ -230,6 +230,28 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Atomic set-if-not-exists with TTL (Story 11.1 - Distributed locking)
+   * Uses Redis SET key value EX ttl NX for atomic lock acquisition.
+   * @param key - Redis key
+   * @param value - Value to store
+   * @param ttlSeconds - Time to live in seconds
+   * @returns 'OK' if the key was set, null if the key already existed
+   */
+  async setnx(key: string, value: string, ttlSeconds: number): Promise<string | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot setnx key');
+      return null;
+    }
+    try {
+      const result = await this.client.set(key, value, 'EX', ttlSeconds, 'NX');
+      return result;
+    } catch (error) {
+      this.logger.error(`Failed to setnx key ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
    * Generic set operation with TTL (Story 1.9)
    * @param key - Redis key
    * @param value - Value to store

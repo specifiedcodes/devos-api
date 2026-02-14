@@ -6,11 +6,13 @@ import { AgentQueueController } from './controllers/agent-queue.controller';
 import { AgentJobProcessor } from './processors/agent-job.processor';
 import { AgentJob } from './entities/agent-job.entity';
 import { AgentsModule } from '../agents/agents.module';
+import { OrchestratorModule } from '../orchestrator/orchestrator.module';
 
 /**
  * AgentQueueModule
  * Story 5.1: BullMQ Task Queue Setup
  * Story 5.3: Dev Agent Implementation - processor routing
+ * Story 11.1: Pipeline state machine callback integration
  *
  * Provides task queue infrastructure for autonomous AI agent orchestration
  */
@@ -34,6 +36,7 @@ import { AgentsModule } from '../agents/agents.module';
       },
     }),
     forwardRef(() => AgentsModule),
+    forwardRef(() => OrchestratorModule),
   ],
   controllers: [AgentQueueController],
   providers: [AgentQueueService, AgentJobProcessor],

@@ -77,6 +77,8 @@ import { DeploymentRollback } from './database/entities/deployment-rollback.enti
 import { ContextSnapshot } from './database/entities/context-snapshot.entity';
 import { AuditLog } from './database/entities/audit-log.entity';
 import { PushSubscription } from './database/entities/push-subscription.entity';
+import { PipelineStateHistory } from './modules/orchestrator/entities/pipeline-state-history.entity';
+import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -142,6 +144,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         AgentStatusUpdate,
         PushSubscription,
         ApiUsage,
+        PipelineStateHistory,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -189,6 +192,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     PushModule,
     ChatRoomModule,
     NotificationsModule,
+    OrchestratorModule,
   ],
   controllers: [AppController],
   providers: [

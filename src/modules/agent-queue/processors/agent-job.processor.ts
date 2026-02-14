@@ -1,5 +1,5 @@
 import { Process, Processor, OnQueueFailed } from '@nestjs/bull';
-import { Logger, Inject, forwardRef } from '@nestjs/common';
+import { Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { Job } from 'bull';
 import { AgentQueueService } from '../services/agent-queue.service';
 import { AgentJobStatus, AgentJobType } from '../entities/agent-job.entity';
@@ -10,11 +10,13 @@ import { QAAgentService } from '../../agents/implementations/qa-agent.service';
 import { DevOpsAgentService } from '../../agents/implementations/devops-agent.service';
 import { ContextRecoveryService } from '../../agents/context-recovery.service';
 import { AgentStatus } from '../../../database/entities/agent.entity';
+import { PipelineStateMachineService } from '../../orchestrator/services/pipeline-state-machine.service';
 
 /**
  * AgentJobProcessor
  * Story 5.1: BullMQ Task Queue Setup
  * Story 5.3: Dev Agent Implementation - execute-task routing
+ * Story 11.1: Pipeline state machine callback integration
  *
  * Processes agent queue jobs
  */
@@ -36,6 +38,9 @@ export class AgentJobProcessor {
     private readonly devOpsAgentService: DevOpsAgentService,
     @Inject(forwardRef(() => ContextRecoveryService))
     private readonly contextRecoveryService: ContextRecoveryService,
+    @Optional()
+    @Inject(forwardRef(() => PipelineStateMachineService))
+    private readonly pipelineStateMachine?: PipelineStateMachineService,
   ) {}
 
   @Process({ concurrency: 10 })
@@ -80,6 +85,22 @@ export class AgentJobProcessor {
         completedAt: new Date(),
       });
 
+      // Story 11.1: Notify pipeline state machine on completion for pipeline jobs
+      if (data?.pipelineProjectId && this.pipelineStateMachine) {
+        try {
+          await this.pipelineStateMachine.onPhaseComplete(
+            data.pipelineProjectId,
+            data.phase,
+            result,
+          );
+        } catch (pipelineError) {
+          this.logger.error(
+            `Pipeline callback failed for project ${data.pipelineProjectId}:`,
+            pipelineError,
+          );
+        }
+      }
+
       this.logger.log(`Job ${agentJobId} completed successfully`);
 
       return result;
@@ -99,7 +120,7 @@ export class AgentJobProcessor {
 
   @OnQueueFailed()
   async onFailed(job: Job, error: Error) {
-    const { agentJobId } = job.data;
+    const { agentJobId, data } = job.data;
 
     this.logger.error(`Job ${agentJobId} failed after ${job.attemptsMade} attempts:`, error);
 
@@ -109,6 +130,22 @@ export class AgentJobProcessor {
         errorMessage: error.message,
         completedAt: new Date(),
       });
+
+      // Story 11.1: Notify pipeline state machine on final failure for pipeline jobs
+      if (data?.pipelineProjectId && this.pipelineStateMachine) {
+        try {
+          await this.pipelineStateMachine.onPhaseFailed(
+            data.pipelineProjectId,
+            data.phase,
+            error.message,
+          );
+        } catch (pipelineError) {
+          this.logger.error(
+            `Pipeline failure callback failed for project ${data.pipelineProjectId}:`,
+            pipelineError,
+          );
+        }
+      }
     } else {
       await this.agentQueueService.updateJobStatus(agentJobId, AgentJobStatus.RETRYING, {
         errorMessage: error.message,
