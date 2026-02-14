@@ -16,7 +16,7 @@ export enum KeyProvider {
   OPENAI = 'openai',
 }
 
-@Entity('byok_secrets')
+@Entity({ name: 'byok_secrets', schema: 'public' })
 @Index(['workspaceId', 'isActive'])
 export class BYOKKey {
   @PrimaryGeneratedColumn('uuid')

@@ -1,16 +1,20 @@
-import { Controller, Get, Param } from '@nestjs/common';
+import { Controller, Get, Param, UseGuards } from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiParam,
+  ApiBearerAuth,
 } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TemplatesService } from '../services/templates.service';
 import { TemplateResponseDto } from '../dto/template-response.dto';
 import { TemplateCategory } from '../constants/template-registry.constant';
 
 @ApiTags('templates')
 @Controller('api/v1/templates')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
 export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
 

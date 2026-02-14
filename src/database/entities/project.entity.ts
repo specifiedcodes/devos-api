@@ -21,7 +21,7 @@ export enum ProjectStatus {
   DELETED = 'deleted',
 }
 
-@Entity('projects')
+@Entity({ name: 'projects', schema: 'public' })
 @Index(['workspaceId', 'name'], { unique: true })
 @Index(['workspaceId'])
 @Index(['createdByUserId'])

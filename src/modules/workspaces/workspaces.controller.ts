@@ -47,6 +47,18 @@ export class WorkspacesController {
     return this.workspacesService.getUserWorkspaces(req.user.id);
   }
 
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a single workspace by ID' })
+  @ApiResponse({ status: 200, type: WorkspaceResponseDto, description: 'Workspace details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Workspace not found or not a member' })
+  async getWorkspaceById(
+    @Param('id') workspaceId: string,
+    @Request() req: any,
+  ): Promise<WorkspaceResponseDto> {
+    return this.workspacesService.getWorkspaceById(workspaceId, req.user.id);
+  }
+
   @Post(':id/switch')
   @HttpCode(200)
   @ApiOperation({ summary: 'Switch to a different workspace' })

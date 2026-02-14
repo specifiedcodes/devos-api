@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { SharedLink } from '../../../database/entities/shared-link.entity';
 import { Project } from '../../../database/entities/project.entity';
 import { CreateSharedLinkDto, ExpirationOption } from '../dto/create-shared-link.dto';
+import { UpdateSharedLinkDto } from '../dto/update-shared-link.dto';
 import {
   SharedLinkNotFoundException,
   SharedLinkExpiredException,
@@ -72,10 +73,17 @@ export class SharedLinksService {
     // Save to database
     const savedLink = await this.sharedLinkRepository.save(sharedLink);
 
+    // Track whether link has a password before stripping the hash
+    const hasPassword = !!savedLink.passwordHash;
+
     // Remove password hash from response
     const { passwordHash: _, ...linkWithoutHash } = savedLink;
 
-    return linkWithoutHash as SharedLink;
+    // Preserve hasPassword flag for response DTO
+    const result = linkWithoutHash as SharedLink;
+    (result as any).hasPassword = hasPassword;
+
+    return result;
   }
 
   /**
@@ -130,6 +138,43 @@ export class SharedLinksService {
     }
 
     return sharedLink;
+  }
+
+  /**
+   * Update a shared link (expiration, password)
+   */
+  async update(
+    linkId: string,
+    workspaceId: string,
+    updateDto: UpdateSharedLinkDto,
+  ): Promise<SharedLink> {
+    const sharedLink = await this.findById(linkId, workspaceId);
+
+    const updateData: Partial<SharedLink> = {};
+
+    if (updateDto.expiresIn !== undefined) {
+      updateData.expiresAt = this.calculateExpirationDate(updateDto.expiresIn) || undefined;
+    }
+
+    if (updateDto.password !== undefined) {
+      const bcryptRounds = parseInt(
+        process.env.SHARED_LINK_PASSWORD_BCRYPT_ROUNDS || '10',
+        10,
+      );
+      updateData.passwordHash = await bcrypt.hash(updateDto.password, bcryptRounds);
+    }
+
+    await this.sharedLinkRepository.update(
+      { id: linkId, workspaceId },
+      updateData,
+    );
+
+    const updated = await this.findById(linkId, workspaceId);
+    const hasPassword = !!updated.passwordHash;
+    const { passwordHash: _, ...linkWithoutHash } = updated;
+    const result = linkWithoutHash as SharedLink;
+    (result as any).hasPassword = hasPassword;
+    return result;
   }
 
   /**

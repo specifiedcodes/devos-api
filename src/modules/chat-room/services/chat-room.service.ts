@@ -110,7 +110,6 @@ export class ChatRoomService {
   async getRoom(roomId: string, userId: string): Promise<ChatRoom> {
     const room = await this.chatRoomRepository.findOne({
       where: { id: roomId },
-      relations: ['createdBy', 'project'],
     });
 
     if (!room) {

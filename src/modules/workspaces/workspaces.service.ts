@@ -375,6 +375,67 @@ export class WorkspacesService {
   }
 
   /**
+   * Get a single workspace by ID for a specific user
+   * @param workspaceId - Workspace UUID
+   * @param userId - User ID requesting the workspace
+   * @returns Workspace details with role and counts
+   */
+  async getWorkspaceById(workspaceId: string, userId: string): Promise<WorkspaceResponseDto> {
+    const user = await this.userRepository.findOne({
+      where: { id: userId },
+      select: ['currentWorkspaceId'],
+    });
+
+    const workspace = await this.workspaceRepository
+      .createQueryBuilder('workspace')
+      .leftJoin('workspace.members', 'member')
+      .where('workspace.id = :workspaceId', { workspaceId })
+      .andWhere('member.userId = :userId', { userId })
+      .select([
+        'workspace.id',
+        'workspace.name',
+        'workspace.description',
+        'workspace.schemaName',
+        'workspace.createdAt',
+        'member.role',
+      ])
+      .getOne();
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found or you are not a member');
+    }
+
+    const memberCount = await this.workspaceMemberRepository.count({
+      where: { workspaceId: workspace.id },
+    });
+
+    let projectCount = 0;
+    try {
+      const schemaName = workspace.schemaName;
+      this.validateSchemaName(schemaName);
+      const result = await this.dataSource.query(
+        `SELECT COUNT(*)::int as count FROM "${schemaName}".projects WHERE status = 'active'`,
+      );
+      projectCount = result[0]?.count || 0;
+    } catch (error) {
+      this.logger.warn(`Failed to get project count for workspace ${workspace.id}: ${error}`);
+    }
+
+    const role = workspace.members?.[0]?.role || WorkspaceRole.VIEWER;
+
+    return {
+      id: workspace.id,
+      name: workspace.name,
+      description: workspace.description,
+      role,
+      projectCount,
+      memberCount,
+      createdAt: workspace.createdAt,
+      isCurrentWorkspace: workspace.id === user?.currentWorkspaceId,
+    };
+  }
+
+  /**
    * Create new workspace for user (user-initiated, not registration default)
    * @param userId - User ID creating the workspace
    * @param dto - Workspace creation data

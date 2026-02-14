@@ -92,6 +92,9 @@ export class ApiKeyValidatorService {
 
       if (error.status === 401) {
         errorMessage = 'Invalid Anthropic API key';
+      } else if (error.status === 400 && error.message?.includes('credit balance')) {
+        // Key is valid but account has no credits - still accept the key
+        return { isValid: true };
       } else if (error.status === 429) {
         errorMessage = 'API key has no remaining quota or rate limit exceeded';
       } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {

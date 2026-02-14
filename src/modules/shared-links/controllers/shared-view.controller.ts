@@ -7,6 +7,8 @@ import {
   Req,
   BadRequestException,
   UseGuards,
+  HttpCode,
+  HttpStatus,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -94,6 +96,7 @@ export class SharedViewController {
    * Rate limited to 5 attempts per 15 minutes per IP to prevent brute force
    */
   @Post(':token/validate-password')
+  @HttpCode(HttpStatus.OK)
   @UseGuards(ThrottlerGuard)
   @Throttle({
     default: {

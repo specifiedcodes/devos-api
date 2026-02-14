@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Delete,
   Body,
   Param,
@@ -22,6 +23,7 @@ import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { SharedLinksService } from '../services/shared-links.service';
 import { CreateSharedLinkDto } from '../dto/create-shared-link.dto';
+import { UpdateSharedLinkDto } from '../dto/update-shared-link.dto';
 import { SharedLinkResponseDto } from '../dto/shared-link-response.dto';
 import { plainToInstance } from 'class-transformer';
 
@@ -153,6 +155,37 @@ export class SharedLinksController {
   }
 
   /**
+   * Update a shared link (expiration, password)
+   */
+  @Patch(':linkId')
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @ApiOperation({ summary: 'Update a shared link' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace UUID' })
+  @ApiParam({ name: 'projectId', description: 'Project UUID' })
+  @ApiParam({ name: 'linkId', description: 'Shared Link UUID' })
+  @ApiResponse({
+    status: 200,
+    type: SharedLinkResponseDto,
+    description: 'Shared link updated successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - requires Owner/Admin role' })
+  @ApiResponse({ status: 404, description: 'Shared link not found' })
+  async update(
+    @Param('workspaceId') workspaceId: string,
+    @Param('projectId') projectId: string,
+    @Param('linkId') linkId: string,
+    @Body() updateDto: UpdateSharedLinkDto,
+  ): Promise<SharedLinkResponseDto> {
+    const updated = await this.sharedLinksService.update(
+      linkId,
+      workspaceId,
+      updateDto,
+    );
+    return this.toResponseDto(updated);
+  }
+
+  /**
    * Revoke (deactivate) a shared link
    *
    * @param workspaceId - UUID of the workspace
@@ -200,7 +233,7 @@ export class SharedLinksController {
       {
         ...sharedLink,
         url,
-        hasPassword: !!sharedLink.passwordHash,
+        hasPassword: sharedLink.hasPassword !== undefined ? sharedLink.hasPassword : !!sharedLink.passwordHash,
         expiresAt: sharedLink.expiresAt || null,
         lastViewedAt: sharedLink.lastViewedAt || null,
       },
