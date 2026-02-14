@@ -11,12 +11,14 @@ import { DevOpsAgentService } from '../../agents/implementations/devops-agent.se
 import { ContextRecoveryService } from '../../agents/context-recovery.service';
 import { AgentStatus } from '../../../database/entities/agent.entity';
 import { PipelineStateMachineService } from '../../orchestrator/services/pipeline-state-machine.service';
+import { PipelineJobHandlerService } from '../../orchestrator/services/pipeline-job-handler.service';
 
 /**
  * AgentJobProcessor
  * Story 5.1: BullMQ Task Queue Setup
  * Story 5.3: Dev Agent Implementation - execute-task routing
  * Story 11.1: Pipeline state machine callback integration
+ * Story 11.3: Pipeline job delegation to PipelineJobHandler
  *
  * Processes agent queue jobs
  */
@@ -41,6 +43,9 @@ export class AgentJobProcessor {
     @Optional()
     @Inject(forwardRef(() => PipelineStateMachineService))
     private readonly pipelineStateMachine?: PipelineStateMachineService,
+    @Optional()
+    @Inject(forwardRef(() => PipelineJobHandlerService))
+    private readonly pipelineJobHandler?: PipelineJobHandlerService,
   ) {}
 
   @Process({ concurrency: 10 })
@@ -189,6 +194,7 @@ export class AgentJobProcessor {
   /**
    * Handler for execute-task jobs
    * Story 5.3: Dev Agent Implementation - routes to correct agent service
+   * Story 11.3: Pipeline job delegation to PipelineJobHandler
    */
   private async handleExecuteTask(data: any): Promise<any> {
     const { agentId, agentType, workspaceId, taskData } = data;
@@ -196,6 +202,15 @@ export class AgentJobProcessor {
     this.logger.log(
       `Execute task job for agent ${agentId} (type: ${agentType})`,
     );
+
+    // Story 11.3: Check if this is a pipeline job (has pipelineProjectId)
+    // Pipeline jobs are delegated to PipelineJobHandler for CLI execution
+    if (data.pipelineProjectId && this.pipelineJobHandler) {
+      this.logger.log(
+        `Pipeline job detected for project ${data.pipelineProjectId}, delegating to PipelineJobHandler`,
+      );
+      return this.pipelineJobHandler.handlePipelineJob(data);
+    }
 
     if (!agentId || !workspaceId) {
       throw new Error('Missing agentId or workspaceId in execute-task job data');
