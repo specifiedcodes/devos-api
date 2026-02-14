@@ -267,8 +267,10 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
 
   /**
    * Find keys matching a pattern (Story 1.9)
+   * WARNING: Uses KEYS command which blocks Redis. For production, use scanKeys() instead.
    * @param pattern - Redis key pattern (e.g., 'session:user123:*')
    * @returns Array of matching keys
+   * @deprecated Use scanKeys() for production code to avoid blocking Redis
    */
   async keys(pattern: string): Promise<string[]> {
     if (!this.isConnected) {
@@ -279,6 +281,41 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
       return await this.client.keys(pattern);
     } catch (error) {
       this.logger.error(`Failed to query keys with pattern ${pattern}`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Find keys matching a pattern using SCAN (Story 10.6)
+   * Non-blocking alternative to keys() for production use
+   * @param pattern - Redis key pattern (e.g., 'quiet-hours:user123:*')
+   * @param count - Hint for number of keys to return per iteration (default: 100)
+   * @returns Array of matching keys
+   */
+  async scanKeys(pattern: string, count: number = 100): Promise<string[]> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot scan keys');
+      return [];
+    }
+    try {
+      const allKeys: string[] = [];
+      let cursor = '0';
+
+      do {
+        const [newCursor, keys] = await this.client.scan(
+          cursor,
+          'MATCH',
+          pattern,
+          'COUNT',
+          count,
+        );
+        cursor = newCursor;
+        allKeys.push(...keys);
+      } while (cursor !== '0');
+
+      return allKeys;
+    } catch (error) {
+      this.logger.error(`Failed to scan keys with pattern ${pattern}`, error);
       return [];
     }
   }

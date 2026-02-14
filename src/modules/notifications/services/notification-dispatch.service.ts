@@ -1,19 +1,24 @@
 /**
  * NotificationDispatchService
  * Story 10.5: Notification Triggers
+ * Story 10.6: Configurable Notification Preferences
  *
  * Dispatches notifications to both push and in-app channels.
  * Routes urgent notifications immediately, queues batchable ones.
+ * Respects user preferences for notification types and quiet hours.
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationBatchService } from './notification-batch.service';
 import { NotificationTemplateService } from './notification-template.service';
+import { NotificationPreferencesService } from './notification-preferences.service';
+import { QuietHoursService } from './quiet-hours.service';
 import { PushNotificationService } from '../../push/push.service';
 import { NotificationService } from '../../notification/notification.service';
 import { PushNotificationPayloadDto, NotificationUrgency } from '../../push/push.dto';
 import { NotificationEvent, NotificationRecipient, NotificationType } from '../events/notification.events';
+import { CRITICAL_NOTIFICATION_TYPES } from '../../../database/entities/notification-preferences.entity';
 
 @Injectable()
 export class NotificationDispatchService {
@@ -24,27 +29,180 @@ export class NotificationDispatchService {
     private readonly inAppService: NotificationService,
     private readonly batchService: NotificationBatchService,
     private readonly templateService: NotificationTemplateService,
+    @Optional() @Inject(forwardRef(() => NotificationPreferencesService))
+    private readonly preferencesService?: NotificationPreferencesService,
+    @Optional() @Inject(forwardRef(() => QuietHoursService))
+    private readonly quietHoursService?: QuietHoursService,
   ) {}
 
   /**
    * Dispatch notification to all recipients via push and in-app channels
+   * Story 10.6: Respects user preferences and quiet hours
    */
   async dispatch(notification: NotificationEvent): Promise<void> {
     this.logger.log(
       `Dispatching ${notification.type} to ${notification.recipients.length} recipients`,
     );
 
-    // Create in-app notifications for all recipients
-    await this.createInAppNotifications(notification);
+    // Filter recipients based on preferences
+    const filteredRecipients = await this.filterRecipientsByPreferences(
+      notification.recipients,
+      notification.type,
+    );
 
-    // Handle push notifications based on urgency
-    if (this.batchService.isImmediateNotification(notification)) {
+    if (filteredRecipients.length === 0) {
+      this.logger.debug(`No recipients after preference filtering for ${notification.type}`);
+      return;
+    }
+
+    // Create filtered notification event
+    const filteredNotification: NotificationEvent = {
+      ...notification,
+      recipients: filteredRecipients,
+    };
+
+    // Create in-app notifications for filtered recipients
+    await this.createInAppNotifications(filteredNotification);
+
+    // Handle push notifications based on urgency and quiet hours
+    if (this.batchService.isImmediateNotification(filteredNotification)) {
       // Send push immediately for urgent notifications
-      await this.sendImmediatePush(notification);
+      await this.sendImmediatePushWithQuietHours(filteredNotification);
     } else {
       // Queue for batched delivery
-      await this.batchService.queueNotification(notification);
+      await this.batchService.queueNotification(filteredNotification);
     }
+  }
+
+  /**
+   * Filter recipients based on their notification preferences
+   * Story 10.6: Notification Type Toggles
+   */
+  private async filterRecipientsByPreferences(
+    recipients: NotificationRecipient[],
+    type: NotificationType,
+  ): Promise<NotificationRecipient[]> {
+    // If preferences service not available, return all recipients
+    if (!this.preferencesService) {
+      return recipients;
+    }
+
+    // Critical notifications bypass preference checks
+    if (this.isCriticalNotification(type)) {
+      return recipients;
+    }
+
+    const filteredRecipients: NotificationRecipient[] = [];
+
+    for (const recipient of recipients) {
+      try {
+        const isEnabled = await this.preferencesService.isTypeEnabled(
+          recipient.userId,
+          recipient.workspaceId,
+          type,
+        );
+
+        if (isEnabled) {
+          filteredRecipients.push(recipient);
+        } else {
+          this.logger.debug(
+            `Notification ${type} disabled for user ${recipient.userId}`,
+          );
+        }
+      } catch (error) {
+        // If preference check fails, include the recipient (fail open)
+        this.logger.warn(
+          `Failed to check preferences for user ${recipient.userId}, including anyway`,
+        );
+        filteredRecipients.push(recipient);
+      }
+    }
+
+    return filteredRecipients;
+  }
+
+  /**
+   * Check if notification type is critical (cannot be disabled)
+   */
+  private isCriticalNotification(type: NotificationType): boolean {
+    return CRITICAL_NOTIFICATION_TYPES.includes(type as any);
+  }
+
+  /**
+   * Send immediate push notifications respecting quiet hours
+   * Story 10.6: Do Not Disturb Mode
+   */
+  private async sendImmediatePushWithQuietHours(
+    notification: NotificationEvent,
+  ): Promise<void> {
+    if (!this.pushService.isEnabled()) {
+      this.logger.debug('Push notifications disabled, skipping immediate push');
+      return;
+    }
+
+    for (const recipient of notification.recipients) {
+      try {
+        await this.sendPushToUserWithQuietHours(recipient, notification);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send push to user ${recipient.userId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        // Continue with other recipients
+      }
+    }
+  }
+
+  /**
+   * Send push to user, checking quiet hours
+   */
+  private async sendPushToUserWithQuietHours(
+    recipient: NotificationRecipient,
+    notification: NotificationEvent,
+  ): Promise<void> {
+    // If quiet hours service is available, check quiet hours
+    if (this.quietHoursService && this.preferencesService) {
+      try {
+        const prefs = await this.preferencesService.getPreferences(
+          recipient.userId,
+          recipient.workspaceId,
+        );
+
+        const inQuietHours = await this.quietHoursService.isInQuietHours(
+          recipient.userId,
+          prefs,
+        );
+
+        if (inQuietHours) {
+          const isCritical = this.isCriticalNotification(notification.type);
+          const shouldBypass = this.quietHoursService.shouldBypassQuietHours(
+            notification.type,
+            prefs.quietHours?.exceptCritical ?? true,
+          );
+
+          if (!isCritical && !shouldBypass) {
+            // Queue for later delivery
+            await this.quietHoursService.queueForLater(recipient, notification);
+            this.logger.debug(
+              `Queued notification for user ${recipient.userId} during quiet hours`,
+            );
+            return;
+          }
+
+          // Critical notification, send anyway
+          this.logger.debug(
+            `Sending critical notification ${notification.type} during quiet hours for user ${recipient.userId}`,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to check quiet hours for user ${recipient.userId}, sending anyway`,
+        );
+      }
+    }
+
+    // Send the push notification
+    await this.sendPushToUser(recipient, notification);
   }
 
   /**
