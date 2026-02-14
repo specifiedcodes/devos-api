@@ -4,7 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { ScheduleModule } from '@nestjs/schedule';
 import { BullModule } from '@nestjs/bull';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseModule } from './database/database.module';
@@ -27,12 +27,15 @@ import { AgentQueueModule } from './modules/agent-queue/agent-queue.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { AgentStatusModule } from './modules/agents/agent-status.module';
 import { AgentStatusUpdate } from './database/entities/agent-status-update.entity';
+import { ApiUsage } from './database/entities/api-usage.entity';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { StoriesModule } from './modules/stories/stories.module';
 import { SprintsModule } from './modules/sprints/sprints.module';
 import { KanbanPreferencesModule } from './modules/kanban-preferences/kanban-preferences.module';
 import { CliSessionsModule } from './modules/cli-sessions/cli-sessions.module';
 import { ChatModule } from './modules/chat/chat.module';
+import { PushModule } from './modules/push/push.module';
+import { ChatRoomModule } from './modules/chat-room/chat-room.module';
 import { User } from './database/entities/user.entity';
 import { Workspace } from './database/entities/workspace.entity';
 import { WorkspaceMember } from './database/entities/workspace-member.entity';
@@ -60,6 +63,18 @@ import { Sprint } from './database/entities/sprint.entity';
 import { UserKanbanPreferences } from './database/entities/user-kanban-preferences.entity';
 import { CliSession } from './database/entities/cli-session.entity';
 import { ChatMessage } from './database/entities/chat-message.entity';
+import { ConversationThread } from './database/entities/conversation-thread.entity';
+import { ChatRoom } from './database/entities/chat-room.entity';
+import { ChatRoomMember } from './database/entities/chat-room-member.entity';
+import { ChatRoomInvitation } from './database/entities/chat-room-invitation.entity';
+import { UserRoomRestriction } from './database/entities/user-room-restriction.entity';
+import { ModerationLog } from './database/entities/moderation-log.entity';
+import { PinnedMessage } from './database/entities/pinned-message.entity';
+import { NotificationPreferences } from './database/entities/notification-preferences.entity';
+import { DeploymentRollback } from './database/entities/deployment-rollback.entity';
+import { ContextSnapshot } from './database/entities/context-snapshot.entity';
+import { AuditLog } from './database/entities/audit-log.entity';
+import { PushSubscription } from './database/entities/push-subscription.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -105,7 +120,20 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         UserKanbanPreferences,
         CliSession,
         ChatMessage,
+        ConversationThread,
+        ChatRoom,
+        ChatRoomMember,
+        ChatRoomInvitation,
+        UserRoomRestriction,
+        ModerationLog,
+        PinnedMessage,
+        NotificationPreferences,
+        DeploymentRollback,
+        ContextSnapshot,
+        AuditLog,
         AgentStatusUpdate,
+        PushSubscription,
+        ApiUsage,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -120,6 +148,13 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         password: process.env.REDIS_PASSWORD || undefined,
       },
     }),
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // 1 minute
+        limit: 100, // 100 requests per minute for general endpoints
+        // Auth endpoints override with stricter limits via @Throttle() decorators
+      },
+    ]),
     EncryptionModule,
     GuardsModule,
     AuthModule,
@@ -143,6 +178,8 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     KanbanPreferencesModule,
     CliSessionsModule,
     ChatModule,
+    PushModule,
+    ChatRoomModule,
   ],
   controllers: [AppController],
   providers: [

@@ -10,7 +10,7 @@ import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey, Ta
  *
  * @see ProvisioningStatus entity
  */
-export class CreateProvisioningStatusTable1738329000000 implements MigrationInterface {
+export class CreateProvisioningStatusTable1738361000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create provisioning_status table
     await queryRunner.createTable(

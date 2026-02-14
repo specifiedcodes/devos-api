@@ -19,6 +19,7 @@ import { CsvExportService } from '../services/csv-export.service';
 import { RecordUsageDto } from '../dto/record-usage.dto';
 import { UsageQueryDto } from '../dto/usage-query.dto';
 import { ExportUsageDto } from '../dto/export-usage.dto';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { AuditService } from '../../../shared/audit/audit.service';
 
@@ -27,7 +28,7 @@ import { AuditService } from '../../../shared/audit/audit.service';
  * Provides endpoints for recording usage and querying aggregations
  */
 @Controller('api/v1/workspaces/:workspaceId/usage')
-@UseGuards(WorkspaceAccessGuard)
+@UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class UsageV2Controller {
   constructor(
     private readonly usageService: UsageService,

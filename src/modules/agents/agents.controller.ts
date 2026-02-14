@@ -65,7 +65,7 @@ export class AgentsController {
     const agent = await this.agentsService.createAgent({
       ...body,
       workspaceId,
-      createdBy: req.user.sub,
+      createdBy: req.user.userId || req.user.id,
     });
 
     return {

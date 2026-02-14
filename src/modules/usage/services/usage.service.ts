@@ -220,32 +220,29 @@ export class UsageService {
     startDate: Date,
     endDate: Date,
   ): Promise<ProjectUsageItem[]> {
-    // SECURITY FIX: Added explicit workspace_id filter to JOIN clause
-    const results = await this.apiUsageRepository
-      .createQueryBuilder('usage')
-      .leftJoin(
-        'projects',
-        'project',
-        'usage.project_id = project.id AND project.workspace_id = :workspaceId',
-      )
-      .select('usage.project_id', 'projectId')
-      .addSelect('COALESCE(project.name, \'No Project\')', 'projectName')
-      .addSelect('SUM(usage.cost_usd)', 'cost')
-      .addSelect('COUNT(*)', 'requests')
-      .where('usage.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('usage.created_at BETWEEN :startDate AND :endDate', {
-        startDate,
-        endDate,
-      })
-      .groupBy('usage.project_id')
-      .addGroupBy('project.name')
-      .orderBy('SUM(usage.cost_usd)', 'DESC')
-      .getRawMany();
+    // Use raw SQL with schema-qualified public.projects to avoid workspace schema
+    // search_path conflict (workspace schemas have their own projects table without workspace_id)
+    const results = await this.apiUsageRepository.manager.query(
+      `SELECT usage.project_id AS "projectId",
+              COALESCE(project.name, 'No Project') AS "projectName",
+              SUM(usage.cost_usd) AS "cost",
+              COUNT(*) AS "requests"
+       FROM public.api_usage usage
+       LEFT JOIN public.projects project
+         ON usage.project_id = project.id
+         AND project.workspace_id = $1
+         AND project.deleted_at IS NULL
+       WHERE usage.workspace_id = $1
+         AND usage.created_at BETWEEN $2 AND $3
+       GROUP BY usage.project_id, project.name
+       ORDER BY SUM(usage.cost_usd) DESC`,
+      [workspaceId, startDate, endDate],
+    );
 
-    return results.map((r) => ({
+    return results.map((r: any) => ({
       projectId: r.projectId,
       projectName: r.projectName || 'No Project',
-      cost: parseFloat(r.cost),
+      cost: parseFloat(r.cost || '0'),
       requests: parseInt(r.requests, 10),
     }));
   }

@@ -47,7 +47,7 @@ export class RoleGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.id;
-    const workspaceId = request.params.id || request.body?.workspaceId;
+    const workspaceId = request.params.workspaceId || request.params.id || request.body?.workspaceId;
 
     if (!userId || !workspaceId) {
       throw new ForbiddenException('Missing user or workspace context');

@@ -2,7 +2,6 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { PassportModule } from '@nestjs/passport';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
@@ -26,12 +25,6 @@ import { OnboardingModule } from '../onboarding/onboarding.module';
     EmailModule,
     WorkspacesModule,
     OnboardingModule,
-    ThrottlerModule.forRoot([
-      {
-        ttl: 900000, // 15 minutes (900,000ms) - matches login rate limit requirement
-        limit: 5, // 5 attempts per 15 minutes - matches NFR-S17 security requirement
-      },
-    ]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

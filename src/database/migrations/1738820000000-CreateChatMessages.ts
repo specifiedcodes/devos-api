@@ -38,7 +38,7 @@ export class CreateChatMessages1738820000000 implements MigrationInterface {
         "agent_id" uuid,
         "user_id" uuid,
         "sender_type" "chat_message_sender_type_enum" NOT NULL,
-        "agent_type" "agents_type_enum",
+        "agent_type" "agent_type_enum",
         "text" text NOT NULL,
         "is_status_update" boolean NOT NULL DEFAULT false,
         "metadata" jsonb,

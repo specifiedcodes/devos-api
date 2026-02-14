@@ -24,7 +24,7 @@ import { FailureRecoveryService } from './failure-recovery.service';
 @Module({
   imports: [
     TypeOrmModule.forFeature([Agent, ContextSnapshot]),
-    AgentQueueModule,
+    forwardRef(() => AgentQueueModule),
     forwardRef(() => BYOKModule),
   ],
   controllers: [AgentsController],
