@@ -10,7 +10,7 @@
  * Neo4jService for pattern node CRUD, and MemoryQueryService for
  * keyword similarity scoring.
  */
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v4 as uuidv4 } from 'uuid';
 import { GraphitiService } from './graphiti.service';
@@ -36,6 +36,7 @@ export class CrossProjectLearningService {
   constructor(
     private readonly graphitiService: GraphitiService,
     private readonly neo4jService: Neo4jService,
+    @Inject(forwardRef(() => MemoryQueryService))
     private readonly memoryQueryService: MemoryQueryService,
     private readonly configService: ConfigService,
   ) {}
