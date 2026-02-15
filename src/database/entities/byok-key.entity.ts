@@ -14,6 +14,7 @@ import { User } from './user.entity';
 export enum KeyProvider {
   ANTHROPIC = 'anthropic',
   OPENAI = 'openai',
+  GOOGLE = 'google',
 }
 
 @Entity({ name: 'byok_secrets', schema: 'public' })

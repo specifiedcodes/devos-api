@@ -29,6 +29,18 @@ jest.mock('openai', () => {
   };
 });
 
+// Mock Google Generative AI SDK
+const mockGoogleGenerateContent = jest.fn();
+jest.mock('@google/generative-ai', () => {
+  return {
+    GoogleGenerativeAI: jest.fn().mockImplementation(() => ({
+      getGenerativeModel: jest.fn().mockReturnValue({
+        generateContent: mockGoogleGenerateContent,
+      }),
+    })),
+  };
+});
+
 describe('ApiKeyValidatorService', () => {
   let service: ApiKeyValidatorService;
 
@@ -166,7 +178,158 @@ describe('ApiKeyValidatorService', () => {
     });
   });
 
+  describe('validateGoogleAIKey', () => {
+    beforeEach(() => {
+      mockGoogleGenerateContent.mockReset();
+    });
+
+    it('should return true for valid Google AI API key', async () => {
+      mockGoogleGenerateContent.mockResolvedValue({
+        response: {
+          text: () => 'ok',
+          candidates: [{ content: { parts: [{ text: 'ok' }] }, finishReason: 'STOP' }],
+          usageMetadata: { promptTokenCount: 1, candidatesTokenCount: 1 },
+        },
+      });
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyTest1234567890123456789012345',
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should call generateContent with minimal prompt and gemini-2.0-flash model', async () => {
+      mockGoogleGenerateContent.mockResolvedValue({
+        response: {
+          text: () => 'ok',
+        },
+      });
+
+      await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyTest1234567890123456789012345',
+      );
+
+      expect(mockGoogleGenerateContent).toHaveBeenCalledWith({
+        contents: [{ role: 'user', parts: [{ text: 'test' }] }],
+        generationConfig: { maxOutputTokens: 1 },
+      });
+    });
+
+    it('should return "Invalid Google AI API key" for 403 error', async () => {
+      mockGoogleGenerateContent.mockRejectedValue({
+        status: 403,
+        message: 'API key not valid',
+      });
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyInvalid1234567890123456789',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid Google AI API key');
+    });
+
+    it('should return quota/rate limit message for 429 error', async () => {
+      mockGoogleGenerateContent.mockRejectedValue({
+        status: 429,
+        message: 'Resource has been exhausted',
+      });
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyRateLimited12345678901234567',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('API key has no remaining quota or rate limit exceeded');
+    });
+
+    it('should return connectivity message for network error (ECONNREFUSED)', async () => {
+      const error = new Error('connect ECONNREFUSED');
+      (error as any).code = 'ECONNREFUSED';
+      mockGoogleGenerateContent.mockRejectedValue(error);
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyNetwork1234567890123456789012',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Unable to reach Google AI servers. Check your network connection.');
+    });
+
+    it('should return connectivity message for ETIMEDOUT error', async () => {
+      const error = new Error('connect ETIMEDOUT');
+      (error as any).code = 'ETIMEDOUT';
+      mockGoogleGenerateContent.mockRejectedValue(error);
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyTimeout12345678901234567890123',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Unable to reach Google AI servers. Check your network connection.');
+    });
+
+    it('should return timeout message when validation times out', async () => {
+      // The TIMEOUT error is thrown by our Promise.race timeout
+      mockGoogleGenerateContent.mockImplementation(() => new Promise(() => {
+        // Never resolves - will be caught by timeout
+      }));
+
+      // Mock a shorter timeout for this test
+      const error = new Error('TIMEOUT');
+      mockGoogleGenerateContent.mockRejectedValue(error);
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSySlowKey12345678901234567890123',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Validation timed out. Please try again.');
+    });
+
+    it('should sanitize key in error logs', async () => {
+      // The key itself should not appear in error messages
+      const specificKey = 'AIzaSySecretKey12345678901234567890';
+      mockGoogleGenerateContent.mockRejectedValue({
+        status: 403,
+        message: 'Forbidden',
+      });
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        specificKey,
+      );
+
+      expect(result.isValid).toBe(false);
+      // Error message should not contain the actual key
+      expect(result.error).not.toContain(specificKey);
+    });
+  });
+
   describe('validateApiKey', () => {
+    it('should handle KeyProvider.GOOGLE and route to validateGoogleAIKey', async () => {
+      mockGoogleGenerateContent.mockResolvedValue({
+        response: { text: () => 'ok' },
+      });
+
+      const result = await service.validateApiKey(
+        KeyProvider.GOOGLE,
+        'AIzaSyTest1234567890123456789012345',
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(mockGoogleGenerateContent).toHaveBeenCalled();
+    });
+
     it('should return false for unsupported provider', async () => {
       const result = await service.validateApiKey(
         'unsupported' as KeyProvider,

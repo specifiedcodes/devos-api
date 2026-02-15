@@ -449,6 +449,195 @@ describe('BYOKKeyService', () => {
     });
   });
 
+  describe('createKey with Google provider', () => {
+    it('should create a BYOK key with valid Google AI key', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Google AI Key',
+        provider: KeyProvider.GOOGLE,
+        apiKey: 'AIzaSyTest1234567890123456789012345',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: true,
+      });
+
+      mockRepository.find.mockResolvedValue([]);
+
+      mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
+        encryptedData: 'encrypted',
+        iv: 'iv123',
+      });
+
+      mockRepository.create.mockReturnValue({
+        id: 'key-google-123',
+        ...dto,
+        workspaceId,
+        createdByUserId: userId,
+      });
+
+      mockRepository.save.mockResolvedValue({
+        id: 'key-google-123',
+        keyName: dto.keyName,
+        provider: dto.provider,
+        createdAt: new Date(),
+        encryptedKey: 'encrypted',
+        keyPrefix: 'AIza',
+        keySuffix: '2345',
+      });
+
+      const result = await service.createKey(workspaceId, userId, dto);
+
+      expect(result).toBeDefined();
+      expect(result.keyName).toBe(dto.keyName);
+      expect(result.maskedKey).toBe('AIza...2345');
+      expect(mockApiKeyValidatorService.validateApiKey).toHaveBeenCalledWith(
+        KeyProvider.GOOGLE,
+        dto.apiKey,
+      );
+      expect(mockEncryptionService.encryptWithWorkspaceKey).toHaveBeenCalledWith(
+        workspaceId,
+        dto.apiKey,
+      );
+    });
+
+    it('should reject invalid Google key format (wrong prefix)', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Google Key',
+        provider: KeyProvider.GOOGLE,
+        apiKey: 'sk-not-a-google-key-1234567890',
+      };
+
+      await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject Google key that is too short', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Google Key',
+        provider: KeyProvider.GOOGLE,
+        apiKey: 'AIzaShort',
+      };
+
+      await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should store Google keys with encrypted_key and encryption_iv', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'Google AI Key',
+        provider: KeyProvider.GOOGLE,
+        apiKey: 'AIzaSyTest1234567890123456789012345',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({ isValid: true });
+      mockRepository.find.mockResolvedValue([]);
+      mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
+        encryptedData: 'encrypted-google',
+        iv: 'iv-google-123',
+      });
+      mockRepository.create.mockReturnValue({
+        id: 'key-google-enc',
+        workspaceId,
+        keyName: dto.keyName,
+        provider: dto.provider,
+        encryptedKey: 'encrypted-google',
+        encryptionIV: 'iv-google-123',
+        createdByUserId: userId,
+      });
+      mockRepository.save.mockResolvedValue({
+        id: 'key-google-enc',
+        keyName: dto.keyName,
+        provider: dto.provider,
+        createdAt: new Date(),
+        keyPrefix: 'AIza',
+        keySuffix: '2345',
+      });
+
+      await service.createKey(workspaceId, userId, dto);
+
+      expect(mockRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          encryptedKey: 'encrypted-google',
+          encryptionIV: 'iv-google-123',
+          provider: KeyProvider.GOOGLE,
+        }),
+      );
+    });
+  });
+
+  describe('getWorkspaceKeys with Google keys', () => {
+    it('should return Google AI keys with correct provider', async () => {
+      const workspaceId = 'workspace-123';
+      const mockKeys = [
+        {
+          id: 'key-1',
+          keyName: 'Anthropic Key',
+          provider: KeyProvider.ANTHROPIC,
+          createdAt: new Date(),
+          isActive: true,
+          keyPrefix: 'sk-ant-',
+          keySuffix: 'wxyz',
+        },
+        {
+          id: 'key-2',
+          keyName: 'Google Key',
+          provider: KeyProvider.GOOGLE,
+          createdAt: new Date(),
+          isActive: true,
+          keyPrefix: 'AIza',
+          keySuffix: '2345',
+        },
+      ];
+
+      mockRepository.find.mockResolvedValue(mockKeys);
+
+      const result = await service.getWorkspaceKeys(workspaceId);
+
+      expect(result).toHaveLength(2);
+      const googleKey = result.find(k => k.provider === KeyProvider.GOOGLE);
+      expect(googleKey).toBeDefined();
+      expect(googleKey!.maskedKey).toBe('AIza...2345');
+    });
+  });
+
+  describe('deleteKey with Google keys', () => {
+    it('should delete Google AI keys', async () => {
+      mockRepository.findOne.mockResolvedValue({
+        id: 'key-google-123',
+        workspaceId: 'workspace-123',
+        keyName: 'Google Key',
+        provider: KeyProvider.GOOGLE,
+      });
+      mockRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.deleteKey('key-google-123', 'workspace-123', 'user-123');
+
+      expect(mockRepository.update).toHaveBeenCalledWith('key-google-123', {
+        isActive: false,
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        'workspace-123',
+        'user-123',
+        'byok_key_deleted',
+        'byok_key',
+        'key-google-123',
+        expect.objectContaining({
+          provider: 'google',
+        }),
+      );
+    });
+  });
+
   describe('extractKeyParts and buildMaskedKey', () => {
     it('should extract and mask Anthropic API key correctly', () => {
       const key = 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz';
@@ -475,6 +664,17 @@ describe('BYOKKeyService', () => {
       const { prefix, suffix } = (service as any).extractKeyParts(key);
       const masked = (service as any).buildMaskedKey(prefix, suffix);
       expect(masked).toBe('sk-...test');
+    });
+
+    it('should extract and mask Google AI API key correctly', () => {
+      // Google keys like 'AIzaSy...' have no dashes, so extractKeyParts uses first 4 chars
+      const key = 'AIzaSyTest1234567890123456789012345';
+      const { prefix, suffix } = (service as any).extractKeyParts(key);
+      expect(prefix).toBe('AIza');
+      expect(suffix).toBe('2345');
+
+      const masked = (service as any).buildMaskedKey(prefix, suffix);
+      expect(masked).toBe('AIza...2345');
     });
 
     it('should handle missing prefix/suffix', () => {

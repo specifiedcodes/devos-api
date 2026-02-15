@@ -24,7 +24,7 @@ export class PricingService {
   private readonly logger = new Logger(PricingService.name);
 
   // Hardcoded fallback pricing (as of 2026-01)
-  // Source: Anthropic and OpenAI pricing pages
+  // Source: Anthropic, OpenAI, and Google AI pricing pages
   private readonly FALLBACK_PRICING: Record<string, ModelPricing> = {
     // Latest Anthropic models (2026-01)
     'anthropic:claude-sonnet-4-5-20250929': {
@@ -71,6 +71,28 @@ export class PricingService {
       outputPricePerMillion: 1.5,
       effectiveDate: '2026-01-01',
     },
+    // Google AI models
+    'google:gemini-2.0-flash': {
+      provider: 'google',
+      model: 'gemini-2.0-flash',
+      inputPricePerMillion: 0.10,
+      outputPricePerMillion: 0.40,
+      effectiveDate: '2026-01-01',
+    },
+    'google:gemini-2.0-pro': {
+      provider: 'google',
+      model: 'gemini-2.0-pro',
+      inputPricePerMillion: 1.25,
+      outputPricePerMillion: 5.00,
+      effectiveDate: '2026-01-01',
+    },
+    'google:text-embedding-004': {
+      provider: 'google',
+      model: 'text-embedding-004',
+      inputPricePerMillion: 0.006,
+      outputPricePerMillion: 0,
+      effectiveDate: '2026-01-01',
+    },
   };
 
   constructor(private readonly redisService: RedisService) {}
@@ -79,7 +101,7 @@ export class PricingService {
    * Get current pricing for a model
    * Tries Redis cache first, falls back to hardcoded pricing
    *
-   * @param provider - AI provider (anthropic, openai)
+   * @param provider - AI provider (anthropic, openai, google)
    * @param model - Model identifier
    * @returns Pricing information
    */
@@ -110,7 +132,7 @@ export class PricingService {
 
     if (!this.FALLBACK_PRICING[pricingKey]) {
       this.logger.warn(
-        `No pricing found for ${pricingKey}, using default Claude 3.5 Sonnet pricing`,
+        `No pricing found for ${pricingKey}, using default Claude Sonnet 4.5 pricing`,
       );
     }
 

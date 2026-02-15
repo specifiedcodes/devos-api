@@ -428,6 +428,27 @@ export class BYOKKeyService {
         }
         break;
 
+      case KeyProvider.GOOGLE:
+        // Google AI keys start with 'AIza'
+        if (!apiKey.startsWith('AIza')) {
+          throw new BadRequestException(
+            'Invalid Google AI API key format. Key should start with "AIza"',
+          );
+        }
+        // Google AI keys are typically 39 characters
+        if (apiKey.length < 30) {
+          throw new BadRequestException(
+            'Google AI API key is too short (minimum 30 characters)',
+          );
+        }
+        // Validate format: alphanumeric, dash, and underscore characters
+        if (!/^AIza[a-zA-Z0-9_-]+$/.test(apiKey)) {
+          throw new BadRequestException(
+            'Invalid Google AI API key format. Should contain only alphanumeric, dash, and underscore characters after prefix',
+          );
+        }
+        break;
+
       default:
         throw new BadRequestException('Unsupported provider');
     }
@@ -490,14 +511,15 @@ export class BYOKKeyService {
    * - Anthropic: "sk-ant-api..." → "sk-ant-...api7"
    * - OpenAI (new): "sk-proj-..." → "sk-proj-...xyz9"
    * - OpenAI (legacy): "sk-..." → "sk-...abc3"
-   * - Unknown format: "key123..." → "key...23"
+   * - Google AI: "AIzaSy..." → "AIza...Sy12"
+   * - Unknown format: "key123..." → "key1...23"
    *
    * Algorithm:
    * 1. For short keys (≤8 chars): Use first 3 chars as prefix
    * 2. For keys with dashes:
    *    - If second dash exists within first 15 chars (e.g., 'sk-ant-'): use up to second dash
    *    - Otherwise: use up to first dash (e.g., 'sk-')
-   * 3. For keys without dashes: Use first 3 chars
+   * 3. For keys without dashes: Use first 4 chars (e.g., Google AI 'AIza')
    * 4. Always use last 4 chars as suffix
    *
    * The 15-char limit for second dash ensures we capture structured prefixes like
@@ -525,8 +547,8 @@ export class BYOKKeyService {
           prefix = apiKey.substring(0, firstDash + 1);
         }
       } else {
-        // No dashes - use first 3 chars as fallback
-        prefix = apiKey.substring(0, 3);
+        // No dashes - use first 4 chars as fallback (e.g., Google AI keys: 'AIza...')
+        prefix = apiKey.substring(0, Math.min(4, apiKey.length));
       }
     }
 

@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { KeyProvider } from '../../../database/entities/byok-key.entity';
 import { sanitizeLogData } from '../../../shared/logging/log-sanitizer';
 
@@ -28,7 +29,7 @@ export class ApiKeyValidatorService {
    * This method performs live validation by making a minimal API call to the provider's
    * service. It verifies that the key is valid, has not been revoked, and has available quota.
    *
-   * @param provider - The API key provider (Anthropic or OpenAI)
+   * @param provider - The API key provider (Anthropic, OpenAI, or Google)
    * @param apiKey - The API key to validate
    * @returns ValidationResult containing isValid boolean and optional error message
    * @throws Never throws - all errors are caught and returned in ValidationResult
@@ -49,6 +50,8 @@ export class ApiKeyValidatorService {
           return await this.validateAnthropicKey(apiKey);
         case KeyProvider.OPENAI:
           return await this.validateOpenAIKey(apiKey);
+        case KeyProvider.GOOGLE:
+          return await this.validateGoogleAIKey(apiKey);
         default:
           throw new Error('Unsupported provider');
       }
@@ -140,6 +143,60 @@ export class ApiKeyValidatorService {
         errorMessage = 'API key has no remaining quota or rate limit exceeded';
       } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
         errorMessage = 'Unable to reach OpenAI servers. Check your network connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      return {
+        isValid: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Validate Google AI API key by making a minimal API call
+   */
+  private async validateGoogleAIKey(apiKey: string): Promise<ValidationResult> {
+    try {
+      const client = new GoogleGenerativeAI(apiKey);
+      const model = client.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+      // Make a minimal API call with 2-token prompt and 1 max output token
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('TIMEOUT')), this.validationTimeout);
+      });
+
+      try {
+        await Promise.race([
+          model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: 'test' }] }],
+            generationConfig: { maxOutputTokens: 1 },
+          }),
+          timeoutPromise,
+        ]);
+      } finally {
+        if (timer !== undefined) {
+          clearTimeout(timer);
+        }
+      }
+
+      return { isValid: true };
+    } catch (error: any) {
+      this.logger.warn(`Google AI API key validation failed: ${sanitizeLogData(error.message)}`);
+
+      // Provide specific error messages based on error type
+      let errorMessage = 'Validation failed';
+
+      if (error.message === 'TIMEOUT') {
+        errorMessage = 'Validation timed out. Please try again.';
+      } else if (error.status === 403 || error.message?.includes('API key')) {
+        errorMessage = 'Invalid Google AI API key';
+      } else if (error.status === 429) {
+        errorMessage = 'API key has no remaining quota or rate limit exceeded';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
+        errorMessage = 'Unable to reach Google AI servers. Check your network connection.';
       } else if (error.message) {
         errorMessage = error.message;
       }
