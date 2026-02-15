@@ -132,6 +132,7 @@ export class GraphitiService {
 
   /**
    * Search episodes with filters. Always scoped by projectId and workspaceId.
+   * Story 12.7: Excludes archived episodes by default unless includeArchived is true.
    */
   async searchEpisodes(query: EpisodeSearchQuery): Promise<MemoryEpisode[]> {
     const conditions: string[] = [
@@ -142,6 +143,11 @@ export class GraphitiService {
       projectId: query.projectId,
       workspaceId: query.workspaceId,
     };
+
+    // Story 12.7: Filter out archived episodes by default
+    if (!query.includeArchived) {
+      conditions.push('(NOT coalesce(e.archived, false))');
+    }
 
     if (query.types && query.types.length > 0) {
       conditions.push('e.episodeType IN $types');
@@ -303,6 +309,36 @@ export class GraphitiService {
       const entityNames: string[] = record.get('entityNames').filter(Boolean);
       return this.mapNodeToEpisode(node, entityNames);
     });
+  }
+
+  /**
+   * Archive an episode by marking it with archived metadata.
+   * Story 12.7: Sets archived=true, archivedAt timestamp, and summaryId on the episode.
+   * Does NOT delete the episode - archive-not-delete strategy.
+   */
+  async archiveEpisode(
+    episodeId: string,
+    summaryId: string,
+  ): Promise<boolean> {
+    const cypher = `
+      MATCH (e:Episode {id: $episodeId})
+      SET e.archived = true, e.archivedAt = datetime(), e.summaryId = $summaryId
+      RETURN e.id as id
+    `;
+
+    try {
+      const result = await this.neo4jService.runQuery(cypher, {
+        episodeId,
+        summaryId,
+      });
+
+      return result.records.length > 0;
+    } catch (error) {
+      this.logger.warn(
+        `Failed to archive episode ${episodeId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return false;
+    }
   }
 
   /**

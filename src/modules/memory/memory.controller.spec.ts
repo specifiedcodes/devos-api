@@ -4,6 +4,7 @@
  * Story 12.2: Memory Ingestion Pipeline
  * Story 12.3: Memory Query Service
  * Story 12.6: Cross-Project Learning
+ * Story 12.7: Memory Summarization (Cheap Models)
  */
 
 // Mock uuid (required by transitive GraphitiService import)
@@ -17,6 +18,7 @@ import { MemoryHealthService } from './services/memory-health.service';
 import { MemoryIngestionService } from './services/memory-ingestion.service';
 import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
+import { MemorySummarizationService } from './services/memory-summarization.service';
 import {
   MemoryHealth,
   IngestionResult,
@@ -26,6 +28,9 @@ import {
   PatternDetectionResult,
   PatternRecommendation,
   PatternAdoptionStats,
+  SummarizationResult,
+  SummarizationStats,
+  MemorySummary,
 } from './interfaces/memory.interfaces';
 
 describe('MemoryController', () => {
@@ -34,6 +39,7 @@ describe('MemoryController', () => {
   let mockMemoryIngestionService: Partial<MemoryIngestionService>;
   let mockMemoryQueryService: Partial<MemoryQueryService>;
   let mockCrossProjectLearningService: any;
+  let mockMemorySummarizationService: any;
 
   const healthyResponse: MemoryHealth = {
     neo4jConnected: true,
@@ -148,6 +154,41 @@ describe('MemoryController', () => {
       getPatternAdoptionStats: jest.fn().mockResolvedValue(adoptionStats),
     };
 
+    mockMemorySummarizationService = {
+      summarizeProject: jest.fn().mockResolvedValue({
+        summariesCreated: 3,
+        episodesArchived: 15,
+        totalProcessed: 15,
+        durationMs: 250,
+        skipped: false,
+        errors: [],
+      } as SummarizationResult),
+      getProjectSummaries: jest.fn().mockResolvedValue([
+        {
+          id: 'summary-1',
+          projectId: 'project-1',
+          workspaceId: 'workspace-1',
+          periodStart: new Date('2025-12-01'),
+          periodEnd: new Date('2025-12-31'),
+          originalEpisodeCount: 10,
+          summary: 'December summary',
+          keyDecisions: [],
+          keyPatterns: [],
+          archivedEpisodeIds: ['ep-1'],
+          summarizationModel: 'stub',
+          createdAt: new Date('2026-01-15'),
+          metadata: {},
+        },
+      ] as MemorySummary[]),
+      getSummarizationStats: jest.fn().mockResolvedValue({
+        totalSummaries: 5,
+        totalArchivedEpisodes: 100,
+        activeEpisodes: 500,
+        oldestSummary: new Date('2025-10-01'),
+        newestSummary: new Date('2025-12-01'),
+      } as SummarizationStats),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MemoryController],
       providers: [
@@ -166,6 +207,10 @@ describe('MemoryController', () => {
         {
           provide: CrossProjectLearningService,
           useValue: mockCrossProjectLearningService,
+        },
+        {
+          provide: MemorySummarizationService,
+          useValue: mockMemorySummarizationService,
         },
       ],
     }).compile();
@@ -675,6 +720,108 @@ describe('MemoryController', () => {
       const guards = Reflect.getMetadata(
         '__guards__',
         MemoryController.prototype.getPatternAdoptionStats,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── Summarization Endpoint Tests (Story 12.7) ─────────────────────────────
+
+  describe('POST /api/v1/memory/summarize', () => {
+    it('should return 200 with SummarizationResult', async () => {
+      const body = { projectId: 'project-1', workspaceId: 'workspace-1' };
+
+      const result = await controller.summarize(body as any);
+
+      expect(result.summariesCreated).toBe(3);
+      expect(result.episodesArchived).toBe(15);
+      expect(result.skipped).toBe(false);
+      expect(result.errors).toEqual([]);
+      expect(mockMemorySummarizationService.summarizeProject).toHaveBeenCalledWith(
+        'project-1',
+        'workspace-1',
+      );
+    });
+
+    it('should require JWT authentication (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.summarize,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should validate required fields (projectId, workspaceId)', async () => {
+      const body = { projectId: 'project-1', workspaceId: 'workspace-1' };
+
+      await controller.summarize(body as any);
+
+      expect(mockMemorySummarizationService.summarizeProject).toHaveBeenCalledWith(
+        'project-1',
+        'workspace-1',
+      );
+    });
+  });
+
+  describe('GET /api/v1/memory/summaries', () => {
+    it('should return 200 with MemorySummary array', async () => {
+      const query = { projectId: 'project-1', workspaceId: 'workspace-1' };
+
+      const result = await controller.getSummaries(query as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('summary-1');
+      expect(result[0].summary).toBe('December summary');
+      expect(mockMemorySummarizationService.getProjectSummaries).toHaveBeenCalledWith(
+        'project-1',
+        'workspace-1',
+      );
+    });
+
+    it('should require JWT authentication (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getSummaries,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should validate required query params', async () => {
+      const query = { projectId: 'project-1', workspaceId: 'workspace-1' };
+
+      await controller.getSummaries(query as any);
+
+      expect(mockMemorySummarizationService.getProjectSummaries).toHaveBeenCalledWith(
+        'project-1',
+        'workspace-1',
+      );
+    });
+  });
+
+  describe('GET /api/v1/memory/summarization-stats', () => {
+    it('should return 200 with SummarizationStats', async () => {
+      const query = { projectId: 'project-1', workspaceId: 'workspace-1' };
+
+      const result = await controller.getSummarizationStats(query as any);
+
+      expect(result.totalSummaries).toBe(5);
+      expect(result.totalArchivedEpisodes).toBe(100);
+      expect(result.activeEpisodes).toBe(500);
+      expect(result.oldestSummary).toBeDefined();
+      expect(result.newestSummary).toBeDefined();
+      expect(mockMemorySummarizationService.getSummarizationStats).toHaveBeenCalledWith(
+        'project-1',
+        'workspace-1',
+      );
+    });
+
+    it('should require JWT authentication (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getSummarizationStats,
       );
       expect(guards).toBeDefined();
       expect(guards.length).toBeGreaterThan(0);

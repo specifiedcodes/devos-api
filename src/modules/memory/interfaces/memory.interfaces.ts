@@ -46,6 +46,7 @@ export interface EpisodeSearchQuery {
   entityNames?: string[];
   since?: Date;
   maxResults?: number;
+  includeArchived?: boolean;
 }
 
 export type EntityRefType =
@@ -300,4 +301,49 @@ export interface PatternAdoptionStats {
   overrideRate: number;
   averageOccurrenceCount: number;
   topPatterns: WorkspacePattern[];
+}
+
+// ─── Memory Summarization Interfaces (Story 12.7) ────────────────────────────
+
+/**
+ * A consolidated memory summary stored in Neo4j.
+ * Groups archived episodes by month for efficient retrieval.
+ */
+export interface MemorySummary {
+  id: string;
+  projectId: string;
+  workspaceId: string;
+  periodStart: Date;
+  periodEnd: Date;
+  originalEpisodeCount: number;
+  summary: string;
+  keyDecisions: string[];
+  keyPatterns: string[];
+  archivedEpisodeIds: string[];
+  summarizationModel: string;
+  createdAt: Date;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Result of a summarization run.
+ */
+export interface SummarizationResult {
+  summariesCreated: number;
+  episodesArchived: number;
+  totalProcessed: number;
+  durationMs: number;
+  skipped: boolean;
+  errors: string[];
+}
+
+/**
+ * Summarization statistics for a project.
+ */
+export interface SummarizationStats {
+  totalSummaries: number;
+  totalArchivedEpisodes: number;
+  activeEpisodes: number;
+  oldestSummary: Date | null;
+  newestSummary: Date | null;
 }

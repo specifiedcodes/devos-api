@@ -1,6 +1,7 @@
 /**
  * GraphitiService Unit Tests
  * Story 12.1: Graphiti/Neo4j Setup
+ * Story 12.7: Memory Summarization - archived episode filtering and archiveEpisode
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { GraphitiService } from './graphiti.service';
@@ -523,6 +524,113 @@ describe('GraphitiService', () => {
         ),
         { entityId: 'entity-1' },
       );
+    });
+  });
+
+  // ─── Story 12.7: Archived Episode Filtering & archiveEpisode ──────────────
+
+  describe('searchEpisodes archived filtering (Story 12.7)', () => {
+    const mockEpisodeRecord = {
+      e: {
+        properties: {
+          id: 'ep-1',
+          projectId: 'proj-1',
+          workspaceId: 'ws-1',
+          storyId: null,
+          agentType: 'dev',
+          timestamp: '2026-01-15T10:00:00.000Z',
+          episodeType: 'fact',
+          content: 'Test',
+          confidence: 0.8,
+          metadata: '{}',
+        },
+      },
+      entityNames: [],
+    };
+
+    it('should exclude archived episodes by default', async () => {
+      (mockNeo4jService.runQuery as jest.Mock).mockResolvedValue(
+        createMockResult([mockEpisodeRecord]),
+      );
+
+      await service.searchEpisodes({
+        projectId: 'proj-1',
+        workspaceId: 'ws-1',
+      });
+
+      expect(mockNeo4jService.runQuery).toHaveBeenCalledWith(
+        expect.stringContaining('NOT coalesce(e.archived, false)'),
+        expect.any(Object),
+      );
+    });
+
+    it('should include archived episodes when includeArchived=true', async () => {
+      (mockNeo4jService.runQuery as jest.Mock).mockResolvedValue(
+        createMockResult([mockEpisodeRecord]),
+      );
+
+      await service.searchEpisodes({
+        projectId: 'proj-1',
+        workspaceId: 'ws-1',
+        includeArchived: true,
+      });
+
+      const queryArg = (mockNeo4jService.runQuery as jest.Mock).mock.calls[0][0];
+      expect(queryArg).not.toContain('NOT coalesce(e.archived, false)');
+    });
+
+    it('should be backward compatible without includeArchived (defaults to exclude)', async () => {
+      (mockNeo4jService.runQuery as jest.Mock).mockResolvedValue(
+        createMockResult([mockEpisodeRecord]),
+      );
+
+      await service.searchEpisodes({
+        projectId: 'proj-1',
+        workspaceId: 'ws-1',
+      });
+
+      expect(mockNeo4jService.runQuery).toHaveBeenCalledWith(
+        expect.stringContaining('NOT coalesce(e.archived, false)'),
+        expect.any(Object),
+      );
+    });
+  });
+
+  describe('archiveEpisode (Story 12.7)', () => {
+    it('should set archived=true and metadata fields', async () => {
+      (mockNeo4jService.runQuery as jest.Mock).mockResolvedValue(
+        createMockResult([{ id: 'ep-1' }]),
+      );
+
+      await service.archiveEpisode('ep-1', 'summary-1');
+
+      expect(mockNeo4jService.runQuery).toHaveBeenCalledWith(
+        expect.stringContaining('SET e.archived = true'),
+        expect.objectContaining({
+          episodeId: 'ep-1',
+          summaryId: 'summary-1',
+        }),
+      );
+    });
+
+    it('should return true on success', async () => {
+      (mockNeo4jService.runQuery as jest.Mock).mockResolvedValue(
+        createMockResult([{ id: 'ep-1' }]),
+      );
+
+      const result = await service.archiveEpisode('ep-1', 'summary-1');
+
+      expect(result).toBe(true);
+    });
+
+    it('should return false for non-existent episode', async () => {
+      (mockNeo4jService.runQuery as jest.Mock).mockResolvedValue(
+        createMockResult([]),
+      );
+
+      const result = await service.archiveEpisode('non-existent', 'summary-1');
+
+      expect(result).toBe(false);
     });
   });
 });

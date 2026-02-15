@@ -4,10 +4,12 @@
  * Story 12.2: Memory Ingestion Pipeline
  * Story 12.3: Memory Query Service
  * Story 12.6: Cross-Project Learning
+ * Story 12.7: Memory Summarization (Cheap Models)
  *
  * REST API endpoints for the memory subsystem.
  * Provides health check, manual ingestion trigger, ingestion stats,
- * memory query, relevance feedback, and cross-project pattern management.
+ * memory query, relevance feedback, cross-project pattern management,
+ * and memory summarization management.
  */
 import {
   Controller,
@@ -34,6 +36,7 @@ import { MemoryHealthService } from './services/memory-health.service';
 import { MemoryIngestionService } from './services/memory-ingestion.service';
 import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
+import { MemorySummarizationService } from './services/memory-summarization.service';
 import {
   MemoryHealth,
   IngestionResult,
@@ -47,6 +50,9 @@ import {
   PatternType,
   PatternConfidence,
   PatternStatus,
+  MemorySummary,
+  SummarizationResult,
+  SummarizationStats,
 } from './interfaces/memory.interfaces';
 import {
   IngestMemoryDto,
@@ -62,6 +68,11 @@ import {
   PatternQueryDto,
   PatternRecommendationQueryDto,
 } from './dto/pattern.dto';
+import {
+  SummarizeDto,
+  SummaryQueryDto,
+  SummarizationStatsQueryDto,
+} from './dto/summarization.dto';
 
 @ApiTags('Memory')
 @Controller('api/v1/memory')
@@ -71,6 +82,7 @@ export class MemoryController {
     private readonly memoryIngestionService: MemoryIngestionService,
     private readonly memoryQueryService: MemoryQueryService,
     private readonly crossProjectLearningService: CrossProjectLearningService,
+    private readonly memorySummarizationService: MemorySummarizationService,
   ) {}
 
   @Get('health')
@@ -199,6 +211,75 @@ export class MemoryController {
       body.wasUseful,
     );
     return { updated };
+  }
+
+  // ─── Memory Summarization Endpoints (Story 12.7) ───────────────────────────
+
+  @Post('summarize')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Manually trigger memory summarization for a project' })
+  @ApiBody({ type: SummarizeDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Summarization completed successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async summarize(@Body() body: SummarizeDto): Promise<SummarizationResult> {
+    return this.memorySummarizationService.summarizeProject(
+      body.projectId,
+      body.workspaceId,
+    );
+  }
+
+  @Get('summaries')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get memory summaries for a project' })
+  @ApiQuery({ name: 'projectId', required: true, type: String })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Summaries returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async getSummaries(
+    @Query() query: SummaryQueryDto,
+  ): Promise<MemorySummary[]> {
+    return this.memorySummarizationService.getProjectSummaries(
+      query.projectId,
+      query.workspaceId,
+    );
+  }
+
+  @Get('summarization-stats')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get memory summarization statistics for a project' })
+  @ApiQuery({ name: 'projectId', required: true, type: String })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Summarization statistics returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async getSummarizationStats(
+    @Query() query: SummarizationStatsQueryDto,
+  ): Promise<SummarizationStats> {
+    return this.memorySummarizationService.getSummarizationStats(
+      query.projectId,
+      query.workspaceId,
+    );
   }
 
   // ─── Cross-Project Learning Endpoints (Story 12.6) ─────────────────────────
