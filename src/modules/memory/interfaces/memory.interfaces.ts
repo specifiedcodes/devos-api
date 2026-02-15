@@ -173,3 +173,53 @@ export interface DeduplicationBatchResult {
   skipped: number;
   flagged: number;
 }
+
+// ─── Memory Query Interfaces (Story 12.3) ────────────────────────────────────
+
+/**
+ * Input for the main memory query method.
+ */
+export interface MemoryQueryInput {
+  projectId: string;
+  workspaceId: string;
+  query: string;
+  filters?: {
+    types?: MemoryEpisodeType[];
+    entityIds?: string[];
+    since?: Date;
+    maxResults?: number;
+  };
+}
+
+/**
+ * Result returned by the memory query method.
+ */
+export interface MemoryQueryResult {
+  memories: MemoryEpisode[];
+  totalCount: number;
+  relevanceScores: number[];
+  queryDurationMs: number;
+}
+
+/**
+ * Formatted memory context ready for agent consumption.
+ */
+export interface FormattedMemoryContext {
+  contextString: string;
+  memoryCount: number;
+}
+
+/**
+ * Input for recording relevance feedback on a memory episode.
+ */
+export interface MemoryFeedbackInput {
+  episodeId: string;
+  wasUseful: boolean;
+}
+
+/**
+ * A scored memory episode with relevance score attached.
+ */
+export interface ScoredMemory extends MemoryEpisode {
+  relevanceScore: number;
+}

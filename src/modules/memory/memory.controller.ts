@@ -2,9 +2,11 @@
  * MemoryController
  * Story 12.1: Graphiti/Neo4j Setup
  * Story 12.2: Memory Ingestion Pipeline
+ * Story 12.3: Memory Query Service
  *
  * REST API endpoints for the memory subsystem.
- * Provides health check, manual ingestion trigger, and ingestion stats.
+ * Provides health check, manual ingestion trigger, ingestion stats,
+ * memory query, and relevance feedback.
  */
 import {
   Controller,
@@ -27,15 +29,22 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { MemoryHealthService } from './services/memory-health.service';
 import { MemoryIngestionService } from './services/memory-ingestion.service';
+import { MemoryQueryService } from './services/memory-query.service';
 import {
   MemoryHealth,
   IngestionResult,
   IngestionStats,
+  MemoryQueryResult,
+  MemoryEpisodeType,
 } from './interfaces/memory.interfaces';
 import {
   IngestMemoryDto,
   IngestionStatsQueryDto,
 } from './dto/ingestion.dto';
+import {
+  MemoryQueryDto,
+  MemoryFeedbackDto,
+} from './dto/query.dto';
 
 @ApiTags('Memory')
 @Controller('api/v1/memory')
@@ -43,6 +52,7 @@ export class MemoryController {
   constructor(
     private readonly memoryHealthService: MemoryHealthService,
     private readonly memoryIngestionService: MemoryIngestionService,
+    private readonly memoryQueryService: MemoryQueryService,
   ) {}
 
   @Get('health')
@@ -117,5 +127,59 @@ export class MemoryController {
       query.workspaceId,
       since,
     );
+  }
+
+  @Post('query')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Query memories with filters and semantic relevance' })
+  @ApiBody({ type: MemoryQueryDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Memory query results returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async queryMemories(@Body() body: MemoryQueryDto): Promise<MemoryQueryResult> {
+    return this.memoryQueryService.query({
+      projectId: body.projectId,
+      workspaceId: body.workspaceId,
+      query: body.query,
+      filters: body.filters
+        ? {
+            types: body.filters.types as MemoryEpisodeType[] | undefined,
+            entityIds: body.filters.entityIds,
+            since: body.filters.since ? new Date(body.filters.since) : undefined,
+            maxResults: body.filters.maxResults,
+          }
+        : undefined,
+    });
+  }
+
+  @Post('feedback')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Record relevance feedback on a memory episode' })
+  @ApiBody({ type: MemoryFeedbackDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Feedback recorded successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async recordFeedback(
+    @Body() body: MemoryFeedbackDto,
+  ): Promise<{ updated: boolean }> {
+    const updated = await this.memoryQueryService.recordRelevanceFeedback(
+      body.episodeId,
+      body.wasUseful,
+    );
+    return { updated };
   }
 }

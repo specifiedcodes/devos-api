@@ -2,6 +2,7 @@
  * MemoryController Unit Tests
  * Story 12.1: Graphiti/Neo4j Setup
  * Story 12.2: Memory Ingestion Pipeline
+ * Story 12.3: Memory Query Service
  */
 
 // Mock uuid (required by transitive GraphitiService import)
@@ -13,16 +14,19 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { MemoryController } from './memory.controller';
 import { MemoryHealthService } from './services/memory-health.service';
 import { MemoryIngestionService } from './services/memory-ingestion.service';
+import { MemoryQueryService } from './services/memory-query.service';
 import {
   MemoryHealth,
   IngestionResult,
   IngestionStats,
+  MemoryQueryResult,
 } from './interfaces/memory.interfaces';
 
 describe('MemoryController', () => {
   let controller: MemoryController;
   let mockMemoryHealthService: Partial<MemoryHealthService>;
   let mockMemoryIngestionService: Partial<MemoryIngestionService>;
+  let mockMemoryQueryService: Partial<MemoryQueryService>;
 
   const healthyResponse: MemoryHealth = {
     neo4jConnected: true,
@@ -56,6 +60,27 @@ describe('MemoryController', () => {
     errors: 1,
   };
 
+  const queryResult: MemoryQueryResult = {
+    memories: [
+      {
+        id: 'ep-1',
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        storyId: 'story-1',
+        agentType: 'dev',
+        timestamp: new Date('2026-02-10T10:00:00.000Z'),
+        episodeType: 'decision',
+        content: 'Decided to use BullMQ for task queue',
+        entities: ['BullMQ'],
+        confidence: 0.9,
+        metadata: {},
+      },
+    ],
+    totalCount: 1,
+    relevanceScores: [0.85],
+    queryDurationMs: 42,
+  };
+
   beforeEach(async () => {
     mockMemoryHealthService = {
       getHealth: jest.fn().mockResolvedValue(healthyResponse),
@@ -64,6 +89,11 @@ describe('MemoryController', () => {
     mockMemoryIngestionService = {
       ingest: jest.fn().mockResolvedValue(ingestionResult),
       getIngestionStats: jest.fn().mockResolvedValue(ingestionStats),
+    };
+
+    mockMemoryQueryService = {
+      query: jest.fn().mockResolvedValue(queryResult),
+      recordRelevanceFeedback: jest.fn().mockResolvedValue(true),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -77,11 +107,17 @@ describe('MemoryController', () => {
           provide: MemoryIngestionService,
           useValue: mockMemoryIngestionService,
         },
+        {
+          provide: MemoryQueryService,
+          useValue: mockMemoryQueryService,
+        },
       ],
     }).compile();
 
     controller = module.get<MemoryController>(MemoryController);
   });
+
+  // ─── Health Endpoint Tests (Story 12.1) ────────────────────────────────────
 
   describe('GET /api/v1/memory/health', () => {
     it('should return 200 with health data when Neo4j is connected', async () => {
@@ -114,6 +150,8 @@ describe('MemoryController', () => {
       expect(guards.length).toBeGreaterThan(0);
     });
   });
+
+  // ─── Ingest Endpoint Tests (Story 12.2) ────────────────────────────────────
 
   describe('POST /api/v1/memory/ingest', () => {
     const validBody = {
@@ -215,6 +253,8 @@ describe('MemoryController', () => {
     });
   });
 
+  // ─── Ingestion Stats Endpoint Tests (Story 12.2) ──────────────────────────
+
   describe('GET /api/v1/memory/ingestion-stats', () => {
     it('should return stats for project', async () => {
       const query = {
@@ -256,6 +296,162 @@ describe('MemoryController', () => {
       );
       expect(guards).toBeDefined();
       expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── Query Endpoint Tests (Story 12.3) ─────────────────────────────────────
+
+  describe('POST /api/v1/memory/query', () => {
+    it('should return 200 with MemoryQueryResult', async () => {
+      const body = {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        query: 'BullMQ task queue',
+      };
+
+      const result = await controller.queryMemories(body as any);
+
+      expect(result).toEqual(queryResult);
+      expect(result.memories).toHaveLength(1);
+      expect(result.relevanceScores).toHaveLength(1);
+      expect(result.totalCount).toBe(1);
+      expect(result.queryDurationMs).toBeDefined();
+    });
+
+    it('should require JWT authentication (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.queryMemories,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should pass required fields to MemoryQueryService', async () => {
+      const body = {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        query: 'BullMQ task queue',
+      };
+
+      await controller.queryMemories(body as any);
+
+      expect(mockMemoryQueryService.query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'project-1',
+          workspaceId: 'workspace-1',
+          query: 'BullMQ task queue',
+        }),
+      );
+    });
+
+    it('should handle optional filters', async () => {
+      const body = {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        query: 'test query',
+        filters: {
+          types: ['decision', 'problem'],
+          entityIds: ['BullMQ'],
+          since: '2026-02-01T00:00:00.000Z',
+          maxResults: 5,
+        },
+      };
+
+      await controller.queryMemories(body as any);
+
+      expect(mockMemoryQueryService.query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectId: 'project-1',
+          workspaceId: 'workspace-1',
+          query: 'test query',
+          filters: expect.objectContaining({
+            types: ['decision', 'problem'],
+            entityIds: ['BullMQ'],
+            since: new Date('2026-02-01T00:00:00.000Z'),
+            maxResults: 5,
+          }),
+        }),
+      );
+    });
+
+    it('should handle query without filters', async () => {
+      const body = {
+        projectId: 'project-1',
+        workspaceId: 'workspace-1',
+        query: 'simple query',
+      };
+
+      await controller.queryMemories(body as any);
+
+      expect(mockMemoryQueryService.query).toHaveBeenCalledWith(
+        expect.objectContaining({
+          filters: undefined,
+        }),
+      );
+    });
+  });
+
+  // ─── Feedback Endpoint Tests (Story 12.3) ──────────────────────────────────
+
+  describe('POST /api/v1/memory/feedback', () => {
+    it('should return 200 with updated status', async () => {
+      const body = {
+        episodeId: 'ep-1',
+        wasUseful: true,
+      };
+
+      const result = await controller.recordFeedback(body as any);
+
+      expect(result).toEqual({ updated: true });
+    });
+
+    it('should require JWT authentication (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.recordFeedback,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should call recordRelevanceFeedback with correct parameters', async () => {
+      const body = {
+        episodeId: 'ep-1',
+        wasUseful: true,
+      };
+
+      await controller.recordFeedback(body as any);
+
+      expect(
+        mockMemoryQueryService.recordRelevanceFeedback,
+      ).toHaveBeenCalledWith('ep-1', true);
+    });
+
+    it('should handle negative feedback', async () => {
+      const body = {
+        episodeId: 'ep-2',
+        wasUseful: false,
+      };
+
+      await controller.recordFeedback(body as any);
+
+      expect(
+        mockMemoryQueryService.recordRelevanceFeedback,
+      ).toHaveBeenCalledWith('ep-2', false);
+    });
+
+    it('should return updated: false when episode not found', async () => {
+      (mockMemoryQueryService.recordRelevanceFeedback as jest.Mock).mockResolvedValue(false);
+
+      const body = {
+        episodeId: 'nonexistent-ep',
+        wasUseful: true,
+      };
+
+      const result = await controller.recordFeedback(body as any);
+
+      expect(result).toEqual({ updated: false });
     });
   });
 });
