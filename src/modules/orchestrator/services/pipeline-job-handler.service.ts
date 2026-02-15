@@ -4,6 +4,7 @@
  * Story 11.4: Dev Agent CLI Integration (dev agent delegation)
  * Story 11.5: QA Agent CLI Integration (qa agent delegation)
  * Story 11.6: Planner Agent CLI Integration (planner agent delegation)
+ * Story 11.7: DevOps Agent CLI Integration (devops agent delegation)
  *
  * Main handler for pipeline phase jobs. Coordinates:
  * - Task context assembly
@@ -15,6 +16,7 @@
  * - Dev agent delegation to DevAgentPipelineExecutor (Story 11.4)
  * - QA agent delegation to QAAgentPipelineExecutor (Story 11.5)
  * - Planner agent delegation to PlannerAgentPipelineExecutor (Story 11.6)
+ * - DevOps agent delegation to DevOpsAgentPipelineExecutor (Story 11.7)
  */
 import { Injectable, Logger, ForbiddenException, Optional, Inject, forwardRef } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
@@ -27,6 +29,7 @@ import { WorkspaceManagerService } from './workspace-manager.service';
 import { DevAgentPipelineExecutorService } from './dev-agent-pipeline-executor.service';
 import { QAAgentPipelineExecutorService } from './qa-agent-pipeline-executor.service';
 import { PlannerAgentPipelineExecutorService } from './planner-agent-pipeline-executor.service';
+import { DevOpsAgentPipelineExecutorService } from './devops-agent-pipeline-executor.service';
 import {
   PipelineJobData,
   PipelineJobResult,
@@ -40,6 +43,7 @@ import { PipelineState } from '../interfaces/pipeline.interfaces';
 import { DevAgentExecutionParams } from '../interfaces/dev-agent-execution.interfaces';
 import { QAAgentExecutionParams } from '../interfaces/qa-agent-execution.interfaces';
 import { PlannerAgentExecutionParams } from '../interfaces/planner-agent-execution.interfaces';
+import { DevOpsAgentExecutionParams } from '../interfaces/devops-agent-execution.interfaces';
 
 /** Agent types that work on feature branches */
 const FEATURE_BRANCH_AGENTS = new Set(['dev']);
@@ -71,6 +75,9 @@ export class PipelineJobHandlerService {
     @Optional()
     @Inject(forwardRef(() => PlannerAgentPipelineExecutorService))
     private readonly plannerAgentExecutor?: PlannerAgentPipelineExecutorService,
+    @Optional()
+    @Inject(forwardRef(() => DevOpsAgentPipelineExecutorService))
+    private readonly devopsAgentExecutor?: DevOpsAgentPipelineExecutorService,
   ) {}
 
   /**
@@ -111,6 +118,11 @@ export class PipelineJobHandlerService {
       // Story 11.6: Delegate planner agent jobs to PlannerAgentPipelineExecutor
       if (jobData.agentType === 'planner' && this.plannerAgentExecutor) {
         return this.handlePlannerAgentJob(jobData, workspacePath, startTime);
+      }
+
+      // Story 11.7: Delegate devops agent jobs to DevOpsAgentPipelineExecutor
+      if (jobData.agentType === 'devops' && this.devopsAgentExecutor) {
+        return this.handleDevOpsAgentJob(jobData, workspacePath, startTime);
       }
 
       // 2. Handle Git branch strategy based on agent type
@@ -444,6 +456,88 @@ export class PipelineJobHandlerService {
     if (result.success) {
       this.logger.log(
         `Planner agent completed: ${result.documentsGenerated.length} documents, ${result.storiesCreated.length} stories created`,
+      );
+    }
+
+    return pipelineResult;
+  }
+
+  /**
+   * Handle DevOps agent jobs by delegating to DevOpsAgentPipelineExecutor.
+   * Story 11.7: DevOps Agent CLI Integration
+   *
+   * Builds DevOpsAgentExecutionParams from PipelineJobData and delegates
+   * execution to the DevOpsAgentPipelineExecutor. Maps the result back
+   * to PipelineJobResult with deployment URL, smoke test results, and incident reports.
+   */
+  private async handleDevOpsAgentJob(
+    jobData: PipelineJobData,
+    workspacePath: string,
+    startTime: number,
+  ): Promise<PipelineJobResult> {
+    this.logger.log(
+      `Delegating DevOps agent job to DevOpsAgentPipelineExecutor for story ${jobData.storyId}`,
+    );
+
+    const metadata = jobData.pipelineMetadata || {};
+
+    const githubToken = metadata.githubToken || '';
+    if (!githubToken) {
+      this.logger.warn(
+        `DevOps agent job for story ${jobData.storyId} missing GitHub token in pipeline metadata`,
+      );
+    }
+
+    const executionParams: DevOpsAgentExecutionParams = {
+      workspaceId: jobData.workspaceId,
+      projectId: jobData.pipelineProjectId,
+      storyId: jobData.storyId || 'unknown',
+      storyTitle: metadata.storyTitle || `Story ${jobData.storyId}`,
+      storyDescription: metadata.storyDescription || '',
+      workspacePath,
+      gitRepoUrl: metadata.gitRepoUrl || '',
+      githubToken,
+      repoOwner: metadata.repoOwner || '',
+      repoName: metadata.repoName || '',
+      prUrl: metadata.prUrl || '',
+      prNumber: metadata.prNumber || 0,
+      devBranch: metadata.devBranch || '',
+      qaVerdict: metadata.qaVerdict || 'PASS',
+      qaReportSummary: metadata.qaReportSummary || '',
+      deploymentPlatform: metadata.deploymentPlatform || 'auto',
+      supabaseConfigured: metadata.supabaseConfigured || false,
+      environment: metadata.environment || 'staging',
+    };
+
+    const result = await this.devopsAgentExecutor!.execute(executionParams);
+
+    // Map DevOpsAgentExecutionResult to PipelineJobResult
+    const pipelineResult: PipelineJobResult = {
+      sessionId: result.sessionId,
+      exitCode: result.success ? 0 : 1,
+      branch: null, // DevOps works on main, no feature branch
+      commitHash: result.mergeCommitHash,
+      outputLineCount: 0,
+      durationMs: result.durationMs,
+      error: result.error,
+      metadata: {
+        deploymentUrl: result.deploymentUrl,
+        deploymentPlatform: result.deploymentPlatform,
+        deploymentId: result.deploymentId,
+        smokeTestResults: result.smokeTestResults,
+        rollbackPerformed: result.rollbackPerformed,
+        rollbackReason: result.rollbackReason,
+        incidentReport: result.incidentReport,
+      },
+    };
+
+    if (result.success) {
+      this.logger.log(
+        `DevOps agent completed successfully: deployment=${result.deploymentUrl}, platform=${result.deploymentPlatform}`,
+      );
+    } else {
+      this.logger.warn(
+        `DevOps agent failed: ${result.error}${result.rollbackPerformed ? ' (rollback performed)' : ''}`,
       );
     }
 

@@ -37,6 +37,8 @@ export interface PipelineJobResult {
   outputLineCount: number;
   durationMs: number;
   error: string | null;
+  /** Optional metadata for agent-specific result data (deployment URLs, test results, etc.) */
+  metadata?: Record<string, any>;
 }
 
 // ─── Pipeline Job Error ─────────────────────────────────────────────────────

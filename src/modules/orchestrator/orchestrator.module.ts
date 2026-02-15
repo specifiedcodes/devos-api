@@ -6,6 +6,7 @@
  * Story 11.4: Dev Agent CLI Integration
  * Story 11.5: QA Agent CLI Integration
  * Story 11.6: Planner Agent CLI Integration
+ * Story 11.7: DevOps Agent CLI Integration
  *
  * Provides the autonomous pipeline state machine with:
  * - PipelineStateMachineService: Core state machine logic
@@ -47,6 +48,14 @@
  * - PlannerDocumentValidatorService: BMAD template document validation
  * - PlannerSprintStatusUpdaterService: Sprint status YAML management
  * - PlannerGitOpsService: Git staging/commit/push for planning documents
+ *
+ * DevOps Agent CLI Integration (Story 11.7):
+ * - DevOpsAgentPipelineExecutorService: Full DevOps agent deployment orchestration
+ * - DevOpsPRMergerService: PR merge via GitHub API
+ * - DevOpsDeploymentTriggerService: Platform detection and deployment trigger
+ * - DevOpsDeploymentMonitorService: Deployment progress monitoring
+ * - DevOpsSmokeTestRunnerService: CLI-based smoke test execution
+ * - DevOpsRollbackHandlerService: Rollback and incident reporting
  */
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -88,6 +97,13 @@ import { PlannerAgentPipelineExecutorService } from './services/planner-agent-pi
 import { PlannerDocumentValidatorService } from './services/planner-document-validator.service';
 import { PlannerSprintStatusUpdaterService } from './services/planner-sprint-status-updater.service';
 import { PlannerGitOpsService } from './services/planner-git-ops.service';
+// Story 11.7: DevOps Agent CLI Integration services
+import { DevOpsAgentPipelineExecutorService } from './services/devops-agent-pipeline-executor.service';
+import { DevOpsPRMergerService } from './services/devops-pr-merger.service';
+import { DevOpsDeploymentTriggerService } from './services/devops-deployment-trigger.service';
+import { DevOpsDeploymentMonitorService } from './services/devops-deployment-monitor.service';
+import { DevOpsSmokeTestRunnerService } from './services/devops-smoke-test-runner.service';
+import { DevOpsRollbackHandlerService } from './services/devops-rollback-handler.service';
 
 @Module({
   imports: [
@@ -132,6 +148,13 @@ import { PlannerGitOpsService } from './services/planner-git-ops.service';
     PlannerDocumentValidatorService,
     PlannerSprintStatusUpdaterService,
     PlannerGitOpsService,
+    // Story 11.7: DevOps Agent CLI Integration services
+    DevOpsAgentPipelineExecutorService,
+    DevOpsPRMergerService,
+    DevOpsDeploymentTriggerService,
+    DevOpsDeploymentMonitorService,
+    DevOpsSmokeTestRunnerService,
+    DevOpsRollbackHandlerService,
   ],
   exports: [
     PipelineStateMachineService,
@@ -140,6 +163,7 @@ import { PlannerGitOpsService } from './services/planner-git-ops.service';
     DevAgentPipelineExecutorService,
     QAAgentPipelineExecutorService,
     PlannerAgentPipelineExecutorService,
+    DevOpsAgentPipelineExecutorService,
   ],
 })
 export class OrchestratorModule {}
