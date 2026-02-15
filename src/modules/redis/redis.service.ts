@@ -519,6 +519,31 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Execute Redis INFO command (Story 14.1 - Prometheus metrics)
+   * Returns raw Redis INFO string for metrics collection
+   * @returns Redis INFO response string or null on failure
+   */
+  async getInfo(): Promise<string | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot get info');
+      return null;
+    }
+    try {
+      return await this.client.info();
+    } catch (error) {
+      this.logger.error('Failed to get Redis info', error);
+      return null;
+    }
+  }
+
+  /**
+   * Returns the Redis connection status (Story 14.1 - Prometheus metrics)
+   */
+  getConnectionStatus(): boolean {
+    return this.isConnected;
+  }
+
+  /**
    * Cleanup on module destroy
    */
   async onModuleDestroy() {

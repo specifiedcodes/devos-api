@@ -87,6 +87,7 @@ import { ContextModule } from './modules/context/context.module';
 import { ModelRegistryModule } from './modules/model-registry/model-registry.module';
 import { BenchmarkModule } from './modules/benchmarks/benchmark.module';
 import { ModelPreferencesModule } from './modules/model-preferences/model-preferences.module';
+import { MetricsModule } from './modules/metrics/metrics.module';
 import { ModelPerformance } from './database/entities/model-performance.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
@@ -211,6 +212,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     ModelRegistryModule,
     BenchmarkModule,
     ModelPreferencesModule,
+    MetricsModule,
   ],
   controllers: [AppController],
   providers: [
