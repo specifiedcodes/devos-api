@@ -53,11 +53,6 @@ import { MemoryController } from './memory.controller';
     MemorySummarizationService, // Story 12.7: Memory Summarization
     ContextBudgetService, // Story 12.8: Context Budget System
     MemoryLifecycleService, // Story 12.9: Memory Lifecycle Management
-    // Story 12.6: Provide CrossProjectLearningService as string token for optional injection in MemoryQueryService
-    {
-      provide: 'CrossProjectLearningService',
-      useExisting: CrossProjectLearningService,
-    },
   ],
   exports: [
     GraphitiService,

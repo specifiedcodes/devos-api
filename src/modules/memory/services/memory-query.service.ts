@@ -12,7 +12,7 @@
  *
  * Also provides agent-focused context assembly and relevance feedback recording.
  */
-import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphitiService } from './graphiti.service';
 import { Neo4jService } from './neo4j.service';
@@ -24,6 +24,7 @@ import {
   FormattedMemoryContext,
   PatternRecommendation,
 } from '../interfaces/memory.interfaces';
+import { CrossProjectLearningService } from './cross-project-learning.service';
 
 /**
  * Stop words to filter from natural language queries.
@@ -92,14 +93,14 @@ export class MemoryQueryService {
   private readonly logger = new Logger(MemoryQueryService.name);
 
   // Story 12.6: Optional CrossProjectLearningService injection
-  // Using @Optional() + @Inject() with string token to prevent circular dependency
-  private crossProjectLearningService: any;
+  // Using forwardRef to break circular dependency (CrossProjectLearningService → MemoryQueryService)
+  private crossProjectLearningService: CrossProjectLearningService | null;
 
   constructor(
     private readonly graphitiService: GraphitiService,
     private readonly neo4jService: Neo4jService,
     private readonly configService: ConfigService,
-    @Optional() @Inject('CrossProjectLearningService') crossProjectLearning?: any,
+    @Optional() @Inject(forwardRef(() => CrossProjectLearningService)) crossProjectLearning?: CrossProjectLearningService,
   ) {
     this.crossProjectLearningService = crossProjectLearning ?? null;
   }
@@ -352,7 +353,7 @@ export class MemoryQueryService {
     if (patternBudget <= 0) return '';
 
     const recommendations: PatternRecommendation[] =
-      await this.crossProjectLearningService.getPatternRecommendations(
+      await this.crossProjectLearningService!.getPatternRecommendations(
         workspaceId,
         projectId,
         taskDescription,
