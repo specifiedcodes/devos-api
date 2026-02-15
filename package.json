@@ -59,6 +59,7 @@
     "cookie-parser": "^1.4.7",
     "express-session": "^1.19.0",
     "ioredis": "^5.9.2",
+    "neo4j-driver": "^6.0.1",
     "nodemailer": "^7.0.13",
     "openai": "^6.17.0",
     "passport": "^0.7.0",
@@ -69,6 +70,7 @@
     "rxjs": "^7.8.2",
     "speakeasy": "^2.0.0",
     "typeorm": "^0.3.28",
+    "uuid": "^13.0.0",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
@@ -86,6 +88,7 @@
     "@types/socket.io": "^3.0.1",
     "@types/speakeasy": "^2.0.10",
     "@types/supertest": "^6.0.3",
+    "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "eslint-config-prettier": "^10.1.8",
