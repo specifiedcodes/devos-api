@@ -15,6 +15,7 @@ export enum KeyProvider {
   ANTHROPIC = 'anthropic',
   OPENAI = 'openai',
   GOOGLE = 'google',
+  DEEPSEEK = 'deepseek',
 }
 
 @Entity({ name: 'byok_secrets', schema: 'public' })

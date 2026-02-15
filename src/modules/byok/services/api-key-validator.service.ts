@@ -29,7 +29,7 @@ export class ApiKeyValidatorService {
    * This method performs live validation by making a minimal API call to the provider's
    * service. It verifies that the key is valid, has not been revoked, and has available quota.
    *
-   * @param provider - The API key provider (Anthropic, OpenAI, or Google)
+   * @param provider - The API key provider (Anthropic, OpenAI, Google, or DeepSeek)
    * @param apiKey - The API key to validate
    * @returns ValidationResult containing isValid boolean and optional error message
    * @throws Never throws - all errors are caught and returned in ValidationResult
@@ -52,6 +52,8 @@ export class ApiKeyValidatorService {
           return await this.validateOpenAIKey(apiKey);
         case KeyProvider.GOOGLE:
           return await this.validateGoogleAIKey(apiKey);
+        case KeyProvider.DEEPSEEK:
+          return await this.validateDeepSeekKey(apiKey);
         default:
           throw new Error('Unsupported provider');
       }
@@ -143,6 +145,51 @@ export class ApiKeyValidatorService {
         errorMessage = 'API key has no remaining quota or rate limit exceeded';
       } else if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
         errorMessage = 'Unable to reach OpenAI servers. Check your network connection.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+
+      return {
+        isValid: false,
+        error: errorMessage,
+      };
+    }
+  }
+
+  /**
+   * Validate DeepSeek API key by making a minimal API call
+   * DeepSeek uses an OpenAI-compatible API, so we reuse the openai package with a different baseURL.
+   */
+  private async validateDeepSeekKey(apiKey: string): Promise<ValidationResult> {
+    try {
+      const client = new OpenAI({
+        apiKey,
+        baseURL: 'https://api.deepseek.com',
+        timeout: this.validationTimeout,
+      });
+
+      // Make a minimal chat completion call to verify the key
+      await client.chat.completions.create({
+        model: 'deepseek-chat',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'test' }],
+      });
+
+      return { isValid: true };
+    } catch (error: any) {
+      this.logger.warn(`DeepSeek API key validation failed: ${sanitizeLogData(error.message)}`);
+
+      // Provide specific error messages based on error type
+      let errorMessage = 'Validation failed';
+
+      if (error.status === 401) {
+        errorMessage = 'Invalid DeepSeek API key';
+      } else if (error.status === 429) {
+        errorMessage = 'API key has no remaining quota or rate limit exceeded';
+      } else if (error.message === 'TIMEOUT' || error.code === 'ETIMEDOUT') {
+        errorMessage = 'Validation timed out. Please try again.';
+      } else if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+        errorMessage = 'Unable to reach DeepSeek servers. Check your network connection.';
       } else if (error.message) {
         errorMessage = error.message;
       }

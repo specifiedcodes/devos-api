@@ -93,6 +93,21 @@ export class PricingService {
       outputPricePerMillion: 0,
       effectiveDate: '2026-01-01',
     },
+    // DeepSeek models
+    'deepseek:deepseek-chat': {
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      inputPricePerMillion: 0.27,
+      outputPricePerMillion: 1.10,
+      effectiveDate: '2026-01-01',
+    },
+    'deepseek:deepseek-reasoner': {
+      provider: 'deepseek',
+      model: 'deepseek-reasoner',
+      inputPricePerMillion: 0.55,
+      outputPricePerMillion: 2.19,
+      effectiveDate: '2026-01-01',
+    },
   };
 
   constructor(private readonly redisService: RedisService) {}
@@ -101,7 +116,7 @@ export class PricingService {
    * Get current pricing for a model
    * Tries Redis cache first, falls back to hardcoded pricing
    *
-   * @param provider - AI provider (anthropic, openai, google)
+   * @param provider - AI provider (anthropic, openai, google, deepseek)
    * @param model - Model identifier
    * @returns Pricing information
    */

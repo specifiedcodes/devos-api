@@ -638,6 +638,195 @@ describe('BYOKKeyService', () => {
     });
   });
 
+  describe('createKey with DeepSeek provider', () => {
+    it('should create a BYOK key with valid DeepSeek key', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'DeepSeek Key',
+        provider: KeyProvider.DEEPSEEK,
+        apiKey: 'sk-deepseek-valid-key-1234567890abcdefghijklmnopqrstuvwxyz',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({
+        isValid: true,
+      });
+
+      mockRepository.find.mockResolvedValue([]);
+
+      mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
+        encryptedData: 'encrypted',
+        iv: 'iv123',
+      });
+
+      mockRepository.create.mockReturnValue({
+        id: 'key-deepseek-123',
+        ...dto,
+        workspaceId,
+        createdByUserId: userId,
+      });
+
+      mockRepository.save.mockResolvedValue({
+        id: 'key-deepseek-123',
+        keyName: dto.keyName,
+        provider: dto.provider,
+        createdAt: new Date(),
+        encryptedKey: 'encrypted',
+        keyPrefix: 'sk-',
+        keySuffix: 'wxyz',
+      });
+
+      const result = await service.createKey(workspaceId, userId, dto);
+
+      expect(result).toBeDefined();
+      expect(result.keyName).toBe(dto.keyName);
+      expect(result.maskedKey).toBe('sk-...wxyz');
+      expect(mockApiKeyValidatorService.validateApiKey).toHaveBeenCalledWith(
+        KeyProvider.DEEPSEEK,
+        dto.apiKey,
+      );
+      expect(mockEncryptionService.encryptWithWorkspaceKey).toHaveBeenCalledWith(
+        workspaceId,
+        dto.apiKey,
+      );
+    });
+
+    it('should reject invalid DeepSeek key format (wrong prefix)', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'DeepSeek Key',
+        provider: KeyProvider.DEEPSEEK,
+        apiKey: 'AIza-not-a-deepseek-key-1234567890',
+      };
+
+      await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should reject DeepSeek key that is too short', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'DeepSeek Key',
+        provider: KeyProvider.DEEPSEEK,
+        apiKey: 'sk-short',
+      };
+
+      await expect(service.createKey(workspaceId, userId, dto)).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it('should store DeepSeek keys with encrypted_key and encryption_iv', async () => {
+      const workspaceId = 'workspace-123';
+      const userId = 'user-123';
+      const dto = {
+        keyName: 'DeepSeek Key',
+        provider: KeyProvider.DEEPSEEK,
+        apiKey: 'sk-deepseek-valid-key-1234567890abcdefghijklmnopqrstuvwxyz',
+      };
+
+      mockApiKeyValidatorService.validateApiKey.mockResolvedValue({ isValid: true });
+      mockRepository.find.mockResolvedValue([]);
+      mockEncryptionService.encryptWithWorkspaceKey.mockReturnValue({
+        encryptedData: 'encrypted-deepseek',
+        iv: 'iv-deepseek-123',
+      });
+      mockRepository.create.mockReturnValue({
+        id: 'key-deepseek-enc',
+        workspaceId,
+        keyName: dto.keyName,
+        provider: dto.provider,
+        encryptedKey: 'encrypted-deepseek',
+        encryptionIV: 'iv-deepseek-123',
+        createdByUserId: userId,
+      });
+      mockRepository.save.mockResolvedValue({
+        id: 'key-deepseek-enc',
+        keyName: dto.keyName,
+        provider: dto.provider,
+        createdAt: new Date(),
+        keyPrefix: 'sk-',
+        keySuffix: 'wxyz',
+      });
+
+      await service.createKey(workspaceId, userId, dto);
+
+      expect(mockRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          encryptedKey: 'encrypted-deepseek',
+          encryptionIV: 'iv-deepseek-123',
+          provider: KeyProvider.DEEPSEEK,
+        }),
+      );
+    });
+  });
+
+  describe('getWorkspaceKeys with DeepSeek keys', () => {
+    it('should return DeepSeek keys with correct provider', async () => {
+      const workspaceId = 'workspace-123';
+      const mockKeys = [
+        {
+          id: 'key-1',
+          keyName: 'Anthropic Key',
+          provider: KeyProvider.ANTHROPIC,
+          createdAt: new Date(),
+          isActive: true,
+          keyPrefix: 'sk-ant-',
+          keySuffix: 'wxyz',
+        },
+        {
+          id: 'key-2',
+          keyName: 'DeepSeek Key',
+          provider: KeyProvider.DEEPSEEK,
+          createdAt: new Date(),
+          isActive: true,
+          keyPrefix: 'sk-',
+          keySuffix: '7890',
+        },
+      ];
+
+      mockRepository.find.mockResolvedValue(mockKeys);
+
+      const result = await service.getWorkspaceKeys(workspaceId);
+
+      expect(result).toHaveLength(2);
+      const deepseekKey = result.find(k => k.provider === KeyProvider.DEEPSEEK);
+      expect(deepseekKey).toBeDefined();
+      expect(deepseekKey!.maskedKey).toBe('sk-...7890');
+    });
+  });
+
+  describe('deleteKey with DeepSeek keys', () => {
+    it('should delete DeepSeek keys', async () => {
+      mockRepository.findOne.mockResolvedValue({
+        id: 'key-deepseek-123',
+        workspaceId: 'workspace-123',
+        keyName: 'DeepSeek Key',
+        provider: KeyProvider.DEEPSEEK,
+      });
+      mockRepository.update.mockResolvedValue({ affected: 1 });
+
+      await service.deleteKey('key-deepseek-123', 'workspace-123', 'user-123');
+
+      expect(mockRepository.update).toHaveBeenCalledWith('key-deepseek-123', {
+        isActive: false,
+      });
+      expect(mockAuditService.log).toHaveBeenCalledWith(
+        'workspace-123',
+        'user-123',
+        'byok_key_deleted',
+        'byok_key',
+        'key-deepseek-123',
+        expect.objectContaining({
+          provider: 'deepseek',
+        }),
+      );
+    });
+  });
+
   describe('extractKeyParts and buildMaskedKey', () => {
     it('should extract and mask Anthropic API key correctly', () => {
       const key = 'sk-ant-api03-test-key-1234567890abcdefghijklmnopqrstuvwxyz';
@@ -675,6 +864,17 @@ describe('BYOKKeyService', () => {
 
       const masked = (service as any).buildMaskedKey(prefix, suffix);
       expect(masked).toBe('AIza...2345');
+    });
+
+    it('should extract and mask DeepSeek API key correctly', () => {
+      // Real DeepSeek keys look like 'sk-abc123...' (random chars after 'sk-', no further dashes in prefix)
+      const key = 'sk-a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4';
+      const { prefix, suffix } = (service as any).extractKeyParts(key);
+      expect(prefix).toBe('sk-');
+      expect(suffix).toBe('w3x4');
+
+      const masked = (service as any).buildMaskedKey(prefix, suffix);
+      expect(masked).toBe('sk-...w3x4');
     });
 
     it('should handle missing prefix/suffix', () => {

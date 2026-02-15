@@ -218,14 +218,68 @@ describe('PricingService', () => {
     });
   });
 
+  describe('getCurrentPricing - DeepSeek models', () => {
+    it('should return correct pricing for deepseek:deepseek-chat', async () => {
+      redisService.get.mockResolvedValue(null);
+
+      const pricing = await service.getCurrentPricing('deepseek', 'deepseek-chat');
+
+      expect(pricing.provider).toBe('deepseek');
+      expect(pricing.model).toBe('deepseek-chat');
+      expect(pricing.inputPricePerMillion).toBe(0.27);
+      expect(pricing.outputPricePerMillion).toBe(1.10);
+    });
+
+    it('should return correct pricing for deepseek:deepseek-reasoner', async () => {
+      redisService.get.mockResolvedValue(null);
+
+      const pricing = await service.getCurrentPricing('deepseek', 'deepseek-reasoner');
+
+      expect(pricing.provider).toBe('deepseek');
+      expect(pricing.model).toBe('deepseek-reasoner');
+      expect(pricing.inputPricePerMillion).toBe(0.55);
+      expect(pricing.outputPricePerMillion).toBe(2.19);
+    });
+
+    it('should calculate cost correctly for DeepSeek deepseek-chat model', () => {
+      const pricing = {
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        inputPricePerMillion: 0.27,
+        outputPricePerMillion: 1.10,
+        effectiveDate: '2026-01-01',
+      };
+
+      const cost = service.calculateCost(10000, 5000, pricing);
+
+      // (10000/1M * $0.27) + (5000/1M * $1.10) = $0.0027 + $0.0055 = $0.0082
+      expect(cost).toBeCloseTo(0.0082, 4);
+    });
+
+    it('should calculate cost correctly for DeepSeek deepseek-reasoner model', () => {
+      const pricing = {
+        provider: 'deepseek',
+        model: 'deepseek-reasoner',
+        inputPricePerMillion: 0.55,
+        outputPricePerMillion: 2.19,
+        effectiveDate: '2026-01-01',
+      };
+
+      const cost = service.calculateCost(1000000, 500000, pricing);
+
+      // (1M/1M * $0.55) + (500K/1M * $2.19) = $0.55 + $1.095 = $1.645
+      expect(cost).toBeCloseTo(1.645, 4);
+    });
+  });
+
   describe('refreshAllPricing', () => {
     it('should refresh all pricing in Redis', async () => {
       redisService.set.mockResolvedValue(undefined);
 
       await service.refreshAllPricing();
 
-      // Should cache all 6 default models (2 new + 4 legacy)
-      expect(redisService.set).toHaveBeenCalledTimes(6);
+      // Should cache all 11 models (2 new Anthropic + 2 legacy Anthropic + 2 OpenAI + 3 Google + 2 DeepSeek)
+      expect(redisService.set).toHaveBeenCalledTimes(11);
 
       // Verify specific cache calls
       expect(redisService.set).toHaveBeenCalledWith(
@@ -245,6 +299,16 @@ describe('PricingService', () => {
       );
       expect(redisService.set).toHaveBeenCalledWith(
         'pricing:openai:gpt-3.5-turbo',
+        expect.any(String),
+        86400,
+      );
+      expect(redisService.set).toHaveBeenCalledWith(
+        'pricing:deepseek:deepseek-chat',
+        expect.any(String),
+        86400,
+      );
+      expect(redisService.set).toHaveBeenCalledWith(
+        'pricing:deepseek:deepseek-reasoner',
         expect.any(String),
         86400,
       );

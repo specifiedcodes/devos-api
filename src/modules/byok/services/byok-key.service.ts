@@ -449,6 +449,27 @@ export class BYOKKeyService {
         }
         break;
 
+      case KeyProvider.DEEPSEEK:
+        // DeepSeek keys start with 'sk-' (same prefix as OpenAI, differentiated by provider selection)
+        if (!apiKey.startsWith('sk-')) {
+          throw new BadRequestException(
+            'Invalid DeepSeek API key format. Key should start with "sk-"',
+          );
+        }
+        // DeepSeek keys are typically ~51 characters
+        if (apiKey.length < 30) {
+          throw new BadRequestException(
+            'DeepSeek API key is too short (minimum 30 characters)',
+          );
+        }
+        // Validate format: alphanumeric, dash, and underscore characters
+        if (!/^sk-[a-zA-Z0-9_-]+$/.test(apiKey)) {
+          throw new BadRequestException(
+            'Invalid DeepSeek API key format. Should contain only alphanumeric, dash, and underscore characters after prefix',
+          );
+        }
+        break;
+
       default:
         throw new BadRequestException('Unsupported provider');
     }

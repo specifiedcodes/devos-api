@@ -315,6 +315,199 @@ describe('ApiKeyValidatorService', () => {
     });
   });
 
+  describe('validateDeepSeekKey', () => {
+    it('should return true for valid DeepSeek API key', async () => {
+      const OpenAI = require('openai').default;
+      const mockCreate = jest.fn().mockResolvedValue({
+        choices: [{ message: { content: 'test' } }],
+      });
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-valid-key-12345678901234567890123456789012345678901234567890',
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should use deepseek-chat model with max_tokens: 1', async () => {
+      const OpenAI = require('openai').default;
+      const mockCreate = jest.fn().mockResolvedValue({
+        choices: [{ message: { content: 'ok' } }],
+      });
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-valid-key-12345678901234567890123456789012345678901234567890',
+      );
+
+      expect(mockCreate).toHaveBeenCalledWith({
+        model: 'deepseek-chat',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'test' }],
+      });
+    });
+
+    it('should create OpenAI client with baseURL https://api.deepseek.com', async () => {
+      const OpenAI = require('openai').default;
+      const mockCreate = jest.fn().mockResolvedValue({
+        choices: [{ message: { content: 'ok' } }],
+      });
+      OpenAI.mockImplementation((config: any) => {
+        // Store config for assertion
+        OpenAI.__lastConfig = config;
+        return {
+          chat: {
+            completions: {
+              create: mockCreate,
+            },
+          },
+        };
+      });
+
+      await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-valid-key-12345678901234567890123456789012345678901234567890',
+      );
+
+      expect(OpenAI).toHaveBeenCalledWith(
+        expect.objectContaining({
+          baseURL: 'https://api.deepseek.com',
+        }),
+      );
+    });
+
+    it('should return "Invalid DeepSeek API key" for 401 error', async () => {
+      const OpenAI = require('openai').default;
+      const mockCreate = jest.fn().mockRejectedValue({
+        status: 401,
+        message: 'Invalid API key',
+      });
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-invalid-key-12345678901234567890123456789012345678901234567890',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Invalid DeepSeek API key');
+    });
+
+    it('should return quota/rate limit message for 429 error', async () => {
+      const OpenAI = require('openai').default;
+      const mockCreate = jest.fn().mockRejectedValue({
+        status: 429,
+        message: 'Rate limit exceeded',
+      });
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-ratelimit-key-12345678901234567890123456789012345678901234',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('API key has no remaining quota or rate limit exceeded');
+    });
+
+    it('should return connectivity message for network error (ECONNREFUSED)', async () => {
+      const OpenAI = require('openai').default;
+      const error = new Error('connect ECONNREFUSED');
+      (error as any).code = 'ECONNREFUSED';
+      const mockCreate = jest.fn().mockRejectedValue(error);
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-network-key-12345678901234567890123456789012345678901234567',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Unable to reach DeepSeek servers. Check your network connection.');
+    });
+
+    it('should return timeout message for ETIMEDOUT error', async () => {
+      const OpenAI = require('openai').default;
+      const error = new Error('connect ETIMEDOUT');
+      (error as any).code = 'ETIMEDOUT';
+      const mockCreate = jest.fn().mockRejectedValue(error);
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-timeout-key-12345678901234567890123456789012345678901234567',
+      );
+
+      expect(result.isValid).toBe(false);
+      expect(result.error).toBe('Validation timed out. Please try again.');
+    });
+
+    it('should sanitize key in error logs', async () => {
+      const OpenAI = require('openai').default;
+      const specificKey = 'sk-deepseek-secret-key-123456789012345678901234567890123456789';
+      const mockCreate = jest.fn().mockRejectedValue({
+        status: 401,
+        message: 'Unauthorized',
+      });
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        specificKey,
+      );
+
+      expect(result.isValid).toBe(false);
+      // Error message should not contain the actual key
+      expect(result.error).not.toContain(specificKey);
+    });
+  });
+
   describe('validateApiKey', () => {
     it('should handle KeyProvider.GOOGLE and route to validateGoogleAIKey', async () => {
       mockGoogleGenerateContent.mockResolvedValue({
@@ -328,6 +521,28 @@ describe('ApiKeyValidatorService', () => {
 
       expect(result.isValid).toBe(true);
       expect(mockGoogleGenerateContent).toHaveBeenCalled();
+    });
+
+    it('should handle KeyProvider.DEEPSEEK and route to validateDeepSeekKey', async () => {
+      const OpenAI = require('openai').default;
+      const mockCreate = jest.fn().mockResolvedValue({
+        choices: [{ message: { content: 'ok' } }],
+      });
+      OpenAI.mockImplementation(() => ({
+        chat: {
+          completions: {
+            create: mockCreate,
+          },
+        },
+      }));
+
+      const result = await service.validateApiKey(
+        KeyProvider.DEEPSEEK,
+        'sk-deepseek-route-key-12345678901234567890123456789012345678901234567890',
+      );
+
+      expect(result.isValid).toBe(true);
+      expect(mockCreate).toHaveBeenCalled();
     });
 
     it('should return false for unsupported provider', async () => {
