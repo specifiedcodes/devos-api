@@ -17,6 +17,8 @@ import { BYOKKey } from './byok-key.entity';
 export enum ApiProvider {
   ANTHROPIC = 'anthropic',
   OPENAI = 'openai',
+  GOOGLE = 'google',
+  DEEPSEEK = 'deepseek',
 }
 
 /**
@@ -30,6 +32,8 @@ export enum ApiProvider {
 @Index('idx_api_usage_workspace_date', ['workspaceId', 'createdAt'])
 @Index('idx_api_usage_project_date', ['projectId', 'createdAt'])
 @Index('idx_api_usage_byok_key', ['byokKeyId', 'createdAt'])
+@Index('idx_api_usage_provider_model', ['provider', 'model'])
+@Index('idx_api_usage_task_type', ['taskType'])
 export class ApiUsage {
   @PrimaryGeneratedColumn('uuid')
   id!: string;
@@ -75,6 +79,15 @@ export class ApiUsage {
 
   @Column({ name: 'cost_usd', type: 'decimal', precision: 10, scale: 6 })
   costUsd!: number;
+
+  @Column({ name: 'cached_tokens', type: 'integer', default: 0 })
+  cachedTokens!: number;
+
+  @Column({ name: 'task_type', type: 'varchar', length: 50, nullable: true })
+  taskType?: string | null;
+
+  @Column({ name: 'routing_reason', type: 'varchar', length: 200, nullable: true })
+  routingReason?: string | null;
 
   @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt!: Date;

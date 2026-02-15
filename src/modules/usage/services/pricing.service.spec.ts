@@ -218,6 +218,148 @@ describe('PricingService', () => {
     });
   });
 
+  describe('calculateCost - cached tokens', () => {
+    it('should return same result without cachedTokens (backward compatibility)', () => {
+      const pricing = {
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
+        cachedInputPricePerMillion: 0.30,
+        effectiveDate: '2026-01-01',
+      };
+
+      const cost = service.calculateCost(1500, 800, pricing);
+
+      // Same as before: (1500/1M * $3) + (800/1M * $15) = $0.0045 + $0.012 = $0.0165
+      expect(cost).toBe(0.0165);
+    });
+
+    it('should apply cached discount when cachedTokens > 0 and cachedInputPricePerMillion exists', () => {
+      const pricing = {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5-20250929',
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
+        cachedInputPricePerMillion: 0.30,
+        effectiveDate: '2026-01-01',
+      };
+
+      // 1000 total input, 500 cached
+      // effectiveInput = 1000 - 500 = 500
+      // cachedCost = (500/1M * $0.30) = $0.00015
+      // inputCost = (500/1M * $3.0) = $0.0015
+      // outputCost = (200/1M * $15.0) = $0.003
+      // total = $0.00015 + $0.0015 + $0.003 = $0.00465
+      const cost = service.calculateCost(1000, 200, pricing, 500);
+
+      expect(cost).toBeCloseTo(0.00465, 5);
+    });
+
+    it('should cap cached tokens to inputTokens when cachedTokens > inputTokens', () => {
+      const pricing = {
+        provider: 'anthropic',
+        model: 'claude-sonnet-4-5-20250929',
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
+        cachedInputPricePerMillion: 0.30,
+        effectiveDate: '2026-01-01',
+      };
+
+      // 500 total input, 1000 cached (more cached than input)
+      // effectiveCached = min(1000, 500) = 500 (capped to actual input)
+      // effectiveInput = 500 - 500 = 0
+      // cachedCost = (500/1M * $0.30) = $0.00015
+      // inputCost = 0
+      // outputCost = (100/1M * $15.0) = $0.0015
+      // total = $0.00015 + $0 + $0.0015 = $0.00165
+      const cost = service.calculateCost(500, 100, pricing, 1000);
+
+      expect(cost).toBeCloseTo(0.00165, 5);
+    });
+
+    it('should treat cached tokens as regular input when no cachedInputPricePerMillion', () => {
+      const pricing = {
+        provider: 'openai',
+        model: 'gpt-4-turbo',
+        inputPricePerMillion: 10.0,
+        outputPricePerMillion: 30.0,
+        // No cachedInputPricePerMillion
+        effectiveDate: '2026-01-01',
+      };
+
+      // 1000 total input, 500 cached, no cached pricing
+      // effectiveInput = max(0, 1000 - 500) = 500
+      // cachedCost = 0 (no cachedInputPricePerMillion)
+      // inputCost = (500/1M * $10.0) = $0.005
+      // outputCost = (200/1M * $30.0) = $0.006
+      // total = $0 + $0.005 + $0.006 = $0.011
+      const cost = service.calculateCost(1000, 200, pricing, 500);
+
+      expect(cost).toBeCloseTo(0.011, 5);
+    });
+
+    it('should behave identically with cachedTokens = 0 as without cachedTokens', () => {
+      const pricing = {
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        inputPricePerMillion: 3.0,
+        outputPricePerMillion: 15.0,
+        cachedInputPricePerMillion: 0.30,
+        effectiveDate: '2026-01-01',
+      };
+
+      const costWithout = service.calculateCost(1500, 800, pricing);
+      const costWithZero = service.calculateCost(1500, 800, pricing, 0);
+
+      expect(costWithout).toBe(costWithZero);
+    });
+  });
+
+  describe('FALLBACK_PRICING - cachedInputPricePerMillion', () => {
+    it('should include cachedInputPricePerMillion for Anthropic claude-sonnet-4-5', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('anthropic', 'claude-sonnet-4-5-20250929');
+      expect(pricing.cachedInputPricePerMillion).toBe(0.30);
+    });
+
+    it('should include cachedInputPricePerMillion for Anthropic claude-opus-4-5', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('anthropic', 'claude-opus-4-5-20251101');
+      expect(pricing.cachedInputPricePerMillion).toBe(1.50);
+    });
+
+    it('should include cachedInputPricePerMillion for Anthropic claude-3-5-sonnet', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('anthropic', 'claude-3-5-sonnet-20241022');
+      expect(pricing.cachedInputPricePerMillion).toBe(0.30);
+    });
+
+    it('should include cachedInputPricePerMillion for Anthropic claude-3-opus', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('anthropic', 'claude-3-opus-20240229');
+      expect(pricing.cachedInputPricePerMillion).toBe(1.50);
+    });
+
+    it('should include cachedInputPricePerMillion for deepseek-chat', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('deepseek', 'deepseek-chat');
+      expect(pricing.cachedInputPricePerMillion).toBe(0.07);
+    });
+
+    it('should include cachedInputPricePerMillion for gemini-2.0-flash', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('google', 'gemini-2.0-flash');
+      expect(pricing.cachedInputPricePerMillion).toBe(0.025);
+    });
+
+    it('should NOT have cachedInputPricePerMillion for OpenAI gpt-4-turbo', async () => {
+      redisService.get.mockResolvedValue(null);
+      const pricing = await service.getCurrentPricing('openai', 'gpt-4-turbo');
+      expect(pricing.cachedInputPricePerMillion).toBeUndefined();
+    });
+  });
+
   describe('getCurrentPricing - DeepSeek models', () => {
     it('should return correct pricing for deepseek:deepseek-chat', async () => {
       redisService.get.mockResolvedValue(null);

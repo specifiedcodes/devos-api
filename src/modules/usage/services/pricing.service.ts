@@ -10,6 +10,7 @@ export interface ModelPricing {
   model: string;
   inputPricePerMillion: number; // USD per 1M tokens
   outputPricePerMillion: number; // USD per 1M tokens
+  cachedInputPricePerMillion?: number; // USD per 1M cached input tokens
   effectiveDate: string;
 }
 
@@ -32,6 +33,7 @@ export class PricingService {
       model: 'claude-sonnet-4-5-20250929',
       inputPricePerMillion: 3.0,
       outputPricePerMillion: 15.0,
+      cachedInputPricePerMillion: 0.30,
       effectiveDate: '2026-01-01',
     },
     'anthropic:claude-opus-4-5-20251101': {
@@ -39,6 +41,7 @@ export class PricingService {
       model: 'claude-opus-4-5-20251101',
       inputPricePerMillion: 15.0,
       outputPricePerMillion: 75.0,
+      cachedInputPricePerMillion: 1.50,
       effectiveDate: '2026-01-01',
     },
     // Legacy Anthropic models (for backward compatibility)
@@ -47,6 +50,7 @@ export class PricingService {
       model: 'claude-3-5-sonnet-20241022',
       inputPricePerMillion: 3.0,
       outputPricePerMillion: 15.0,
+      cachedInputPricePerMillion: 0.30,
       effectiveDate: '2026-01-01',
     },
     'anthropic:claude-3-opus-20240229': {
@@ -54,6 +58,7 @@ export class PricingService {
       model: 'claude-3-opus-20240229',
       inputPricePerMillion: 15.0,
       outputPricePerMillion: 75.0,
+      cachedInputPricePerMillion: 1.50,
       effectiveDate: '2026-01-01',
     },
     // OpenAI models
@@ -77,6 +82,7 @@ export class PricingService {
       model: 'gemini-2.0-flash',
       inputPricePerMillion: 0.10,
       outputPricePerMillion: 0.40,
+      cachedInputPricePerMillion: 0.025,
       effectiveDate: '2026-01-01',
     },
     'google:gemini-2.0-pro': {
@@ -99,6 +105,7 @@ export class PricingService {
       model: 'deepseek-chat',
       inputPricePerMillion: 0.27,
       outputPricePerMillion: 1.10,
+      cachedInputPricePerMillion: 0.07,
       effectiveDate: '2026-01-01',
     },
     'deepseek:deepseek-reasoner': {
@@ -167,23 +174,39 @@ export class PricingService {
   /**
    * Calculate cost for a given number of tokens
    *
+   * Supports cached token pricing: if cachedTokens is provided and the model
+   * has cachedInputPricePerMillion, cached tokens are priced at the discounted
+   * rate and subtracted from regular input tokens. If no cached pricing exists,
+   * cached tokens are treated as regular input tokens.
+   *
    * @param inputTokens - Number of input tokens
    * @param outputTokens - Number of output tokens
    * @param pricing - Model pricing information
+   * @param cachedTokens - Number of cached input tokens (optional)
    * @returns Calculated cost in USD (rounded to 6 decimal places)
    */
   calculateCost(
     inputTokens: number,
     outputTokens: number,
     pricing: ModelPricing,
+    cachedTokens?: number,
   ): number {
-    const inputCost = (inputTokens / 1_000_000) * pricing.inputPricePerMillion;
+    // Cap cached tokens to not exceed actual input tokens to avoid overcharging
+    const effectiveCachedTokens = cachedTokens
+      ? Math.min(cachedTokens, inputTokens)
+      : 0;
+    const effectiveInputTokens = inputTokens - effectiveCachedTokens;
+    const cachedCost =
+      effectiveCachedTokens > 0 && pricing.cachedInputPricePerMillion
+        ? (effectiveCachedTokens / 1_000_000) * pricing.cachedInputPricePerMillion
+        : 0;
+    const inputCost =
+      (effectiveInputTokens / 1_000_000) * pricing.inputPricePerMillion;
     const outputCost =
       (outputTokens / 1_000_000) * pricing.outputPricePerMillion;
-    const totalCost = inputCost + outputCost;
 
     // Round to 6 decimal places to match DECIMAL(10, 6) precision
-    return Math.round(totalCost * 1_000_000) / 1_000_000;
+    return Math.round((inputCost + outputCost + cachedCost) * 1_000_000) / 1_000_000;
   }
 
   /**

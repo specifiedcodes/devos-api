@@ -11,6 +11,7 @@ import {
   Res,
   Header,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { Response, Request } from 'express';
@@ -19,6 +20,7 @@ import { CsvExportService } from '../services/csv-export.service';
 import { RecordUsageDto } from '../dto/record-usage.dto';
 import { UsageQueryDto } from '../dto/usage-query.dto';
 import { ExportUsageDto } from '../dto/export-usage.dto';
+import { CostBreakdownQueryDto, CostGroupBy } from '../dto/cost-breakdown-query.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -63,6 +65,9 @@ export class UsageV2Controller {
       dto.outputTokens,
       dto.byokKeyId,
       dto.agentId,
+      dto.cachedTokens,
+      dto.taskType,
+      dto.routingReason,
     );
 
     return {
@@ -168,11 +173,67 @@ export class UsageV2Controller {
   ) {
     const daysToQuery = days ? parseInt(days.toString(), 10) : 30;
 
-    if (daysToQuery < 1 || daysToQuery > 365) {
-      throw new Error('Days must be between 1 and 365');
+    if (isNaN(daysToQuery) || daysToQuery < 1 || daysToQuery > 365) {
+      throw new BadRequestException('Days must be between 1 and 365');
     }
 
     return this.usageService.getDailyUsage(workspaceId, daysToQuery);
+  }
+
+  /**
+   * Get cost breakdown with dynamic groupBy dimension
+   * GET /api/v1/workspaces/:workspaceId/usage/breakdown?groupBy=model&startDate=...&endDate=...
+   *
+   * @param workspaceId - Workspace ID
+   * @param query - CostBreakdownQueryDto with groupBy, startDate, endDate
+   * @returns CostBreakdownResponse with breakdown array and totals
+   */
+  @Get('breakdown')
+  async getCostBreakdown(
+    @Param('workspaceId') workspaceId: string,
+    @Query() query: CostBreakdownQueryDto,
+  ) {
+    const startDate = query.startDate
+      ? new Date(query.startDate)
+      : this.getDefaultStartDate();
+    const endDate = query.endDate
+      ? new Date(query.endDate)
+      : this.getDefaultEndDate();
+    const groupBy = query.groupBy || CostGroupBy.MODEL;
+
+    return this.usageService.getCostBreakdown(
+      workspaceId,
+      startDate,
+      endDate,
+      groupBy,
+    );
+  }
+
+  /**
+   * Get provider-level cost breakdown with nested model detail
+   * GET /api/v1/workspaces/:workspaceId/usage/by-provider?startDate=...&endDate=...
+   *
+   * @param workspaceId - Workspace ID
+   * @param query - Date range query params
+   * @returns Array of ProviderBreakdownItem with nested models
+   */
+  @Get('by-provider')
+  async getProviderBreakdown(
+    @Param('workspaceId') workspaceId: string,
+    @Query() query: UsageQueryDto,
+  ) {
+    const startDate = query.startDate
+      ? new Date(query.startDate)
+      : this.getDefaultStartDate();
+    const endDate = query.endDate
+      ? new Date(query.endDate)
+      : this.getDefaultEndDate();
+
+    return this.usageService.getProviderBreakdown(
+      workspaceId,
+      startDate,
+      endDate,
+    );
   }
 
   /**

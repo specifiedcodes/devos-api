@@ -6,6 +6,7 @@ import {
   IsUUID,
   Min,
   Max,
+  MaxLength,
   registerDecorator,
   ValidationOptions,
   ValidationArguments,
@@ -67,4 +68,20 @@ export class RecordUsageDto {
   @Min(0, { message: 'outputTokens must be non-negative' })
   @Max(10_000_000, { message: 'outputTokens cannot exceed 10 million' })
   outputTokens!: number;
+
+  @IsOptional()
+  @IsInt({ message: 'cachedTokens must be an integer' })
+  @Min(0, { message: 'cachedTokens must be non-negative' })
+  @Max(10_000_000, { message: 'cachedTokens cannot exceed 10 million' })
+  cachedTokens?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  taskType?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  routingReason?: string;
 }

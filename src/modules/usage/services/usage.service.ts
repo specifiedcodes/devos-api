@@ -1,11 +1,13 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { ApiUsage, ApiProvider } from '../../../database/entities/api-usage.entity';
 import { PricingService } from './pricing.service';
 import { RedisService } from '../../../modules/redis/redis.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
 import { sanitizeForAudit } from '../../../shared/logging/log-sanitizer';
+import { CostGroupBy } from '../dto/cost-breakdown-query.dto';
 
 /**
  * Usage summary response interface
@@ -37,6 +39,59 @@ export interface ModelUsageItem {
 }
 
 /**
+ * Cost breakdown response for the /breakdown endpoint
+ */
+export interface CostBreakdownResponse {
+  breakdown: CostBreakdownItem[];
+  totalCost: number;
+  totalRequests: number;
+  totalTokens: number;
+  period: { start: string; end: string };
+}
+
+/**
+ * Individual item in a cost breakdown
+ */
+export interface CostBreakdownItem {
+  group: string;
+  totalCost: number;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  avgCostPerRequest: number;
+}
+
+/**
+ * Provider breakdown with nested model-level detail
+ */
+export interface ProviderBreakdownItem {
+  provider: string;
+  totalCost: number;
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  models: { model: string; cost: number; requests: number }[];
+}
+
+/**
+ * Event payload emitted after recording usage
+ */
+export interface CostUpdateEvent {
+  workspaceId: string;
+  provider: string;
+  model: string;
+  taskType: string | null;
+  costUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  monthlyTotal: number;
+  timestamp: string;
+}
+
+/**
  * Service for tracking and querying API usage with real-time cost calculation
  *
  * Features:
@@ -55,6 +110,7 @@ export class UsageService {
     private readonly pricingService: PricingService,
     private readonly redisService: RedisService,
     private readonly auditService: AuditService,
+    private readonly eventEmitter: EventEmitter2,
   ) {}
 
   /**
@@ -68,6 +124,9 @@ export class UsageService {
    * @param outputTokens - Number of output tokens
    * @param byokKeyId - BYOK key ID (optional)
    * @param agentId - Agent identifier (optional)
+   * @param cachedTokens - Number of cached input tokens (optional)
+   * @param taskType - Task type that triggered this usage (optional)
+   * @param routingReason - Reason the router selected this model (optional)
    * @returns Created ApiUsage record
    */
   async recordUsage(
@@ -79,6 +138,9 @@ export class UsageService {
     outputTokens: number,
     byokKeyId?: string,
     agentId?: string,
+    cachedTokens?: number,
+    taskType?: string,
+    routingReason?: string,
   ): Promise<ApiUsage> {
     try {
       // Get current pricing
@@ -87,11 +149,13 @@ export class UsageService {
         model,
       );
 
-      // Calculate cost
+      // Calculate cost (with cached token support)
+      const effectiveCachedTokens = cachedTokens || 0;
       const costUsd = this.pricingService.calculateCost(
         inputTokens,
         outputTokens,
         pricing,
+        effectiveCachedTokens > 0 ? effectiveCachedTokens : undefined,
       );
 
       // Create usage record
@@ -105,13 +169,37 @@ export class UsageService {
         costUsd,
         byokKeyId,
         agentId,
+        cachedTokens: effectiveCachedTokens,
+        taskType: taskType || null,
+        routingReason: routingReason || null,
       });
 
       // Save to database
       const saved = await this.apiUsageRepository.save(usage);
 
       // Increment Redis counter for real-time display
-      await this.incrementMonthlyCounter(workspaceId, costUsd);
+      const monthlyTotal = await this.incrementMonthlyCounter(workspaceId, costUsd);
+
+      // Emit cost update event for real-time subscribers
+      try {
+        const costUpdateEvent: CostUpdateEvent = {
+          workspaceId,
+          provider,
+          model,
+          taskType: taskType || null,
+          costUsd,
+          inputTokens,
+          outputTokens,
+          cachedTokens: effectiveCachedTokens,
+          monthlyTotal: monthlyTotal ?? costUsd,
+          timestamp: new Date().toISOString(),
+        };
+        this.eventEmitter.emit('usage:cost_update', costUpdateEvent);
+      } catch (eventError) {
+        this.logger.warn(
+          `Failed to emit cost update event: ${eventError instanceof Error ? eventError.message : 'Unknown error'}`,
+        );
+      }
 
       // Audit log the usage recording
       // SECURITY FIX: Improved error handling with metrics tracking
@@ -346,9 +434,9 @@ export class UsageService {
       .getRawOne();
 
     return {
-      requests: parseInt(result.requests || '0', 10),
-      cost: parseFloat(result.cost || '0'),
-      totalTokens: parseInt(result.totalTokens || '0', 10),
+      requests: parseInt(result?.requests || '0', 10),
+      cost: parseFloat(result?.cost || '0'),
+      totalTokens: parseInt(result?.totalTokens || '0', 10),
     };
   }
 
@@ -358,11 +446,12 @@ export class UsageService {
    *
    * @param workspaceId - Workspace ID
    * @param cost - Cost to add
+   * @returns Updated monthly total or null if Redis unavailable
    */
   private async incrementMonthlyCounter(
     workspaceId: string,
     cost: number,
-  ): Promise<void> {
+  ): Promise<number | null> {
     try {
       const now = new Date();
       const monthKey = now.toISOString().slice(0, 7); // YYYY-MM
@@ -383,11 +472,14 @@ export class UsageService {
         await this.redisService.expire(redisKey, ttlSeconds);
         this.logger.debug(`Set TTL for ${redisKey}: ${ttlSeconds}s`);
       }
+
+      return newValue;
     } catch (error) {
       // Don't fail the request if Redis is down
       this.logger.warn(
         `Failed to increment Redis counter: ${error instanceof Error ? error.message : 'Unknown error'}`,
       );
+      return null;
     }
   }
 
@@ -440,10 +532,10 @@ export class UsageService {
       .getRawOne();
 
     return {
-      totalCost: parseFloat(result.totalCost || '0'),
-      totalInputTokens: parseInt(result.totalInputTokens || '0', 10),
-      totalOutputTokens: parseInt(result.totalOutputTokens || '0', 10),
-      totalRequests: parseInt(result.totalRequests || '0', 10),
+      totalCost: parseFloat(result?.totalCost || '0'),
+      totalInputTokens: parseInt(result?.totalInputTokens || '0', 10),
+      totalOutputTokens: parseInt(result?.totalOutputTokens || '0', 10),
+      totalRequests: parseInt(result?.totalRequests || '0', 10),
     };
   }
 
@@ -477,6 +569,190 @@ export class UsageService {
       .getRawOne();
 
     return parseFloat(result.totalCost || '0');
+  }
+
+  /**
+   * Get cost breakdown grouped by the specified dimension
+   *
+   * @param workspaceId - Workspace ID
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @param groupBy - Dimension to group by (model, provider, taskType, agent, project)
+   * @returns CostBreakdownResponse with breakdown array, totals, and period
+   */
+  async getCostBreakdown(
+    workspaceId: string,
+    startDate: Date,
+    endDate: Date,
+    groupBy: CostGroupBy = CostGroupBy.MODEL,
+  ): Promise<CostBreakdownResponse> {
+    // Map groupBy to the appropriate SQL column
+    const columnMap: Record<CostGroupBy, string> = {
+      [CostGroupBy.MODEL]: 'usage.model',
+      [CostGroupBy.PROVIDER]: 'usage.provider',
+      [CostGroupBy.TASK_TYPE]: 'usage.task_type',
+      [CostGroupBy.AGENT]: 'usage.agent_id',
+      [CostGroupBy.PROJECT]: 'usage.project_id',
+    };
+
+    const groupColumn = columnMap[groupBy];
+
+    // SECURITY: Validate groupColumn is a known safe value before SQL interpolation
+    const allowedColumns = new Set(Object.values(columnMap));
+    if (!groupColumn || !allowedColumns.has(groupColumn)) {
+      throw new Error(`Invalid groupBy value: ${groupBy}`);
+    }
+
+    if (groupBy === CostGroupBy.PROJECT) {
+      // Special case: join to projects table for project names
+      const results = await this.apiUsageRepository.manager.query(
+        `SELECT COALESCE(project.name, CAST(usage.project_id AS VARCHAR), 'No Project') AS "group",
+                SUM(usage.cost_usd) AS "totalCost",
+                COUNT(*) AS "requests",
+                SUM(usage.input_tokens) AS "inputTokens",
+                SUM(usage.output_tokens) AS "outputTokens",
+                SUM(usage.cached_tokens) AS "cachedTokens"
+         FROM public.api_usage usage
+         LEFT JOIN public.projects project
+           ON usage.project_id = project.id
+           AND project.workspace_id = $1
+           AND project.deleted_at IS NULL
+         WHERE usage.workspace_id = $1
+           AND usage.created_at BETWEEN $2 AND $3
+         GROUP BY usage.project_id, project.name
+         ORDER BY SUM(usage.cost_usd) DESC`,
+        [workspaceId, startDate, endDate],
+      );
+
+      return this.buildCostBreakdownResponse(results, startDate, endDate);
+    }
+
+    // Standard groupBy query
+    const results = await this.apiUsageRepository.manager.query(
+      `SELECT COALESCE(CAST(${groupColumn} AS VARCHAR), 'unknown') AS "group",
+              SUM(usage.cost_usd) AS "totalCost",
+              COUNT(*) AS "requests",
+              SUM(usage.input_tokens) AS "inputTokens",
+              SUM(usage.output_tokens) AS "outputTokens",
+              SUM(usage.cached_tokens) AS "cachedTokens"
+       FROM public.api_usage usage
+       WHERE usage.workspace_id = $1
+         AND usage.created_at BETWEEN $2 AND $3
+       GROUP BY ${groupColumn}
+       ORDER BY SUM(usage.cost_usd) DESC`,
+      [workspaceId, startDate, endDate],
+    );
+
+    return this.buildCostBreakdownResponse(results, startDate, endDate);
+  }
+
+  /**
+   * Build CostBreakdownResponse from raw query results
+   */
+  private buildCostBreakdownResponse(
+    results: any[],
+    startDate: Date,
+    endDate: Date,
+  ): CostBreakdownResponse {
+    const breakdown: CostBreakdownItem[] = results.map((r: any) => {
+      const totalCost = parseFloat(r.totalCost || '0');
+      const requests = parseInt(r.requests || '0', 10);
+      return {
+        group: r.group || 'unknown',
+        totalCost,
+        requests,
+        inputTokens: parseInt(r.inputTokens || '0', 10),
+        outputTokens: parseInt(r.outputTokens || '0', 10),
+        cachedTokens: parseInt(r.cachedTokens || '0', 10),
+        avgCostPerRequest: requests > 0 ? Math.round((totalCost / requests) * 1_000_000) / 1_000_000 : 0,
+      };
+    });
+
+    const totalCost = breakdown.reduce((sum, item) => sum + item.totalCost, 0);
+    const totalRequests = breakdown.reduce((sum, item) => sum + item.requests, 0);
+    const totalTokens = breakdown.reduce(
+      (sum, item) => sum + item.inputTokens + item.outputTokens,
+      0,
+    );
+
+    return {
+      breakdown,
+      totalCost: Math.round(totalCost * 1_000_000) / 1_000_000,
+      totalRequests,
+      totalTokens,
+      period: {
+        start: startDate.toISOString(),
+        end: endDate.toISOString(),
+      },
+    };
+  }
+
+  /**
+   * Get provider-level cost breakdown with nested model detail
+   *
+   * @param workspaceId - Workspace ID
+   * @param startDate - Start date
+   * @param endDate - End date
+   * @returns Array of ProviderBreakdownItem with nested models
+   */
+  async getProviderBreakdown(
+    workspaceId: string,
+    startDate: Date,
+    endDate: Date,
+  ): Promise<ProviderBreakdownItem[]> {
+    // Query provider-level aggregation
+    const providerResults = await this.apiUsageRepository.manager.query(
+      `SELECT usage.provider AS "provider",
+              SUM(usage.cost_usd) AS "totalCost",
+              COUNT(*) AS "requests",
+              SUM(usage.input_tokens) AS "inputTokens",
+              SUM(usage.output_tokens) AS "outputTokens",
+              SUM(usage.cached_tokens) AS "cachedTokens"
+       FROM public.api_usage usage
+       WHERE usage.workspace_id = $1
+         AND usage.created_at BETWEEN $2 AND $3
+       GROUP BY usage.provider
+       ORDER BY SUM(usage.cost_usd) DESC`,
+      [workspaceId, startDate, endDate],
+    );
+
+    // Query model-level breakdown within each provider
+    const modelResults = await this.apiUsageRepository.manager.query(
+      `SELECT usage.provider AS "provider",
+              usage.model AS "model",
+              SUM(usage.cost_usd) AS "cost",
+              COUNT(*) AS "requests"
+       FROM public.api_usage usage
+       WHERE usage.workspace_id = $1
+         AND usage.created_at BETWEEN $2 AND $3
+       GROUP BY usage.provider, usage.model
+       ORDER BY usage.provider, SUM(usage.cost_usd) DESC`,
+      [workspaceId, startDate, endDate],
+    );
+
+    // Build model map grouped by provider
+    const modelsByProvider = new Map<string, { model: string; cost: number; requests: number }[]>();
+    for (const r of modelResults) {
+      const provider = r.provider;
+      if (!modelsByProvider.has(provider)) {
+        modelsByProvider.set(provider, []);
+      }
+      modelsByProvider.get(provider)!.push({
+        model: r.model,
+        cost: parseFloat(r.cost || '0'),
+        requests: parseInt(r.requests || '0', 10),
+      });
+    }
+
+    return providerResults.map((r: any) => ({
+      provider: r.provider,
+      totalCost: parseFloat(r.totalCost || '0'),
+      requests: parseInt(r.requests || '0', 10),
+      inputTokens: parseInt(r.inputTokens || '0', 10),
+      outputTokens: parseInt(r.outputTokens || '0', 10),
+      cachedTokens: parseInt(r.cachedTokens || '0', 10),
+      models: modelsByProvider.get(r.provider) || [],
+    }));
   }
 
   /**
