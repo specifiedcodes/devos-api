@@ -6,8 +6,11 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConflictException, NotFoundException } from '@nestjs/common';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { OrchestratorController } from './orchestrator.controller';
 import { PipelineStateMachineService } from './services/pipeline-state-machine.service';
+import { PipelineFailureRecoveryService } from './services/pipeline-failure-recovery.service';
+import { FailureRecoveryHistory } from './entities/failure-recovery-history.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
 import {
@@ -59,6 +62,14 @@ describe('OrchestratorController', () => {
         {
           provide: PipelineStateMachineService,
           useValue: mockStateMachine,
+        },
+        {
+          provide: PipelineFailureRecoveryService,
+          useValue: {},
+        },
+        {
+          provide: getRepositoryToken(FailureRecoveryHistory),
+          useValue: { findAndCount: jest.fn().mockResolvedValue([[], 0]) },
         },
       ],
     })

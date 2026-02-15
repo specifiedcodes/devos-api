@@ -8,6 +8,7 @@
  * Story 11.6: Planner Agent CLI Integration
  * Story 11.7: DevOps Agent CLI Integration
  * Story 11.8: Multi-Agent Handoff Chain
+ * Story 11.9: Agent Failure Recovery & Checkpoints
  *
  * Provides the autonomous pipeline state machine with:
  * - PipelineStateMachineService: Core state machine logic
@@ -65,11 +66,18 @@
  * - StoryDependencyManagerService: Story dependency tracking
  * - HandoffQueueService: Max parallel agent queue
  * - HandoffHistoryService: Audit trail persistence
+ *
+ * Agent Failure Recovery & Checkpoints (Story 11.9):
+ * - AgentFailureDetectorService: Failure detection from multiple signals
+ * - CheckpointService: Git commit-based checkpoint management
+ * - PipelineFailureRecoveryService: Tiered recovery orchestration
+ * - FailureRecoveryHistory: PostgreSQL audit trail entity
  */
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PipelineStateHistory } from './entities/pipeline-state-history.entity';
 import { HandoffHistory } from './entities/handoff-history.entity';
+import { FailureRecoveryHistory } from './entities/failure-recovery-history.entity';
 import { PipelineStateMachineService } from './services/pipeline-state-machine.service';
 import { PipelineStateStore } from './services/pipeline-state-store.service';
 import { PipelineRecoveryService } from './services/pipeline-recovery.service';
@@ -121,10 +129,18 @@ import { CoordinationRulesEngineService } from './services/coordination-rules-en
 import { StoryDependencyManagerService } from './services/story-dependency-manager.service';
 import { HandoffQueueService } from './services/handoff-queue.service';
 import { HandoffHistoryService } from './services/handoff-history.service';
+// Story 11.9: Agent Failure Recovery & Checkpoints services
+import { AgentFailureDetectorService } from './services/agent-failure-detector.service';
+import { CheckpointService } from './services/checkpoint.service';
+import { PipelineFailureRecoveryService } from './services/pipeline-failure-recovery.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PipelineStateHistory, HandoffHistory]),
+    TypeOrmModule.forFeature([
+      PipelineStateHistory,
+      HandoffHistory,
+      FailureRecoveryHistory,
+    ]),
     forwardRef(() => AgentQueueModule),
     BYOKModule,
     CliSessionsModule,
@@ -179,6 +195,10 @@ import { HandoffHistoryService } from './services/handoff-history.service';
     StoryDependencyManagerService,
     HandoffQueueService,
     HandoffHistoryService,
+    // Story 11.9: Agent Failure Recovery & Checkpoints services
+    AgentFailureDetectorService,
+    CheckpointService,
+    PipelineFailureRecoveryService,
   ],
   exports: [
     PipelineStateMachineService,
@@ -189,6 +209,7 @@ import { HandoffHistoryService } from './services/handoff-history.service';
     PlannerAgentPipelineExecutorService,
     DevOpsAgentPipelineExecutorService,
     HandoffCoordinatorService,
+    PipelineFailureRecoveryService,
   ],
 })
 export class OrchestratorModule {}

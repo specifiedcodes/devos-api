@@ -1,9 +1,15 @@
 /**
  * OrchestratorController
  * Story 11.1: Orchestrator State Machine Core
+ * Story 11.9: Agent Failure Recovery & Checkpoints
  *
  * REST API endpoints for controlling the autonomous pipeline state machine.
  * All endpoints are workspace-scoped and protected by JWT + workspace access guards.
+ *
+ * Story 11.9 adds:
+ * - POST /:projectId/failures/:failureId/override - Manual failure override
+ * - GET /:projectId/recovery-status - Recovery status
+ * - GET /:projectId/failures - Failure history
  */
 import {
   Controller,
@@ -17,18 +23,34 @@ import {
   HttpCode,
   HttpStatus,
   NotFoundException,
+  Optional,
+  Inject,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { PipelineStateMachineService } from './services/pipeline-state-machine.service';
+import { PipelineFailureRecoveryService } from './services/pipeline-failure-recovery.service';
 import { StartPipelineDto } from './dto/start-pipeline.dto';
 import { PipelineHistoryQueryDto } from './dto/pipeline-history-query.dto';
+import { FailureRecoveryHistory } from './entities/failure-recovery-history.entity';
+import {
+  ManualOverrideDto,
+  FailureHistoryQueryDto,
+} from './interfaces/failure-recovery.interfaces';
 
 @Controller('api/v1/workspaces/:workspaceId/orchestrator')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class OrchestratorController {
   constructor(
     private readonly pipelineStateMachine: PipelineStateMachineService,
+    @Optional()
+    @Inject(PipelineFailureRecoveryService)
+    private readonly failureRecoveryService: PipelineFailureRecoveryService | null,
+    @Optional()
+    @InjectRepository(FailureRecoveryHistory)
+    private readonly failureHistoryRepository: Repository<FailureRecoveryHistory> | null,
   ) {}
 
   /**
@@ -142,5 +164,93 @@ export class OrchestratorController {
       limit: query.limit,
       offset: query.offset,
     });
+  }
+
+  // ─── Story 11.9: Failure Recovery Endpoints ─────────────────────────────────
+
+  /**
+   * Handle a manual override for an escalated failure.
+   * POST /api/v1/workspaces/:workspaceId/orchestrator/:projectId/failures/:failureId/override
+   *
+   * @returns 200 OK with RecoveryResult
+   * @throws 404 if failure not found
+   */
+  @Post(':projectId/failures/:failureId/override')
+  @HttpCode(HttpStatus.OK)
+  async handleManualOverride(
+    @Param('workspaceId') workspaceId: string,
+    @Param('projectId') projectId: string,
+    @Param('failureId') failureId: string,
+    @Body() body: ManualOverrideDto,
+    @Req() req: any,
+  ) {
+    if (!this.failureRecoveryService) {
+      throw new NotFoundException('Failure recovery service not available');
+    }
+
+    const userId = req.user.sub || req.user.userId || req.user.id;
+
+    return this.failureRecoveryService.handleManualOverride({
+      failureId,
+      workspaceId,
+      userId,
+      action: body.action,
+      guidance: body.guidance,
+      reassignToAgentType: body.reassignToAgentType,
+    });
+  }
+
+  /**
+   * Get current recovery status for a pipeline.
+   * GET /api/v1/workspaces/:workspaceId/orchestrator/:projectId/recovery-status
+   *
+   * @returns 200 OK with PipelineRecoveryStatus
+   */
+  @Get(':projectId/recovery-status')
+  async getRecoveryStatus(
+    @Param('workspaceId') workspaceId: string,
+    @Param('projectId') projectId: string,
+  ) {
+    if (!this.failureRecoveryService) {
+      return {
+        projectId,
+        activeFailures: [],
+        recoveryHistory: [],
+        isEscalated: false,
+        totalRetries: 0,
+        maxRetries: 3,
+      };
+    }
+
+    return this.failureRecoveryService.getRecoveryStatus(projectId);
+  }
+
+  /**
+   * Get failure history for a pipeline with pagination.
+   * GET /api/v1/workspaces/:workspaceId/orchestrator/:projectId/failures
+   *
+   * @returns 200 OK with { items, total }
+   */
+  @Get(':projectId/failures')
+  async getFailureHistory(
+    @Param('workspaceId') workspaceId: string,
+    @Param('projectId') projectId: string,
+    @Query() query: FailureHistoryQueryDto,
+  ) {
+    if (!this.failureHistoryRepository) {
+      return { items: [], total: 0 };
+    }
+
+    const limit = Math.min(query.limit || 20, 100);
+    const offset = query.offset || 0;
+
+    const [items, total] = await this.failureHistoryRepository.findAndCount({
+      where: { projectId, workspaceId },
+      order: { createdAt: 'DESC' },
+      take: limit,
+      skip: offset,
+    });
+
+    return { items, total };
   }
 }
