@@ -82,6 +82,87 @@ export class WorkspaceSettings {
   @IsOptional()
   triggeredAlerts?: Record<string, any>;
 
+  // Spend cap configuration (Story 13-7)
+  @Column({ type: 'boolean', default: false, name: 'spend_cap_enabled' })
+  spendCapEnabled!: boolean;
+
+  @Column({
+    type: 'decimal',
+    precision: 3,
+    scale: 2,
+    default: 0.70,
+    name: 'warning_threshold',
+    transformer: {
+      to: (value: number | null): number | null => value,
+      from: (value: string | null): number | null => {
+        if (value === null || value === undefined) return null;
+        const parsed = parseFloat(value as string);
+        return isNaN(parsed) ? null : parsed;
+      },
+    },
+  })
+  warningThreshold!: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 3,
+    scale: 2,
+    default: 0.85,
+    name: 'downgrade_threshold',
+    transformer: {
+      to: (value: number | null): number | null => value,
+      from: (value: string | null): number | null => {
+        if (value === null || value === undefined) return null;
+        const parsed = parseFloat(value as string);
+        return isNaN(parsed) ? null : parsed;
+      },
+    },
+  })
+  downgradeThreshold!: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 3,
+    scale: 2,
+    default: 0.95,
+    name: 'critical_threshold',
+    transformer: {
+      to: (value: number | null): number | null => value,
+      from: (value: string | null): number | null => {
+        if (value === null || value === undefined) return null;
+        const parsed = parseFloat(value as string);
+        return isNaN(parsed) ? null : parsed;
+      },
+    },
+  })
+  criticalThreshold!: number;
+
+  @Column({
+    type: 'decimal',
+    precision: 3,
+    scale: 2,
+    default: 1.00,
+    name: 'hard_cap_threshold',
+    transformer: {
+      to: (value: number | null): number | null => value,
+      from: (value: string | null): number | null => {
+        if (value === null || value === undefined) return null;
+        const parsed = parseFloat(value as string);
+        return isNaN(parsed) ? null : parsed;
+      },
+    },
+  })
+  hardCapThreshold!: number;
+
+  @Column({ type: 'jsonb', default: '{}', name: 'downgrade_rules' })
+  downgradeRules!: Record<string, { from: string; to: string }>;
+
+  @Column({ type: 'boolean', default: false, name: 'force_premium_override' })
+  forcePremiumOverride!: boolean;
+
+  @Column({ type: 'boolean', default: false, name: 'auto_downgrade_paused' })
+  autoDowngradePaused!: boolean;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;
 
