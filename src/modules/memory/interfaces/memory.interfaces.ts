@@ -96,3 +96,80 @@ export interface GraphStats {
   relationshipCount: number;
   storageEstimateMB: number;
 }
+
+// ─── Ingestion Pipeline Interfaces (Story 12.2) ─────────────────────────────
+
+/**
+ * A single extracted memory ready for storage.
+ * Produced by MemoryExtractionService from pipeline task output data.
+ */
+export interface ExtractedMemory {
+  episodeType: MemoryEpisodeType;
+  content: string;
+  entities: string[];
+  confidence: number;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Input data for the memory ingestion pipeline.
+ * Built from PipelineStateEvent metadata after an agent task completes.
+ */
+export interface IngestionInput {
+  projectId: string;
+  workspaceId: string;
+  storyId: string | null;
+  agentType: string;
+  sessionId: string;
+  branch: string | null;
+  commitHash: string | null;
+  exitCode: number | null;
+  durationMs: number;
+  outputSummary: string | null;
+  filesChanged: string[];
+  commitMessages: string[];
+  testResults: { passed: number; failed: number; total: number } | null;
+  prUrl: string | null;
+  deploymentUrl: string | null;
+  errorMessage: string | null;
+  pipelineMetadata: Record<string, any>;
+}
+
+/**
+ * Result of a memory ingestion run.
+ */
+export interface IngestionResult {
+  episodesCreated: number;
+  episodeIds: string[];
+  extractionDurationMs: number;
+  errors: string[];
+}
+
+/**
+ * Aggregated ingestion statistics for a project.
+ */
+export interface IngestionStats {
+  totalIngestions: number;
+  totalEpisodes: number;
+  deduplicationsSkipped: number;
+  errors: number;
+}
+
+/**
+ * Result of a deduplication check for a single episode.
+ */
+export interface DeduplicationResult {
+  isDuplicate: boolean;
+  isFlagged: boolean;
+  existingEpisodeId?: string;
+  similarity: number;
+}
+
+/**
+ * Batch deduplication result.
+ */
+export interface DeduplicationBatchResult {
+  accepted: ExtractedMemory[];
+  skipped: number;
+  flagged: number;
+}
