@@ -7,6 +7,7 @@
  * Story 11.5: QA Agent CLI Integration
  * Story 11.6: Planner Agent CLI Integration
  * Story 11.7: DevOps Agent CLI Integration
+ * Story 11.8: Multi-Agent Handoff Chain
  *
  * Provides the autonomous pipeline state machine with:
  * - PipelineStateMachineService: Core state machine logic
@@ -56,10 +57,19 @@
  * - DevOpsDeploymentMonitorService: Deployment progress monitoring
  * - DevOpsSmokeTestRunnerService: CLI-based smoke test execution
  * - DevOpsRollbackHandlerService: Rollback and incident reporting
+ *
+ * Multi-Agent Handoff Chain (Story 11.8):
+ * - HandoffCoordinatorService: Central handoff coordination
+ * - HandoffContextAssemblerService: Context assembly between agents
+ * - CoordinationRulesEngineService: Rule validation engine
+ * - StoryDependencyManagerService: Story dependency tracking
+ * - HandoffQueueService: Max parallel agent queue
+ * - HandoffHistoryService: Audit trail persistence
  */
 import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PipelineStateHistory } from './entities/pipeline-state-history.entity';
+import { HandoffHistory } from './entities/handoff-history.entity';
 import { PipelineStateMachineService } from './services/pipeline-state-machine.service';
 import { PipelineStateStore } from './services/pipeline-state-store.service';
 import { PipelineRecoveryService } from './services/pipeline-recovery.service';
@@ -104,10 +114,17 @@ import { DevOpsDeploymentTriggerService } from './services/devops-deployment-tri
 import { DevOpsDeploymentMonitorService } from './services/devops-deployment-monitor.service';
 import { DevOpsSmokeTestRunnerService } from './services/devops-smoke-test-runner.service';
 import { DevOpsRollbackHandlerService } from './services/devops-rollback-handler.service';
+// Story 11.8: Multi-Agent Handoff Chain services
+import { HandoffCoordinatorService } from './services/handoff-coordinator.service';
+import { HandoffContextAssemblerService } from './services/handoff-context-assembler.service';
+import { CoordinationRulesEngineService } from './services/coordination-rules-engine.service';
+import { StoryDependencyManagerService } from './services/story-dependency-manager.service';
+import { HandoffQueueService } from './services/handoff-queue.service';
+import { HandoffHistoryService } from './services/handoff-history.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([PipelineStateHistory]),
+    TypeOrmModule.forFeature([PipelineStateHistory, HandoffHistory]),
     forwardRef(() => AgentQueueModule),
     BYOKModule,
     CliSessionsModule,
@@ -155,6 +172,13 @@ import { DevOpsRollbackHandlerService } from './services/devops-rollback-handler
     DevOpsDeploymentMonitorService,
     DevOpsSmokeTestRunnerService,
     DevOpsRollbackHandlerService,
+    // Story 11.8: Multi-Agent Handoff Chain services
+    HandoffCoordinatorService,
+    HandoffContextAssemblerService,
+    CoordinationRulesEngineService,
+    StoryDependencyManagerService,
+    HandoffQueueService,
+    HandoffHistoryService,
   ],
   exports: [
     PipelineStateMachineService,
@@ -164,6 +188,7 @@ import { DevOpsRollbackHandlerService } from './services/devops-rollback-handler
     QAAgentPipelineExecutorService,
     PlannerAgentPipelineExecutorService,
     DevOpsAgentPipelineExecutorService,
+    HandoffCoordinatorService,
   ],
 })
 export class OrchestratorModule {}

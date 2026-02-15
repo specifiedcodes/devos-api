@@ -482,6 +482,43 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Get the number of members in a sorted set (Story 11.8 - Handoff Queue)
+   * @param key - Redis sorted set key
+   * @returns Number of members in the sorted set
+   */
+  async zcard(key: string): Promise<number> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zcard');
+      return 0;
+    }
+    try {
+      return await this.client.zcard(key);
+    } catch (error) {
+      this.logger.error(`Failed to zcard for ${key}`, error);
+      return 0;
+    }
+  }
+
+  /**
+   * Remove specific members from a sorted set (Story 11.8 - Handoff Queue)
+   * @param key - Redis sorted set key
+   * @param members - Members to remove
+   * @returns Number of elements removed
+   */
+  async zrem(key: string, ...members: string[]): Promise<number | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zrem');
+      return null;
+    }
+    try {
+      return await this.client.zrem(key, ...members);
+    } catch (error) {
+      this.logger.error(`Failed to zrem from ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
    * Cleanup on module destroy
    */
   async onModuleDestroy() {

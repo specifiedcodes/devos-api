@@ -1,6 +1,7 @@
 /**
  * PipelineStateMachineService
  * Story 11.1: Orchestrator State Machine Core
+ * Story 11.8: Multi-Agent Handoff Chain Integration
  *
  * Core state machine driving the BMAD workflow cycle with:
  * - Redis-persisted state (via PipelineStateStore)
@@ -8,6 +9,7 @@
  * - WebSocket event emission (via EventEmitter2)
  * - Distributed locking for concurrent safety
  * - BullMQ integration for phase job creation
+ * - Handoff coordination between agents (Story 11.8)
  *
  * This is a wrapper around the existing OrchestratorService (Story 5.8)
  * that adds durable persistence, crash recovery, and external APIs.
@@ -15,6 +17,8 @@
 import {
   Injectable,
   Logger,
+  Inject,
+  Optional,
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
@@ -35,6 +39,7 @@ import {
 } from '../interfaces/pipeline.interfaces';
 import { AgentQueueService } from '../../agent-queue/services/agent-queue.service';
 import { AgentJobType } from '../../agent-queue/entities/agent-job.entity';
+import { HandoffCoordinatorService } from './handoff-coordinator.service';
 
 /** Lock acquisition timeout: 5 seconds with 100ms polling */
 const LOCK_ACQUIRE_TIMEOUT_MS = 5000;
@@ -59,6 +64,9 @@ export class PipelineStateMachineService {
     private readonly historyRepository: Repository<PipelineStateHistory>,
     private readonly eventEmitter: EventEmitter2,
     private readonly agentQueueService: AgentQueueService,
+    @Optional()
+    @Inject(HandoffCoordinatorService)
+    private readonly handoffCoordinator: HandoffCoordinatorService | null,
   ) {}
 
   /**
@@ -345,7 +353,9 @@ export class PipelineStateMachineService {
 
   /**
    * Called by job processors when a pipeline phase completes successfully.
-   * Advances the state machine to the next phase.
+   * If HandoffCoordinator is available (Story 11.8), enriches metadata
+   * with handoff context before transitioning to the next phase.
+   * Falls back to basic PHASE_PROGRESSION if HandoffCoordinator is not available.
    */
   async onPhaseComplete(
     projectId: string,
@@ -360,10 +370,139 @@ export class PipelineStateMachineService {
       return;
     }
 
-    await this.transition(projectId, nextState, {
-      triggeredBy: 'system',
-      metadata: { phaseResult: result },
-    });
+    // Story 11.8: If handoff coordinator is available, use it
+    if (this.handoffCoordinator) {
+      try {
+        const context = await this.stateStore.getState(projectId);
+        if (!context) {
+          this.logger.warn(
+            `No pipeline context for project ${projectId}, falling back to basic transition`,
+          );
+          await this.transition(projectId, nextState, {
+            triggeredBy: 'system',
+            metadata: { phaseResult: result },
+          });
+          return;
+        }
+
+        // Check if this is a QA phase with FAIL/NEEDS_CHANGES verdict
+        const isQARejection =
+          phase === PipelineState.QA &&
+          result.verdict &&
+          result.verdict !== 'PASS';
+
+        if (isQARejection) {
+          // Route through QA rejection handler
+          const iterationCount =
+            (context.metadata?.iterationCount || 0) + 1;
+          const rejectionResult =
+            await this.handoffCoordinator.processQARejection({
+              workspaceId: context.workspaceId,
+              projectId,
+              storyId: context.currentStoryId || '',
+              storyTitle: context.metadata?.storyTitle || '',
+              qaResult: result,
+              iterationCount,
+              previousMetadata: context.metadata,
+            });
+
+          if (rejectionResult.success) {
+            // Transition QA -> IMPLEMENTING with rejection context
+            await this.transition(projectId, PipelineState.IMPLEMENTING, {
+              triggeredBy: 'system:qa-rejection',
+              metadata: {
+                phaseResult: result,
+                handoffContext: rejectionResult.handoffContext,
+                iterationCount,
+              },
+            });
+          } else {
+            // Escalation or error - pause pipeline
+            await this.transition(projectId, PipelineState.PAUSED, {
+              triggeredBy: 'system:escalation',
+              metadata: {
+                phaseResult: result,
+                escalationReason: rejectionResult.error,
+                pausedFrom: PipelineState.QA,
+              },
+            });
+          }
+          return;
+        }
+
+        // Normal handoff flow
+        const handoffResult =
+          await this.handoffCoordinator.processHandoff({
+            workspaceId: context.workspaceId,
+            projectId,
+            storyId: context.currentStoryId || '',
+            storyTitle: context.metadata?.storyTitle || '',
+            completingAgentType: context.activeAgentType || '',
+            completingAgentId: context.activeAgentId || '',
+            phaseResult: result,
+            pipelineMetadata: context.metadata,
+          });
+
+        if (handoffResult.queued) {
+          // Handoff was queued (max agents reached or story blocked)
+          // Don't transition - queue will trigger later
+          this.logger.log(
+            `Handoff for project ${projectId} was queued: ${handoffResult.error}`,
+          );
+          return;
+        }
+
+        // Transition with enriched handoff context
+        await this.transition(projectId, nextState, {
+          triggeredBy: 'system',
+          metadata: {
+            phaseResult: result,
+            handoffContext: handoffResult.handoffContext,
+          },
+        });
+      } catch (error) {
+        this.logger.error(
+          `Handoff coordination failed for project ${projectId}, falling back to basic transition`,
+          error,
+        );
+        // Fallback: basic transition without handoff enrichment
+        await this.transition(projectId, nextState, {
+          triggeredBy: 'system',
+          metadata: { phaseResult: result },
+        });
+      }
+    } else {
+      // No handoff coordinator: original behavior (backward compatible)
+      await this.transition(projectId, nextState, {
+        triggeredBy: 'system',
+        metadata: { phaseResult: result },
+      });
+    }
+  }
+
+  /**
+   * Story 11.8: Called when an agent completes its work and frees a slot.
+   * Processes the next queued handoff if available.
+   */
+  async onAgentSlotFreed(workspaceId: string): Promise<void> {
+    if (!this.handoffCoordinator) {
+      return;
+    }
+
+    try {
+      const queuedHandoff =
+        await this.handoffCoordinator.processNextInQueue(workspaceId);
+      if (queuedHandoff) {
+        this.logger.log(
+          `Processing queued handoff for workspace ${workspaceId}`,
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to process queued handoff for workspace ${workspaceId}`,
+        error,
+      );
+    }
   }
 
   /**
