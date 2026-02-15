@@ -95,8 +95,9 @@ describe('Neo4jService', () => {
     it('should create schema constraints and indexes', async () => {
       await service.onModuleInit();
 
-      // 4 constraints + 5 indexes = 9 runQuery calls
-      expect(mockRun).toHaveBeenCalledTimes(9);
+      // 5 constraints + 8 indexes = 13 runQuery calls
+      // (4 original + 1 WorkspacePattern constraint, 5 original + 3 WorkspacePattern indexes)
+      expect(mockRun).toHaveBeenCalledTimes(13);
 
       // Verify constraint queries
       expect(mockRun).toHaveBeenCalledWith(

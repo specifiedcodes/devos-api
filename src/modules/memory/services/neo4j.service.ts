@@ -145,6 +145,8 @@ export class Neo4jService implements OnModuleInit, OnModuleDestroy {
       'CREATE CONSTRAINT entity_ref_id IF NOT EXISTS FOR (er:EntityRef) REQUIRE er.id IS UNIQUE',
       'CREATE CONSTRAINT project_node_id IF NOT EXISTS FOR (p:ProjectNode) REQUIRE p.projectId IS UNIQUE',
       'CREATE CONSTRAINT workspace_node_id IF NOT EXISTS FOR (w:WorkspaceNode) REQUIRE w.workspaceId IS UNIQUE',
+      // Story 12.6: Cross-Project Learning - WorkspacePattern constraints
+      'CREATE CONSTRAINT workspace_pattern_id IF NOT EXISTS FOR (wp:WorkspacePattern) REQUIRE wp.id IS UNIQUE',
     ];
 
     const indexes = [
@@ -153,6 +155,10 @@ export class Neo4jService implements OnModuleInit, OnModuleDestroy {
       'CREATE INDEX episode_timestamp IF NOT EXISTS FOR (e:Episode) ON (e.timestamp)',
       'CREATE INDEX episode_type IF NOT EXISTS FOR (e:Episode) ON (e.episodeType)',
       'CREATE INDEX entity_ref_name IF NOT EXISTS FOR (er:EntityRef) ON (er.name)',
+      // Story 12.6: Cross-Project Learning - WorkspacePattern indexes
+      'CREATE INDEX workspace_pattern_workspace IF NOT EXISTS FOR (wp:WorkspacePattern) ON (wp.workspaceId)',
+      'CREATE INDEX workspace_pattern_type IF NOT EXISTS FOR (wp:WorkspacePattern) ON (wp.patternType)',
+      'CREATE INDEX workspace_pattern_confidence IF NOT EXISTS FOR (wp:WorkspacePattern) ON (wp.confidence)',
     ];
 
     for (const constraint of constraints) {

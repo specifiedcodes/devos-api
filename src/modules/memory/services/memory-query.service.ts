@@ -12,7 +12,7 @@
  *
  * Also provides agent-focused context assembly and relevance feedback recording.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GraphitiService } from './graphiti.service';
 import { Neo4jService } from './neo4j.service';
@@ -22,6 +22,7 @@ import {
   MemoryQueryInput,
   MemoryQueryResult,
   FormattedMemoryContext,
+  PatternRecommendation,
 } from '../interfaces/memory.interfaces';
 
 /**
@@ -90,11 +91,18 @@ const SECTION_ORDER: MemoryEpisodeType[] = [
 export class MemoryQueryService {
   private readonly logger = new Logger(MemoryQueryService.name);
 
+  // Story 12.6: Optional CrossProjectLearningService injection
+  // Using @Optional() + @Inject() with string token to prevent circular dependency
+  private crossProjectLearningService: any;
+
   constructor(
     private readonly graphitiService: GraphitiService,
     private readonly neo4jService: Neo4jService,
     private readonly configService: ConfigService,
-  ) {}
+    @Optional() @Inject('CrossProjectLearningService') crossProjectLearning?: any,
+  ) {
+    this.crossProjectLearningService = crossProjectLearning ?? null;
+  }
 
   /**
    * Main query method. Retrieves and scores memories based on multiple factors.
@@ -185,7 +193,7 @@ export class MemoryQueryService {
       },
     });
 
-    if (result.memories.length === 0) {
+    if (result.memories.length === 0 && !this.crossProjectLearningService) {
       return { contextString: '', memoryCount: 0 };
     }
 
@@ -238,11 +246,40 @@ export class MemoryQueryService {
       }
     }
 
-    if (sections.length === 0) {
+    if (sections.length === 0 && !this.crossProjectLearningService) {
       return { contextString: '', memoryCount: 0 };
     }
 
-    const contextString = `## Relevant Project Memory\n\n${sections.join('\n\n')}`;
+    // Story 12.6: Add workspace patterns section
+    let patternsSection = '';
+    if (this.crossProjectLearningService) {
+      try {
+        patternsSection = await this.buildWorkspacePatternsSection(
+          workspaceId,
+          projectId,
+          taskDescription,
+          tokenBudget - totalTokens,
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to fetch workspace patterns: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    if (sections.length === 0 && !patternsSection) {
+      return { contextString: '', memoryCount: 0 };
+    }
+
+    let contextString = '';
+    if (sections.length > 0) {
+      contextString = `## Relevant Project Memory\n\n${sections.join('\n\n')}`;
+    }
+    if (patternsSection) {
+      contextString = contextString
+        ? `${contextString}\n\n${patternsSection}`
+        : patternsSection;
+    }
 
     return { contextString, memoryCount };
   }
@@ -292,6 +329,54 @@ export class MemoryQueryService {
       );
       return false;
     }
+  }
+
+  // ─── Workspace Patterns (Story 12.6) ─────────────────────────────────────────
+
+  /**
+   * Build a "Workspace Patterns" section for agent context.
+   * Retrieves cross-project pattern recommendations and formats them
+   * with confidence labels ([AUTO-APPLY], [RECOMMENDED], [SUGGESTION]).
+   */
+  private async buildWorkspacePatternsSection(
+    workspaceId: string,
+    projectId: string,
+    taskDescription: string,
+    remainingBudget: number,
+  ): Promise<string> {
+    const patternBudget = Math.min(
+      remainingBudget,
+      this.getPatternContextBudget(),
+    );
+
+    if (patternBudget <= 0) return '';
+
+    const recommendations: PatternRecommendation[] =
+      await this.crossProjectLearningService.getPatternRecommendations(
+        workspaceId,
+        projectId,
+        taskDescription,
+      );
+
+    if (!recommendations || recommendations.length === 0) return '';
+
+    const header = '### Workspace Patterns';
+    let totalTokens = this.estimateTokens(header + '\n\n');
+    const lines: string[] = [];
+
+    for (const rec of recommendations) {
+      const line = `- ${rec.confidenceLabel} ${rec.pattern.content} (observed in ${rec.pattern.occurrenceCount} projects, confidence: ${rec.pattern.confidence})`;
+      const lineTokens = this.estimateTokens(line + '\n');
+
+      if (totalTokens + lineTokens > patternBudget) break;
+
+      lines.push(line);
+      totalTokens += lineTokens;
+    }
+
+    if (lines.length === 0) return '';
+
+    return `${header}\n\n${lines.join('\n')}`;
   }
 
   // ─── Scoring Methods ──────────────────────────────────────────────────────────
@@ -413,6 +498,14 @@ export class MemoryQueryService {
       10,
     );
     return isNaN(value) ? 4000 : value;
+  }
+
+  private getPatternContextBudget(): number {
+    const value = parseInt(
+      this.configService.get<string>('CROSS_PROJECT_PATTERN_CONTEXT_BUDGET', '2000'),
+      10,
+    );
+    return isNaN(value) ? 2000 : value;
   }
 
   private getTimeDecayHalfLife(): number {

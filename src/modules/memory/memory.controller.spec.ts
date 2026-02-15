@@ -3,6 +3,7 @@
  * Story 12.1: Graphiti/Neo4j Setup
  * Story 12.2: Memory Ingestion Pipeline
  * Story 12.3: Memory Query Service
+ * Story 12.6: Cross-Project Learning
  */
 
 // Mock uuid (required by transitive GraphitiService import)
@@ -15,11 +16,16 @@ import { MemoryController } from './memory.controller';
 import { MemoryHealthService } from './services/memory-health.service';
 import { MemoryIngestionService } from './services/memory-ingestion.service';
 import { MemoryQueryService } from './services/memory-query.service';
+import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import {
   MemoryHealth,
   IngestionResult,
   IngestionStats,
   MemoryQueryResult,
+  WorkspacePattern,
+  PatternDetectionResult,
+  PatternRecommendation,
+  PatternAdoptionStats,
 } from './interfaces/memory.interfaces';
 
 describe('MemoryController', () => {
@@ -27,6 +33,7 @@ describe('MemoryController', () => {
   let mockMemoryHealthService: Partial<MemoryHealthService>;
   let mockMemoryIngestionService: Partial<MemoryIngestionService>;
   let mockMemoryQueryService: Partial<MemoryQueryService>;
+  let mockCrossProjectLearningService: any;
 
   const healthyResponse: MemoryHealth = {
     neo4jConnected: true,
@@ -81,6 +88,40 @@ describe('MemoryController', () => {
     queryDurationMs: 42,
   };
 
+  // Story 12.6 test data
+  const testPattern: WorkspacePattern = {
+    id: 'pattern-1',
+    workspaceId: 'workspace-1',
+    patternType: 'architecture',
+    content: 'Use Zustand for React state management',
+    sourceProjectIds: ['project-1', 'project-2'],
+    sourceEpisodeIds: ['ep-1', 'ep-2'],
+    occurrenceCount: 3,
+    confidence: 'medium',
+    status: 'active',
+    overriddenBy: null,
+    overrideReason: null,
+    createdAt: new Date('2026-02-10T10:00:00.000Z'),
+    updatedAt: new Date('2026-02-10T10:00:00.000Z'),
+    metadata: {},
+  };
+
+  const detectionResult: PatternDetectionResult = {
+    newPatterns: 2,
+    updatedPatterns: 1,
+    totalPatterns: 5,
+    detectionDurationMs: 150,
+  };
+
+  const adoptionStats: PatternAdoptionStats = {
+    totalPatterns: 10,
+    byConfidence: { low: 3, medium: 5, high: 2 },
+    byType: { architecture: 4, error: 2, testing: 2, deployment: 1, security: 1 },
+    overrideRate: 0.1,
+    averageOccurrenceCount: 3.5,
+    topPatterns: [testPattern],
+  };
+
   beforeEach(async () => {
     mockMemoryHealthService = {
       getHealth: jest.fn().mockResolvedValue(healthyResponse),
@@ -94,6 +135,17 @@ describe('MemoryController', () => {
     mockMemoryQueryService = {
       query: jest.fn().mockResolvedValue(queryResult),
       recordRelevanceFeedback: jest.fn().mockResolvedValue(true),
+    };
+
+    mockCrossProjectLearningService = {
+      getWorkspacePatterns: jest.fn().mockResolvedValue([testPattern]),
+      detectPatterns: jest.fn().mockResolvedValue(detectionResult),
+      overridePattern: jest.fn().mockResolvedValue({ ...testPattern, status: 'overridden' }),
+      restorePattern: jest.fn().mockResolvedValue(testPattern),
+      getPatternRecommendations: jest.fn().mockResolvedValue([
+        { pattern: testPattern, relevanceScore: 0.7, confidenceLabel: '[RECOMMENDED]' },
+      ]),
+      getPatternAdoptionStats: jest.fn().mockResolvedValue(adoptionStats),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -110,6 +162,10 @@ describe('MemoryController', () => {
         {
           provide: MemoryQueryService,
           useValue: mockMemoryQueryService,
+        },
+        {
+          provide: CrossProjectLearningService,
+          useValue: mockCrossProjectLearningService,
         },
       ],
     }).compile();
@@ -452,6 +508,176 @@ describe('MemoryController', () => {
       const result = await controller.recordFeedback(body as any);
 
       expect(result).toEqual({ updated: false });
+    });
+  });
+
+  // ─── Cross-Project Learning Endpoint Tests (Story 12.6) ───────────────────
+
+  describe('GET /api/v1/memory/patterns/:workspaceId', () => {
+    it('should return 200 with patterns', async () => {
+      const result = await controller.getWorkspacePatterns('workspace-1', {} as any);
+
+      expect(result).toEqual([testPattern]);
+      expect(mockCrossProjectLearningService.getWorkspacePatterns).toHaveBeenCalledWith(
+        'workspace-1',
+        expect.any(Object),
+      );
+    });
+
+    it('should require JWT (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getWorkspacePatterns,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should filter by query params', async () => {
+      const query = {
+        type: 'architecture',
+        confidence: 'high',
+        status: 'active',
+        limit: 10,
+      };
+
+      await controller.getWorkspacePatterns('workspace-1', query as any);
+
+      expect(mockCrossProjectLearningService.getWorkspacePatterns).toHaveBeenCalledWith(
+        'workspace-1',
+        expect.objectContaining({
+          patternType: 'architecture',
+          confidence: 'high',
+          status: 'active',
+          limit: 10,
+        }),
+      );
+    });
+  });
+
+  describe('POST /api/v1/memory/patterns/detect', () => {
+    it('should return 200 with detection result', async () => {
+      const body = { workspaceId: 'workspace-1' };
+
+      const result = await controller.detectPatterns(body as any);
+
+      expect(result).toEqual(detectionResult);
+      expect(result.newPatterns).toBe(2);
+      expect(result.updatedPatterns).toBe(1);
+      expect(result.totalPatterns).toBe(5);
+      expect(mockCrossProjectLearningService.detectPatterns).toHaveBeenCalledWith('workspace-1');
+    });
+
+    it('should require JWT (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.detectPatterns,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('POST /api/v1/memory/patterns/:patternId/override', () => {
+    it('should return 200 with updated pattern', async () => {
+      const body = { userId: 'user-1', reason: 'Not applicable' };
+
+      const result = await controller.overridePattern('pattern-1', body as any);
+
+      expect(result.status).toBe('overridden');
+      expect(mockCrossProjectLearningService.overridePattern).toHaveBeenCalledWith(
+        'pattern-1',
+        'user-1',
+        'Not applicable',
+      );
+    });
+
+    it('should require JWT (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.overridePattern,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should require userId and reason in body', async () => {
+      const body = { userId: 'user-1', reason: 'Not applicable' };
+
+      await controller.overridePattern('pattern-1', body as any);
+
+      expect(mockCrossProjectLearningService.overridePattern).toHaveBeenCalledWith(
+        'pattern-1',
+        'user-1',
+        'Not applicable',
+      );
+    });
+  });
+
+  describe('POST /api/v1/memory/patterns/:patternId/restore', () => {
+    it('should return 200 with restored pattern', async () => {
+      const result = await controller.restorePattern('pattern-1');
+
+      expect(result).toEqual(testPattern);
+      expect(result.status).toBe('active');
+      expect(mockCrossProjectLearningService.restorePattern).toHaveBeenCalledWith('pattern-1');
+    });
+
+    it('should require JWT (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.restorePattern,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('GET /api/v1/memory/patterns/:workspaceId/recommendations', () => {
+    it('should return 200 with recommendations', async () => {
+      const query = { projectId: 'project-new', task: 'React state management' };
+
+      const result = await controller.getPatternRecommendations('workspace-1', query as any);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].pattern).toBeDefined();
+      expect(result[0].relevanceScore).toBe(0.7);
+      expect(result[0].confidenceLabel).toBe('[RECOMMENDED]');
+      expect(mockCrossProjectLearningService.getPatternRecommendations).toHaveBeenCalledWith(
+        'workspace-1',
+        'project-new',
+        'React state management',
+      );
+    });
+
+    it('should require JWT (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getPatternRecommendations,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('GET /api/v1/memory/patterns/:workspaceId/stats', () => {
+    it('should return 200 with stats', async () => {
+      const result = await controller.getPatternAdoptionStats('workspace-1');
+
+      expect(result).toEqual(adoptionStats);
+      expect(result.totalPatterns).toBe(10);
+      expect(result.byConfidence.high).toBe(2);
+      expect(result.overrideRate).toBe(0.1);
+      expect(mockCrossProjectLearningService.getPatternAdoptionStats).toHaveBeenCalledWith('workspace-1');
+    });
+
+    it('should require JWT (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getPatternAdoptionStats,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
     });
   });
 });

@@ -3,14 +3,16 @@
  * Story 12.1: Graphiti/Neo4j Setup
  * Story 12.2: Memory Ingestion Pipeline
  * Story 12.3: Memory Query Service
+ * Story 12.6: Cross-Project Learning
  *
  * NestJS module for the memory subsystem (Graphiti/Neo4j).
  * Provides Neo4jService, GraphitiService, MemoryHealthService,
  * ingestion pipeline services (MemoryIngestionService,
  * MemoryExtractionService, MemoryDeduplicationService),
- * and MemoryQueryService for querying and scoring memories.
+ * MemoryQueryService for querying and scoring memories,
+ * and CrossProjectLearningService for workspace-level pattern recognition.
  * Exports GraphitiService, Neo4jService, MemoryIngestionService,
- * and MemoryQueryService for use by other modules
+ * MemoryQueryService, and CrossProjectLearningService for use by other modules
  * (orchestrator, agents, context recovery).
  */
 import { Module } from '@nestjs/common';
@@ -22,6 +24,7 @@ import { MemoryIngestionService } from './services/memory-ingestion.service';
 import { MemoryExtractionService } from './services/memory-extraction.service';
 import { MemoryDeduplicationService } from './services/memory-deduplication.service';
 import { MemoryQueryService } from './services/memory-query.service';
+import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import { MemoryController } from './memory.controller';
 
 @Module({
@@ -35,6 +38,12 @@ import { MemoryController } from './memory.controller';
     MemoryExtractionService,
     MemoryDeduplicationService,
     MemoryQueryService,
+    CrossProjectLearningService,
+    // Story 12.6: Provide CrossProjectLearningService as string token for optional injection in MemoryQueryService
+    {
+      provide: 'CrossProjectLearningService',
+      useExisting: CrossProjectLearningService,
+    },
   ],
   exports: [
     GraphitiService,
@@ -42,6 +51,7 @@ import { MemoryController } from './memory.controller';
     MemoryIngestionService,
     MemoryQueryService,
     MemoryHealthService, // Story 12.5: Exported for ContextHealthService to check Graphiti connectivity
+    CrossProjectLearningService, // Story 12.6: Exported for context module access
   ],
 })
 export class MemoryModule {}

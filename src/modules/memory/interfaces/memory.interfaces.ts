@@ -223,3 +223,81 @@ export interface MemoryFeedbackInput {
 export interface ScoredMemory extends MemoryEpisode {
   relevanceScore: number;
 }
+
+// ─── Cross-Project Learning Interfaces (Story 12.6) ──────────────────────────
+
+/**
+ * Pattern type categories for workspace-level patterns.
+ */
+export type PatternType = 'architecture' | 'error' | 'testing' | 'deployment' | 'security';
+
+/**
+ * Confidence level determined by cross-project adoption.
+ */
+export type PatternConfidence = 'low' | 'medium' | 'high';
+
+/**
+ * Pattern lifecycle status.
+ */
+export type PatternStatus = 'active' | 'overridden' | 'archived';
+
+/**
+ * Workspace-level pattern recognized across multiple projects.
+ */
+export interface WorkspacePattern {
+  id: string;
+  workspaceId: string;
+  patternType: PatternType;
+  content: string;
+  sourceProjectIds: string[];
+  sourceEpisodeIds: string[];
+  occurrenceCount: number;
+  confidence: PatternConfidence;
+  status: PatternStatus;
+  overriddenBy: string | null;
+  overrideReason: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  metadata: Record<string, unknown>;
+}
+
+/**
+ * Filters for querying workspace patterns.
+ */
+export interface PatternFilters {
+  patternType?: PatternType;
+  confidence?: PatternConfidence;
+  status?: PatternStatus;
+  limit?: number;
+}
+
+/**
+ * Result from running pattern detection on a workspace.
+ */
+export interface PatternDetectionResult {
+  newPatterns: number;
+  updatedPatterns: number;
+  totalPatterns: number;
+  detectionDurationMs: number;
+}
+
+/**
+ * A pattern recommendation for a specific task, with relevance scoring.
+ */
+export interface PatternRecommendation {
+  pattern: WorkspacePattern;
+  relevanceScore: number;
+  confidenceLabel: string;
+}
+
+/**
+ * Adoption statistics for workspace patterns.
+ */
+export interface PatternAdoptionStats {
+  totalPatterns: number;
+  byConfidence: { low: number; medium: number; high: number };
+  byType: Record<PatternType, number>;
+  overrideRate: number;
+  averageOccurrenceCount: number;
+  topPatterns: WorkspacePattern[];
+}

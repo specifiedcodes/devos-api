@@ -19,6 +19,8 @@ import { Neo4jService } from './neo4j.service';
 import {
   MemoryEpisode,
   MemoryEpisodeType,
+  WorkspacePattern,
+  PatternRecommendation,
 } from '../interfaces/memory.interfaces';
 
 describe('MemoryQueryService', () => {
@@ -26,6 +28,7 @@ describe('MemoryQueryService', () => {
   let mockGraphitiService: any;
   let mockNeo4jService: any;
   let mockConfigService: any;
+  let mockCrossProjectLearningService: any;
 
   /**
    * Helper to create a test MemoryEpisode.
@@ -47,6 +50,29 @@ describe('MemoryQueryService', () => {
     };
   }
 
+  /**
+   * Helper to create a test WorkspacePattern.
+   */
+  function createTestPattern(overrides: Partial<WorkspacePattern> = {}): WorkspacePattern {
+    return {
+      id: 'pattern-1',
+      workspaceId: 'workspace-1',
+      patternType: 'architecture',
+      content: 'Use Zustand for React state management',
+      sourceProjectIds: ['project-1', 'project-2'],
+      sourceEpisodeIds: ['ep-1', 'ep-2'],
+      occurrenceCount: 3,
+      confidence: 'medium',
+      status: 'active',
+      overriddenBy: null,
+      overrideReason: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      metadata: {},
+      ...overrides,
+    };
+  }
+
   beforeEach(async () => {
     mockGraphitiService = {
       searchEpisodes: jest.fn().mockResolvedValue([]),
@@ -62,9 +88,13 @@ describe('MemoryQueryService', () => {
           MEMORY_QUERY_CANDIDATE_MULTIPLIER: '3',
           MEMORY_QUERY_DEFAULT_TOKEN_BUDGET: '4000',
           MEMORY_QUERY_TIME_DECAY_HALF_LIFE_DAYS: '30',
+          CROSS_PROJECT_PATTERN_CONTEXT_BUDGET: '2000',
         };
         return config[key] ?? defaultValue;
       }),
+    };
+    mockCrossProjectLearningService = {
+      getPatternRecommendations: jest.fn().mockResolvedValue([]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -73,6 +103,7 @@ describe('MemoryQueryService', () => {
         { provide: GraphitiService, useValue: mockGraphitiService },
         { provide: Neo4jService, useValue: mockNeo4jService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: 'CrossProjectLearningService', useValue: mockCrossProjectLearningService },
       ],
     }).compile();
 
@@ -886,6 +917,205 @@ describe('MemoryQueryService', () => {
       const result = await service.recordRelevanceFeedback('ep-feedback', true);
 
       expect(result).toBe(false);
+    });
+  });
+
+  // ─── Workspace Patterns Context Tests (Story 12.6) ──────────────────────────
+
+  describe('queryForAgentContext - workspace patterns', () => {
+    it('should include workspace patterns section when patterns exist', async () => {
+      const episodes = [
+        createTestEpisode({
+          id: 'ep-1',
+          episodeType: 'decision',
+          content: 'Use BullMQ for task queue',
+          confidence: 0.9,
+          timestamp: new Date('2026-02-10'),
+        }),
+      ];
+      mockGraphitiService.searchEpisodes.mockResolvedValue(episodes);
+
+      const recommendation: PatternRecommendation = {
+        pattern: createTestPattern({
+          content: 'Use async queues for email sending',
+          occurrenceCount: 5,
+          confidence: 'high',
+        }),
+        relevanceScore: 0.7,
+        confidenceLabel: '[AUTO-APPLY]',
+      };
+      mockCrossProjectLearningService.getPatternRecommendations.mockResolvedValue([recommendation]);
+
+      const result = await service.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'Set up task queue',
+        'dev',
+      );
+
+      expect(result.contextString).toContain('### Workspace Patterns');
+      expect(result.contextString).toContain('Use async queues for email sending');
+    });
+
+    it('should format high-confidence patterns with [AUTO-APPLY] prefix', async () => {
+      mockGraphitiService.searchEpisodes.mockResolvedValue([]);
+
+      const recommendation: PatternRecommendation = {
+        pattern: createTestPattern({
+          content: 'Always use retry logic',
+          occurrenceCount: 5,
+          confidence: 'high',
+        }),
+        relevanceScore: 0.8,
+        confidenceLabel: '[AUTO-APPLY]',
+      };
+      mockCrossProjectLearningService.getPatternRecommendations.mockResolvedValue([recommendation]);
+
+      const result = await service.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'retry logic',
+        'dev',
+      );
+
+      expect(result.contextString).toContain('[AUTO-APPLY]');
+      expect(result.contextString).toContain('confidence: high');
+    });
+
+    it('should format medium-confidence patterns with [RECOMMENDED] prefix', async () => {
+      mockGraphitiService.searchEpisodes.mockResolvedValue([]);
+
+      const recommendation: PatternRecommendation = {
+        pattern: createTestPattern({
+          content: 'Use Zustand for React state',
+          occurrenceCount: 3,
+          confidence: 'medium',
+        }),
+        relevanceScore: 0.6,
+        confidenceLabel: '[RECOMMENDED]',
+      };
+      mockCrossProjectLearningService.getPatternRecommendations.mockResolvedValue([recommendation]);
+
+      const result = await service.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'state management',
+        'dev',
+      );
+
+      expect(result.contextString).toContain('[RECOMMENDED]');
+      expect(result.contextString).toContain('confidence: medium');
+    });
+
+    it('should format low-confidence patterns with [SUGGESTION] prefix', async () => {
+      mockGraphitiService.searchEpisodes.mockResolvedValue([]);
+
+      const recommendation: PatternRecommendation = {
+        pattern: createTestPattern({
+          content: 'Consider exponential backoff',
+          occurrenceCount: 2,
+          confidence: 'low',
+        }),
+        relevanceScore: 0.5,
+        confidenceLabel: '[SUGGESTION]',
+      };
+      mockCrossProjectLearningService.getPatternRecommendations.mockResolvedValue([recommendation]);
+
+      const result = await service.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'API retries',
+        'dev',
+      );
+
+      expect(result.contextString).toContain('[SUGGESTION]');
+      expect(result.contextString).toContain('confidence: low');
+    });
+
+    it('should exclude overridden patterns from context', async () => {
+      mockGraphitiService.searchEpisodes.mockResolvedValue([]);
+
+      // CrossProjectLearningService already filters out overridden patterns
+      // by only returning active patterns
+      mockCrossProjectLearningService.getPatternRecommendations.mockResolvedValue([]);
+
+      const result = await service.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'some task',
+        'dev',
+      );
+
+      // No workspace patterns section when no patterns
+      expect(result.contextString).not.toContain('### Workspace Patterns');
+    });
+
+    it('should respect pattern token budget', async () => {
+      // Create many recommendations that would exceed budget
+      const recommendations: PatternRecommendation[] = Array.from(
+        { length: 50 },
+        (_, i) => ({
+          pattern: createTestPattern({
+            content: `Pattern ${i}: ${'A'.repeat(200)}`,
+            occurrenceCount: 3,
+            confidence: 'medium',
+          }),
+          relevanceScore: 0.5,
+          confidenceLabel: '[RECOMMENDED]',
+        }),
+      );
+      mockGraphitiService.searchEpisodes.mockResolvedValue([]);
+      mockCrossProjectLearningService.getPatternRecommendations.mockResolvedValue(recommendations);
+
+      const result = await service.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'some task',
+        'dev',
+        10000, // large overall budget
+      );
+
+      // Should have workspace patterns section but truncated
+      if (result.contextString.includes('### Workspace Patterns')) {
+        // Pattern section should not exceed ~2000 tokens (8000 chars)
+        const patternsSection = result.contextString.split('### Workspace Patterns')[1];
+        expect(patternsSection.length).toBeLessThan(10000);
+      }
+    });
+
+    it('should gracefully handle missing CrossProjectLearningService', async () => {
+      // Create a service without CrossProjectLearningService
+      const moduleWithout = await Test.createTestingModule({
+        providers: [
+          MemoryQueryService,
+          { provide: GraphitiService, useValue: mockGraphitiService },
+          { provide: Neo4jService, useValue: mockNeo4jService },
+          { provide: ConfigService, useValue: mockConfigService },
+          // No CrossProjectLearningService provided
+        ],
+      }).compile();
+
+      const serviceWithout = moduleWithout.get<MemoryQueryService>(MemoryQueryService);
+
+      const episodes = [
+        createTestEpisode({
+          episodeType: 'decision',
+          content: 'Use BullMQ',
+          confidence: 0.9,
+        }),
+      ];
+      mockGraphitiService.searchEpisodes.mockResolvedValue(episodes);
+
+      const result = await serviceWithout.queryForAgentContext(
+        'project-1',
+        'workspace-1',
+        'task queue',
+        'dev',
+      );
+
+      // Should work fine without patterns
+      expect(result.contextString).toContain('## Relevant Project Memory');
+      expect(result.contextString).not.toContain('### Workspace Patterns');
     });
   });
 });
