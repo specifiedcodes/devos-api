@@ -1,14 +1,28 @@
 /**
  * TaskContextAssembler Tests
  * Story 11.3: Agent-to-CLI Execution Pipeline
+ * Story 12.4: Three-Tier Context Recovery Enhancement (Memory Integration)
  *
  * TDD: Tests written first, then implementation.
- * Tests context assembly and prompt formatting for pipeline agents.
+ * Tests context assembly, prompt formatting, and Graphiti memory integration.
  */
+
+// Mock ESM modules that cause Jest transform issues (Story 12.4: MemoryQueryService chain)
+jest.mock('uuid', () => ({
+  v4: jest.fn(() => 'mock-uuid-v4'),
+}));
+jest.mock('neo4j-driver', () => ({
+  default: {
+    driver: jest.fn(),
+  },
+  auth: { basic: jest.fn() },
+}));
+
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { TaskContextAssemblerService } from './task-context-assembler.service';
 import { AgentTaskContext } from '../interfaces/pipeline-job.interfaces';
+import { MemoryQueryService } from '../../memory/services/memory-query.service';
 import * as fsPromises from 'fs/promises';
 
 jest.mock('fs/promises');
@@ -274,6 +288,176 @@ describe('TaskContextAssemblerService', () => {
       const prompt = service.formatTaskPrompt(baseContext, 'unknown-type');
       // Should not throw, should use dev template as fallback
       expect(prompt).toContain('Build Auth Module');
+    });
+  });
+
+  // ── Story 12.4: Graphiti Memory Integration Tests ─────────────────────
+
+  describe('assembleContext with Graphiti memory (Story 12.4)', () => {
+    let serviceWithMemory: TaskContextAssemblerService;
+    let mockMemoryQueryService: any;
+
+    beforeEach(async () => {
+      mockMemoryQueryService = {
+        query: jest.fn().mockResolvedValue({
+          memories: [],
+          totalCount: 0,
+          relevanceScores: [],
+          queryDurationMs: 5,
+        }),
+        queryForAgentContext: jest.fn().mockResolvedValue({
+          contextString: '## Relevant Project Memory\n\n### Decisions\n- Used NestJS modules',
+          memoryCount: 1,
+        }),
+      };
+
+      const module: TestingModule = await Test.createTestingModule({
+        providers: [
+          TaskContextAssemblerService,
+          {
+            provide: ConfigService,
+            useValue: {
+              get: jest.fn((key: string, defaultValue?: any) => {
+                if (key === 'CONTEXT_MEMORY_TOKEN_BUDGET') return '4000';
+                return defaultValue ?? '';
+              }),
+            },
+          },
+          {
+            provide: MemoryQueryService,
+            useValue: mockMemoryQueryService,
+          },
+        ],
+      }).compile();
+
+      serviceWithMemory = module.get<TaskContextAssemblerService>(
+        TaskContextAssemblerService,
+      );
+    });
+
+    it('should include Graphiti memory context when MemoryQueryService available', async () => {
+      mockedFsPromises.access.mockRejectedValue(new Error('ENOENT'));
+      mockedFsPromises.readdir.mockResolvedValue([] as any);
+
+      const result = await serviceWithMemory.assembleContext({
+        workspaceId: 'ws-123',
+        projectId: 'proj-456',
+        storyId: 'story-1',
+        agentType: 'dev',
+        workspacePath: mockWorkspacePath,
+        pipelineMetadata: {
+          storyTitle: 'Test',
+          storyDescription: 'Build feature X',
+          acceptanceCriteria: [],
+        },
+      });
+
+      expect(result.memoryContext).toBeDefined();
+      expect(result.memoryContext).toContain('Relevant Project Memory');
+      expect(mockMemoryQueryService.queryForAgentContext).toHaveBeenCalledWith(
+        'proj-456',
+        'ws-123',
+        'Build feature X',
+        'dev',
+        4000,
+      );
+    });
+
+    it('should work without memory context when MemoryQueryService unavailable (null)', async () => {
+      mockedFsPromises.access.mockRejectedValue(new Error('ENOENT'));
+      mockedFsPromises.readdir.mockResolvedValue([] as any);
+
+      // Use the service WITHOUT MemoryQueryService (from beforeEach of parent describe)
+      const result = await service.assembleContext({
+        workspaceId: 'ws-123',
+        projectId: 'proj-456',
+        storyId: 'story-1',
+        agentType: 'dev',
+        workspacePath: mockWorkspacePath,
+        pipelineMetadata: {
+          storyTitle: 'Test',
+          storyDescription: 'Test desc',
+          acceptanceCriteria: [],
+        },
+      });
+
+      expect(result.memoryContext).toBeUndefined();
+    });
+
+    it('should append memory context after file-based context', async () => {
+      mockedFsPromises.access.mockRejectedValue(new Error('ENOENT'));
+      mockedFsPromises.readdir.mockResolvedValue([] as any);
+
+      const result = await serviceWithMemory.assembleContext({
+        workspaceId: 'ws-123',
+        projectId: 'proj-456',
+        storyId: 'story-1',
+        agentType: 'dev',
+        workspacePath: mockWorkspacePath,
+        pipelineMetadata: {
+          storyTitle: 'Test',
+          storyDescription: 'Build feature X',
+          acceptanceCriteria: [],
+        },
+      });
+
+      // projectContext is file-based, memoryContext is from Graphiti
+      expect(result.projectContext).toBeDefined();
+      expect(result.memoryContext).toBeDefined();
+      expect(result.memoryContext).toContain('Relevant Project Memory');
+    });
+
+    it('should respect configured token budget for memory context', async () => {
+      mockedFsPromises.access.mockRejectedValue(new Error('ENOENT'));
+      mockedFsPromises.readdir.mockResolvedValue([] as any);
+
+      await serviceWithMemory.assembleContext({
+        workspaceId: 'ws-123',
+        projectId: 'proj-456',
+        storyId: 'story-1',
+        agentType: 'dev',
+        workspacePath: mockWorkspacePath,
+        pipelineMetadata: {
+          storyTitle: 'Test',
+          storyDescription: 'Build feature X',
+          acceptanceCriteria: [],
+        },
+      });
+
+      // Verify token budget was passed
+      expect(mockMemoryQueryService.queryForAgentContext).toHaveBeenCalledWith(
+        'proj-456',
+        'ws-123',
+        'Build feature X',
+        'dev',
+        4000,
+      );
+    });
+
+    it('should handle MemoryQueryService errors gracefully (proceeds without memory)', async () => {
+      mockMemoryQueryService.queryForAgentContext.mockRejectedValue(
+        new Error('Neo4j connection timeout'),
+      );
+
+      mockedFsPromises.access.mockRejectedValue(new Error('ENOENT'));
+      mockedFsPromises.readdir.mockResolvedValue([] as any);
+
+      const result = await serviceWithMemory.assembleContext({
+        workspaceId: 'ws-123',
+        projectId: 'proj-456',
+        storyId: 'story-1',
+        agentType: 'dev',
+        workspacePath: mockWorkspacePath,
+        pipelineMetadata: {
+          storyTitle: 'Test',
+          storyDescription: 'Build feature X',
+          acceptanceCriteria: [],
+        },
+      });
+
+      // Should not throw, should proceed without memory
+      expect(result).toBeDefined();
+      expect(result.memoryContext).toBeUndefined();
     });
   });
 });

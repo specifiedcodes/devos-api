@@ -1,11 +1,13 @@
 /**
  * TaskContextAssemblerService
  * Story 11.3: Agent-to-CLI Execution Pipeline
+ * Story 12.4: Three-Tier Context Recovery Enhancement (Graphiti memory integration)
  *
  * Assembles rich context for Claude Code CLI sessions based on
- * agent type, story details, workspace files, and pipeline metadata.
+ * agent type, story details, workspace files, pipeline metadata,
+ * and Graphiti memory context.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs';
 import * as fsPromises from 'fs/promises';
@@ -16,6 +18,7 @@ import {
   DEV_AGENT_PROMPT_TEMPLATE,
   formatPrompt,
 } from '../prompts/agent-prompt-templates';
+import { MemoryQueryService } from '../../memory/services/memory-query.service';
 
 /**
  * Parameters for assembling task context.
@@ -33,11 +36,15 @@ export interface AssembleContextParams {
 export class TaskContextAssemblerService {
   private readonly logger = new Logger(TaskContextAssemblerService.name);
 
-  constructor(private readonly configService: ConfigService) {}
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() @Inject(MemoryQueryService)
+    private readonly memoryQueryService?: MemoryQueryService,
+  ) {}
 
   /**
    * Assemble task context for a pipeline phase.
-   * Reads from project settings, story data, and workspace files.
+   * Reads from project settings, story data, workspace files, and Graphiti memory.
    */
   async assembleContext(
     params: AssembleContextParams,
@@ -63,6 +70,14 @@ export class TaskContextAssemblerService {
     // List existing files in workspace (async to avoid blocking event loop)
     const existingFiles = await this.listWorkspaceFiles(workspacePath);
 
+    // Query Graphiti memory for relevant context (Story 12.4)
+    const memoryContext = await this.queryMemoryContext(
+      params.projectId,
+      params.workspaceId,
+      storyDescription,
+      params.agentType,
+    );
+
     return {
       storyTitle,
       storyDescription,
@@ -73,6 +88,7 @@ export class TaskContextAssemblerService {
       existingFiles,
       projectContext,
       previousAgentOutput,
+      memoryContext: memoryContext || undefined,
     };
   }
 
@@ -111,6 +127,48 @@ export class TaskContextAssemblerService {
     }
 
     return '';
+  }
+
+  /**
+   * Query Graphiti memory for relevant context to include in agent task context.
+   * Returns formatted memory context string or empty string.
+   * Handles MemoryQueryService being unavailable or throwing errors gracefully.
+   * Story 12.4: Three-Tier Context Recovery Enhancement.
+   */
+  private async queryMemoryContext(
+    projectId: string,
+    workspaceId: string,
+    taskDescription: string,
+    agentType: string,
+  ): Promise<string> {
+    if (!this.memoryQueryService) {
+      return '';
+    }
+
+    try {
+      const tokenBudget = parseInt(
+        this.configService.get<string>(
+          'CONTEXT_MEMORY_TOKEN_BUDGET',
+          '4000',
+        ),
+        10,
+      );
+
+      const result = await this.memoryQueryService.queryForAgentContext(
+        projectId,
+        workspaceId,
+        taskDescription,
+        agentType,
+        tokenBudget,
+      );
+
+      return result.contextString || '';
+    } catch (error) {
+      this.logger.warn(
+        `Failed to query Graphiti memory for agent context: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return '';
+    }
   }
 
   /**

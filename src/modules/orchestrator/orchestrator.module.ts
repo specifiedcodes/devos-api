@@ -133,6 +133,8 @@ import { HandoffHistoryService } from './services/handoff-history.service';
 import { AgentFailureDetectorService } from './services/agent-failure-detector.service';
 import { CheckpointService } from './services/checkpoint.service';
 import { PipelineFailureRecoveryService } from './services/pipeline-failure-recovery.service';
+// Story 12.4: Memory module for Graphiti memory integration in TaskContextAssemblerService
+import { MemoryModule } from '../memory/memory.module';
 
 @Module({
   imports: [
@@ -145,6 +147,7 @@ import { PipelineFailureRecoveryService } from './services/pipeline-failure-reco
     BYOKModule,
     CliSessionsModule,
     IntegrationsModule,
+    MemoryModule,
   ],
   controllers: [OrchestratorController],
   providers: [

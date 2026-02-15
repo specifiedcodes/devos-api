@@ -80,6 +80,7 @@ import { PushSubscription } from './database/entities/push-subscription.entity';
 import { PipelineStateHistory } from './modules/orchestrator/entities/pipeline-state-history.entity';
 import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { MemoryModule } from './modules/memory/memory.module';
+import { ContextModule } from './modules/context/context.module';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -195,6 +196,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     NotificationsModule,
     OrchestratorModule,
     MemoryModule,
+    ContextModule,
   ],
   controllers: [AppController],
   providers: [

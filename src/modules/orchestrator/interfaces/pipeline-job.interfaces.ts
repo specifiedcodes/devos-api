@@ -82,6 +82,8 @@ export interface AgentTaskContext {
   existingFiles: string[];
   projectContext: string;
   previousAgentOutput: string | null;
+  /** Optional Graphiti memory context appended during assembly (Story 12.4) */
+  memoryContext?: string;
 }
 
 // ─── Stream Params ──────────────────────────────────────────────────────────
