@@ -5,11 +5,12 @@
  * Story 12.3: Memory Query Service
  * Story 12.6: Cross-Project Learning
  * Story 12.7: Memory Summarization (Cheap Models)
+ * Story 12.8: Context Budget System
  *
  * REST API endpoints for the memory subsystem.
  * Provides health check, manual ingestion trigger, ingestion stats,
  * memory query, relevance feedback, cross-project pattern management,
- * and memory summarization management.
+ * memory summarization management, and context budget information.
  */
 import {
   Controller,
@@ -37,6 +38,7 @@ import { MemoryIngestionService } from './services/memory-ingestion.service';
 import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import { MemorySummarizationService } from './services/memory-summarization.service';
+import { ContextBudgetService } from './services/context-budget.service';
 import {
   MemoryHealth,
   IngestionResult,
@@ -53,6 +55,7 @@ import {
   MemorySummary,
   SummarizationResult,
   SummarizationStats,
+  ContextBudget,
 } from './interfaces/memory.interfaces';
 import {
   IngestMemoryDto,
@@ -73,6 +76,7 @@ import {
   SummaryQueryDto,
   SummarizationStatsQueryDto,
 } from './dto/summarization.dto';
+import { ContextBudgetQueryDto } from './dto/context-budget.dto';
 
 @ApiTags('Memory')
 @Controller('api/v1/memory')
@@ -83,6 +87,7 @@ export class MemoryController {
     private readonly memoryQueryService: MemoryQueryService,
     private readonly crossProjectLearningService: CrossProjectLearningService,
     private readonly memorySummarizationService: MemorySummarizationService,
+    private readonly contextBudgetService: ContextBudgetService,
   ) {}
 
   @Get('health')
@@ -280,6 +285,27 @@ export class MemoryController {
       query.projectId,
       query.workspaceId,
     );
+  }
+
+  // ─── Context Budget Endpoint (Story 12.8) ───────────────────────────────────
+
+  @Get('context-budget')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get context budget for a model' })
+  @ApiQuery({ name: 'modelId', required: true, type: String, description: 'Model identifier (e.g., claude-3-5-sonnet, gpt-4)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Context budget returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async getContextBudget(
+    @Query() query: ContextBudgetQueryDto,
+  ): Promise<ContextBudget> {
+    return this.contextBudgetService.calculateBudget(query.modelId);
   }
 
   // ─── Cross-Project Learning Endpoints (Story 12.6) ─────────────────────────

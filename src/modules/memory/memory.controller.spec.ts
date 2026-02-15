@@ -5,6 +5,7 @@
  * Story 12.3: Memory Query Service
  * Story 12.6: Cross-Project Learning
  * Story 12.7: Memory Summarization (Cheap Models)
+ * Story 12.8: Context Budget System
  */
 
 // Mock uuid (required by transitive GraphitiService import)
@@ -19,6 +20,7 @@ import { MemoryIngestionService } from './services/memory-ingestion.service';
 import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import { MemorySummarizationService } from './services/memory-summarization.service';
+import { ContextBudgetService } from './services/context-budget.service';
 import {
   MemoryHealth,
   IngestionResult,
@@ -31,6 +33,7 @@ import {
   SummarizationResult,
   SummarizationStats,
   MemorySummary,
+  ContextBudget,
 } from './interfaces/memory.interfaces';
 
 describe('MemoryController', () => {
@@ -40,6 +43,7 @@ describe('MemoryController', () => {
   let mockMemoryQueryService: Partial<MemoryQueryService>;
   let mockCrossProjectLearningService: any;
   let mockMemorySummarizationService: any;
+  let mockContextBudgetService: any;
 
   const healthyResponse: MemoryHealth = {
     neo4jConnected: true,
@@ -154,6 +158,34 @@ describe('MemoryController', () => {
       getPatternAdoptionStats: jest.fn().mockResolvedValue(adoptionStats),
     };
 
+    mockContextBudgetService = {
+      calculateBudget: jest.fn().mockReturnValue({
+        modelId: 'claude-3-5-sonnet',
+        totalTokens: 200000,
+        responseReserve: 60000,
+        systemPromptTokens: 20000,
+        availableForContext: 120000,
+        allocations: {
+          tier1: 500,
+          storyContext: 2000,
+          tier2: 10000,
+          memories: 64500,
+          tier3: 41000,
+          patterns: 2000,
+        },
+        usedTokens: {
+          tier1: 0,
+          storyContext: 0,
+          tier2: 0,
+          memories: 0,
+          tier3: 0,
+          patterns: 0,
+        },
+        totalUsed: 0,
+        utilizationPercent: 0,
+      } as ContextBudget),
+    };
+
     mockMemorySummarizationService = {
       summarizeProject: jest.fn().mockResolvedValue({
         summariesCreated: 3,
@@ -211,6 +243,10 @@ describe('MemoryController', () => {
         {
           provide: MemorySummarizationService,
           useValue: mockMemorySummarizationService,
+        },
+        {
+          provide: ContextBudgetService,
+          useValue: mockContextBudgetService,
         },
       ],
     }).compile();
@@ -825,6 +861,43 @@ describe('MemoryController', () => {
       );
       expect(guards).toBeDefined();
       expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ─── Context Budget Endpoint Tests (Story 12.8) ───────────────────────────
+
+  describe('GET /api/v1/memory/context-budget', () => {
+    it('should return 200 with ContextBudget', async () => {
+      const query = { modelId: 'claude-3-5-sonnet' };
+
+      const result = await controller.getContextBudget(query as any);
+
+      expect(result).toBeDefined();
+      expect(result.modelId).toBe('claude-3-5-sonnet');
+      expect(result.totalTokens).toBe(200000);
+      expect(result.responseReserve).toBe(60000);
+      expect(result.systemPromptTokens).toBe(20000);
+      expect(result.availableForContext).toBe(120000);
+      expect(mockContextBudgetService.calculateBudget).toHaveBeenCalledWith(
+        'claude-3-5-sonnet',
+      );
+    });
+
+    it('should require JWT authentication (JwtAuthGuard applied)', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getContextBudget,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should validate required modelId param', async () => {
+      const query = { modelId: 'gpt-4' };
+
+      await controller.getContextBudget(query as any);
+
+      expect(mockContextBudgetService.calculateBudget).toHaveBeenCalledWith('gpt-4');
     });
   });
 });

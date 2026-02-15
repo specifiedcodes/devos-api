@@ -303,6 +303,77 @@ export interface PatternAdoptionStats {
   topPatterns: WorkspacePattern[];
 }
 
+// ─── Context Budget Interfaces (Story 12.8) ──────────────────────────────────
+
+/**
+ * Budget tracking for context assembly within a model's token window.
+ */
+export interface ContextBudget {
+  modelId: string;
+  totalTokens: number;
+  responseReserve: number;
+  systemPromptTokens: number;
+  availableForContext: number;
+  allocations: ContextAllocations;
+  usedTokens: ContextAllocations;
+  totalUsed: number;
+  utilizationPercent: number;
+}
+
+/**
+ * Token allocation and usage per context source.
+ */
+export interface ContextAllocations {
+  tier1: number;
+  storyContext: number;
+  tier2: number;
+  memories: number;
+  tier3: number;
+  patterns: number;
+}
+
+/**
+ * Parameters for assembling context within a budget.
+ */
+export interface ContextAssemblyParams {
+  modelId: string;
+  projectId: string;
+  workspaceId: string;
+  agentType: string;
+  taskDescription: string;
+  taskComplexity?: 'simple' | 'medium' | 'complex';
+  isRetry?: boolean;
+  errorContext?: string;
+  tier1Content?: string;
+  storyContent?: string;
+  tier2Content?: string;
+  tier3Content?: string;
+}
+
+/**
+ * Result of context assembly including budget tracking and metadata.
+ */
+export interface AssembledContext {
+  contextString: string;
+  budget: ContextBudget;
+  sourcesIncluded: string[];
+  sourcesSkipped: string[];
+  sourcesTruncated: string[];
+  assemblyDurationMs: number;
+  warnings: string[];
+}
+
+/**
+ * Report on context budget utilization for analytics and monitoring.
+ */
+export interface ContextUtilizationReport {
+  modelId: string;
+  totalBudget: number;
+  totalUsed: number;
+  utilizationPercent: number;
+  perSource: Record<string, { allocated: number; used: number }>;
+}
+
 // ─── Memory Summarization Interfaces (Story 12.7) ────────────────────────────
 
 /**
