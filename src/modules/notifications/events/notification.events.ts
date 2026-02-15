@@ -14,7 +14,9 @@ export type NotificationType =
   | 'deployment_success'
   | 'deployment_failed'
   | 'agent_error'
-  | 'agent_message';
+  | 'agent_message'
+  | 'context_degraded'
+  | 'context_critical';
 
 /**
  * Notification urgency levels
@@ -115,6 +117,27 @@ export interface AgentMessageEvent {
 }
 
 /**
+ * Context degraded event payload (Story 12.5)
+ */
+export interface ContextDegradedEvent {
+  projectId: string;
+  workspaceId: string;
+  previousHealth: string;
+  currentHealth: string;
+  issues: string[];
+}
+
+/**
+ * Context critical event payload (Story 12.5)
+ */
+export interface ContextCriticalEvent {
+  projectId: string;
+  workspaceId: string;
+  issues: string[];
+  criticalSince: string; // ISO 8601
+}
+
+/**
  * Event names used with NestJS EventEmitter
  */
 export const NotificationEventNames = {
@@ -124,4 +147,5 @@ export const NotificationEventNames = {
   DEPLOYMENT_FAILED: 'deployment.failed',
   AGENT_ERROR: 'agent.error',
   AGENT_MESSAGE: 'agent.message',
+  CONTEXT_HEALTH_CHANGED: 'context:health_changed',
 } as const;

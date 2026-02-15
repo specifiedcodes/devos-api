@@ -9,11 +9,15 @@
  * - Epic completion -> Update all three tiers
  *
  * Implements debounce to prevent duplicate writes from rapid events.
+ *
+ * Story 12.5: After context generation, triggers health check via
+ * ContextHealthEventService to detect health transitions.
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { ConfigService } from '@nestjs/config';
 import { ContextGenerationService } from './context-generation.service';
+import { ContextHealthEventService } from './context-health-event.service';
 import {
   PipelineStateEvent,
   PipelineState,
@@ -42,6 +46,7 @@ export class ContextGenerationTriggerService {
   constructor(
     private readonly contextGenerationService: ContextGenerationService,
     private readonly configService: ConfigService,
+    @Optional() private readonly contextHealthEventService?: ContextHealthEventService,
   ) {}
 
   /**
@@ -137,6 +142,9 @@ export class ContextGenerationTriggerService {
         );
         await this.contextGenerationService.writeDevOSContext(workspacePath, context);
       }
+
+      // Story 12.5: Trigger health check after context generation
+      await this.triggerHealthCheck(event.projectId, event.workspaceId, workspacePath);
     } catch (error) {
       // Event handlers must not crash - log error and continue
       this.logger.error(
@@ -218,5 +226,31 @@ export class ContextGenerationTriggerService {
     }
 
     return `${basePath}/${safeWorkspaceId}/${safeProjectId}`;
+  }
+
+  /**
+   * Story 12.5: Trigger health check after context generation.
+   * Wrapped in try/catch to prevent health check failures from blocking
+   * context generation.
+   */
+  private async triggerHealthCheck(
+    projectId: string,
+    workspaceId: string,
+    workspacePath: string,
+  ): Promise<void> {
+    if (!this.contextHealthEventService) {
+      return;
+    }
+    try {
+      await this.contextHealthEventService.checkAndEmitHealthChange(
+        projectId,
+        workspaceId,
+        workspacePath,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Health check failed after context generation for project ${projectId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
   }
 }

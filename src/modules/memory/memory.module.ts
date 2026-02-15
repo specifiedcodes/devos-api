@@ -41,6 +41,7 @@ import { MemoryController } from './memory.controller';
     Neo4jService,
     MemoryIngestionService,
     MemoryQueryService,
+    MemoryHealthService, // Story 12.5: Exported for ContextHealthService to check Graphiti connectivity
   ],
 })
 export class MemoryModule {}

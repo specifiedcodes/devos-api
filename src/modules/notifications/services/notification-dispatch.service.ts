@@ -359,6 +359,8 @@ export class NotificationDispatchService {
       'deployment_failed',
       'agent_error',
       'agent_message',
+      'context_degraded',
+      'context_critical',
     ];
     return validTypes.includes(type as NotificationType);
   }

@@ -208,7 +208,9 @@ export class NotificationPreferencesService {
     }
 
     // Map notification type to event setting
-    const typeToSettingMap: Record<NotificationType, keyof EventNotificationSettings> = {
+    // Note: context_degraded and context_critical (Story 12.5) are not user-configurable
+    // and default to enabled (handled by the fallback below)
+    const typeToSettingMap: Partial<Record<NotificationType, keyof EventNotificationSettings>> = {
       epic_completed: 'epicCompletions',
       story_completed: 'storyCompletions',
       deployment_success: 'deploymentSuccess',
