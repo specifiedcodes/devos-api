@@ -78,6 +78,8 @@ import { ContextSnapshot } from './database/entities/context-snapshot.entity';
 import { AuditLog } from './database/entities/audit-log.entity';
 import { PushSubscription } from './database/entities/push-subscription.entity';
 import { PipelineStateHistory } from './modules/orchestrator/entities/pipeline-state-history.entity';
+import { HandoffHistory } from './modules/orchestrator/entities/handoff-history.entity';
+import { FailureRecoveryHistory } from './modules/orchestrator/entities/failure-recovery-history.entity';
 import { ModelDefinition } from './database/entities/model-definition.entity';
 import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { MemoryModule } from './modules/memory/memory.module';
@@ -149,6 +151,8 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         PushSubscription,
         ApiUsage,
         PipelineStateHistory,
+        HandoffHistory,
+        FailureRecoveryHistory,
         ModelDefinition,
       ],
       synchronize: false, // Always false - use migrations
