@@ -6,6 +6,7 @@
  * Story 12.6: Cross-Project Learning
  * Story 12.7: Memory Summarization (Cheap Models)
  * Story 12.8: Context Budget System
+ * Story 12.9: Memory Lifecycle Management
  */
 
 // Mock uuid (required by transitive GraphitiService import)
@@ -21,6 +22,7 @@ import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import { MemorySummarizationService } from './services/memory-summarization.service';
 import { ContextBudgetService } from './services/context-budget.service';
+import { MemoryLifecycleService } from './services/memory-lifecycle.service';
 import {
   MemoryHealth,
   IngestionResult,
@@ -34,6 +36,9 @@ import {
   SummarizationStats,
   MemorySummary,
   ContextBudget,
+  MemoryLifecyclePolicy,
+  LifecycleResult,
+  LifecycleReport,
 } from './interfaces/memory.interfaces';
 
 describe('MemoryController', () => {
@@ -44,6 +49,7 @@ describe('MemoryController', () => {
   let mockCrossProjectLearningService: any;
   let mockMemorySummarizationService: any;
   let mockContextBudgetService: any;
+  let mockMemoryLifecycleService: any;
 
   const healthyResponse: MemoryHealth = {
     neo4jConnected: true,
@@ -221,6 +227,59 @@ describe('MemoryController', () => {
       } as SummarizationStats),
     };
 
+    mockMemoryLifecycleService = {
+      runLifecycle: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        pruneResult: { prunedCount: 2, prunedEpisodeIds: ['ep-1', 'ep-2'], skippedPinned: 0, skippedDecisions: 1, skippedPatterns: 0, durationMs: 50 },
+        consolidationResults: [{ projectId: 'project-1', consolidatedCount: 1, newEpisodeIds: ['new-1'], archivedOriginalIds: ['old-1', 'old-2'], durationMs: 30 }],
+        archiveResult: { archivedCount: 3, archivedEpisodeIds: ['arch-1', 'arch-2', 'arch-3'], skippedDecisions: 0, skippedPatterns: 0, skippedPinned: 0, durationMs: 20 },
+        capResults: [{ projectId: 'project-1', activeCountBefore: 5010, activeCountAfter: 5000, archivedCount: 10, durationMs: 40 }],
+        totalDurationMs: 140,
+        errors: [],
+      } as LifecycleResult),
+      getLifecyclePolicy: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        pruneAfterDays: 180,
+        consolidateThreshold: 0.85,
+        archiveAfterDays: 365,
+        maxMemoriesPerProject: 5000,
+        retainDecisionsForever: true,
+        retainPatternsForever: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+      } as MemoryLifecyclePolicy),
+      updateLifecyclePolicy: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        pruneAfterDays: 90,
+        consolidateThreshold: 0.85,
+        archiveAfterDays: 365,
+        maxMemoriesPerProject: 5000,
+        retainDecisionsForever: true,
+        retainPatternsForever: true,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-02-15T10:00:00.000Z'),
+      } as MemoryLifecyclePolicy),
+      getLifecycleReport: jest.fn().mockResolvedValue({
+        workspaceId: 'workspace-1',
+        generatedAt: new Date('2026-02-15T10:00:00.000Z'),
+        totalProjects: 2,
+        totalActiveEpisodes: 500,
+        totalArchivedEpisodes: 100,
+        totalPrunedAllTime: 0,
+        totalConsolidatedAllTime: 0,
+        graphSizeMetrics: { totalNodes: 1000, totalEdges: 2000, estimatedStorageMB: 1.95 },
+        queryPerformanceMetrics: { averageQueryTimeMs: 0, cacheHitRate: 0 },
+        projectBreakdown: [
+          { projectId: 'project-1', activeEpisodes: 300, archivedEpisodes: 80, recommendation: 'healthy' },
+          { projectId: 'project-2', activeEpisodes: 200, archivedEpisodes: 20, recommendation: 'healthy' },
+        ],
+        lastLifecycleRun: null,
+      } as LifecycleReport),
+      pinMemory: jest.fn().mockResolvedValue(true),
+      unpinMemory: jest.fn().mockResolvedValue(true),
+      deleteMemory: jest.fn().mockResolvedValue(true),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [MemoryController],
       providers: [
@@ -247,6 +306,10 @@ describe('MemoryController', () => {
         {
           provide: ContextBudgetService,
           useValue: mockContextBudgetService,
+        },
+        {
+          provide: MemoryLifecycleService,
+          useValue: mockMemoryLifecycleService,
         },
       ],
     }).compile();
@@ -898,6 +961,193 @@ describe('MemoryController', () => {
       await controller.getContextBudget(query as any);
 
       expect(mockContextBudgetService.calculateBudget).toHaveBeenCalledWith('gpt-4');
+    });
+  });
+
+  // ─── Memory Lifecycle Endpoint Tests (Story 12.9) ──────────────────────────
+
+  describe('POST /api/v1/memory/lifecycle/run', () => {
+    it('should return 200 with LifecycleResult', async () => {
+      const body = { workspaceId: 'workspace-1' };
+
+      const result = await controller.runLifecycle(body as any);
+
+      expect(result.workspaceId).toBe('workspace-1');
+      expect(result.pruneResult.prunedCount).toBe(2);
+      expect(result.consolidationResults).toHaveLength(1);
+      expect(result.archiveResult.archivedCount).toBe(3);
+      expect(result.capResults).toHaveLength(1);
+      expect(result.errors).toEqual([]);
+      expect(mockMemoryLifecycleService.runLifecycle).toHaveBeenCalledWith('workspace-1');
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.runLifecycle,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should validate required workspaceId', async () => {
+      const body = { workspaceId: 'workspace-1' };
+
+      await controller.runLifecycle(body as any);
+
+      expect(mockMemoryLifecycleService.runLifecycle).toHaveBeenCalledWith('workspace-1');
+    });
+  });
+
+  describe('GET /api/v1/memory/lifecycle/policy', () => {
+    it('should return 200 with MemoryLifecyclePolicy', async () => {
+      const query = { workspaceId: 'workspace-1' };
+
+      const result = await controller.getLifecyclePolicy(query as any);
+
+      expect(result.workspaceId).toBe('workspace-1');
+      expect(result.pruneAfterDays).toBe(180);
+      expect(result.consolidateThreshold).toBe(0.85);
+      expect(result.archiveAfterDays).toBe(365);
+      expect(result.maxMemoriesPerProject).toBe(5000);
+      expect(result.retainDecisionsForever).toBe(true);
+      expect(result.retainPatternsForever).toBe(true);
+      expect(mockMemoryLifecycleService.getLifecyclePolicy).toHaveBeenCalledWith('workspace-1');
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getLifecyclePolicy,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('PUT /api/v1/memory/lifecycle/policy', () => {
+    it('should return 200 with updated policy', async () => {
+      const body = { workspaceId: 'workspace-1', pruneAfterDays: 90 };
+
+      const result = await controller.updateLifecyclePolicy(body as any);
+
+      expect(result.pruneAfterDays).toBe(90);
+      expect(mockMemoryLifecycleService.updateLifecyclePolicy).toHaveBeenCalledWith(
+        'workspace-1',
+        { pruneAfterDays: 90 },
+      );
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.updateLifecyclePolicy,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('GET /api/v1/memory/lifecycle/report', () => {
+    it('should return 200 with LifecycleReport', async () => {
+      const query = { workspaceId: 'workspace-1' };
+
+      const result = await controller.getLifecycleReport(query as any);
+
+      expect(result.workspaceId).toBe('workspace-1');
+      expect(result.totalProjects).toBe(2);
+      expect(result.totalActiveEpisodes).toBe(500);
+      expect(result.totalArchivedEpisodes).toBe(100);
+      expect(result.graphSizeMetrics.totalNodes).toBe(1000);
+      expect(result.projectBreakdown).toHaveLength(2);
+      expect(mockMemoryLifecycleService.getLifecycleReport).toHaveBeenCalledWith('workspace-1');
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.getLifecycleReport,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('POST /api/v1/memory/episodes/:episodeId/pin', () => {
+    it('should return 200 with pinned status', async () => {
+      const result = await controller.pinMemory('ep-1');
+
+      expect(result).toEqual({ pinned: true });
+      expect(mockMemoryLifecycleService.pinMemory).toHaveBeenCalledWith('ep-1');
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.pinMemory,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should return pinned: false when episode not found', async () => {
+      mockMemoryLifecycleService.pinMemory.mockResolvedValueOnce(false);
+
+      const result = await controller.pinMemory('nonexistent');
+
+      expect(result).toEqual({ pinned: false });
+    });
+  });
+
+  describe('POST /api/v1/memory/episodes/:episodeId/unpin', () => {
+    it('should return 200 with unpinned status', async () => {
+      const result = await controller.unpinMemory('ep-1');
+
+      expect(result).toEqual({ unpinned: true });
+      expect(mockMemoryLifecycleService.unpinMemory).toHaveBeenCalledWith('ep-1');
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.unpinMemory,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should return unpinned: false when episode not found', async () => {
+      mockMemoryLifecycleService.unpinMemory.mockResolvedValueOnce(false);
+
+      const result = await controller.unpinMemory('nonexistent');
+
+      expect(result).toEqual({ unpinned: false });
+    });
+  });
+
+  describe('DELETE /api/v1/memory/episodes/:episodeId', () => {
+    it('should return 200 with deleted status', async () => {
+      const result = await controller.deleteMemory('ep-1');
+
+      expect(result).toEqual({ deleted: true });
+      expect(mockMemoryLifecycleService.deleteMemory).toHaveBeenCalledWith('ep-1');
+    });
+
+    it('should require JWT authentication', () => {
+      const guards = Reflect.getMetadata(
+        '__guards__',
+        MemoryController.prototype.deleteMemory,
+      );
+      expect(guards).toBeDefined();
+      expect(guards.length).toBeGreaterThan(0);
+    });
+
+    it('should return deleted: false when episode not found', async () => {
+      mockMemoryLifecycleService.deleteMemory.mockResolvedValueOnce(false);
+
+      const result = await controller.deleteMemory('nonexistent');
+
+      expect(result).toEqual({ deleted: false });
     });
   });
 });

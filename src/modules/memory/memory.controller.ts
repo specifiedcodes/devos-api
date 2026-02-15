@@ -6,16 +6,21 @@
  * Story 12.6: Cross-Project Learning
  * Story 12.7: Memory Summarization (Cheap Models)
  * Story 12.8: Context Budget System
+ * Story 12.9: Memory Lifecycle Management
  *
  * REST API endpoints for the memory subsystem.
  * Provides health check, manual ingestion trigger, ingestion stats,
  * memory query, relevance feedback, cross-project pattern management,
- * memory summarization management, and context budget information.
+ * memory summarization management, context budget information,
+ * and memory lifecycle management (pruning, consolidation, archival,
+ * cap enforcement, policy management, pin/unpin/delete).
  */
 import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Body,
   Query,
   Param,
@@ -39,6 +44,7 @@ import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import { MemorySummarizationService } from './services/memory-summarization.service';
 import { ContextBudgetService } from './services/context-budget.service';
+import { MemoryLifecycleService } from './services/memory-lifecycle.service';
 import {
   MemoryHealth,
   IngestionResult,
@@ -56,6 +62,9 @@ import {
   SummarizationResult,
   SummarizationStats,
   ContextBudget,
+  MemoryLifecyclePolicy,
+  LifecycleResult,
+  LifecycleReport,
 } from './interfaces/memory.interfaces';
 import {
   IngestMemoryDto,
@@ -77,6 +86,12 @@ import {
   SummarizationStatsQueryDto,
 } from './dto/summarization.dto';
 import { ContextBudgetQueryDto } from './dto/context-budget.dto';
+import {
+  LifecycleRunDto,
+  LifecyclePolicyQueryDto,
+  LifecyclePolicyUpdateDto,
+  LifecycleReportQueryDto,
+} from './dto/lifecycle.dto';
 
 @ApiTags('Memory')
 @Controller('api/v1/memory')
@@ -88,6 +103,7 @@ export class MemoryController {
     private readonly crossProjectLearningService: CrossProjectLearningService,
     private readonly memorySummarizationService: MemorySummarizationService,
     private readonly contextBudgetService: ContextBudgetService,
+    private readonly memoryLifecycleService: MemoryLifecycleService,
   ) {}
 
   @Get('health')
@@ -306,6 +322,147 @@ export class MemoryController {
     @Query() query: ContextBudgetQueryDto,
   ): Promise<ContextBudget> {
     return this.contextBudgetService.calculateBudget(query.modelId);
+  }
+
+  // ─── Memory Lifecycle Endpoints (Story 12.9) ──────────────────────────────
+
+  @Post('lifecycle/run')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Manually trigger memory lifecycle for a workspace' })
+  @ApiBody({ type: LifecycleRunDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Lifecycle run completed successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async runLifecycle(@Body() body: LifecycleRunDto): Promise<LifecycleResult> {
+    return this.memoryLifecycleService.runLifecycle(body.workspaceId);
+  }
+
+  @Get('lifecycle/policy')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get lifecycle policy for a workspace' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Lifecycle policy returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async getLifecyclePolicy(
+    @Query() query: LifecyclePolicyQueryDto,
+  ): Promise<MemoryLifecyclePolicy> {
+    return this.memoryLifecycleService.getLifecyclePolicy(query.workspaceId);
+  }
+
+  @Put('lifecycle/policy')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update lifecycle policy for a workspace' })
+  @ApiBody({ type: LifecyclePolicyUpdateDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Lifecycle policy updated successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async updateLifecyclePolicy(
+    @Body() body: LifecyclePolicyUpdateDto,
+  ): Promise<MemoryLifecyclePolicy> {
+    const { workspaceId, ...updates } = body;
+    return this.memoryLifecycleService.updateLifecyclePolicy(workspaceId, updates);
+  }
+
+  @Get('lifecycle/report')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get lifecycle metrics report for a workspace' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Lifecycle report returned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async getLifecycleReport(
+    @Query() query: LifecycleReportQueryDto,
+  ): Promise<LifecycleReport> {
+    return this.memoryLifecycleService.getLifecycleReport(query.workspaceId);
+  }
+
+  @Post('episodes/:episodeId/pin')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Pin a memory to protect from lifecycle operations' })
+  @ApiParam({ name: 'episodeId', description: 'Episode ID to pin', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Memory pinned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async pinMemory(
+    @Param('episodeId') episodeId: string,
+  ): Promise<{ pinned: boolean }> {
+    const pinned = await this.memoryLifecycleService.pinMemory(episodeId);
+    return { pinned };
+  }
+
+  @Post('episodes/:episodeId/unpin')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Unpin a memory to allow lifecycle operations' })
+  @ApiParam({ name: 'episodeId', description: 'Episode ID to unpin', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Memory unpinned successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async unpinMemory(
+    @Param('episodeId') episodeId: string,
+  ): Promise<{ unpinned: boolean }> {
+    const unpinned = await this.memoryLifecycleService.unpinMemory(episodeId);
+    return { unpinned };
+  }
+
+  @Delete('episodes/:episodeId')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Permanently delete a specific memory' })
+  @ApiParam({ name: 'episodeId', description: 'Episode ID to delete', type: String })
+  @ApiResponse({
+    status: 200,
+    description: 'Memory deleted successfully',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - JWT required',
+  })
+  async deleteMemory(
+    @Param('episodeId') episodeId: string,
+  ): Promise<{ deleted: boolean }> {
+    const deleted = await this.memoryLifecycleService.deleteMemory(episodeId);
+    return { deleted };
   }
 
   // ─── Cross-Project Learning Endpoints (Story 12.6) ─────────────────────────

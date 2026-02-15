@@ -6,6 +6,7 @@
  * Story 12.6: Cross-Project Learning
  * Story 12.7: Memory Summarization (Cheap Models)
  * Story 12.8: Context Budget System
+ * Story 12.9: Memory Lifecycle Management
  *
  * NestJS module for the memory subsystem (Graphiti/Neo4j).
  * Provides Neo4jService, GraphitiService, MemoryHealthService,
@@ -14,11 +15,13 @@
  * MemoryQueryService for querying and scoring memories,
  * CrossProjectLearningService for workspace-level pattern recognition,
  * MemorySummarizationService for episode consolidation,
- * and ContextBudgetService for intelligent context budget management.
+ * ContextBudgetService for intelligent context budget management,
+ * and MemoryLifecycleService for automated memory lifecycle management.
  * Exports GraphitiService, Neo4jService, MemoryIngestionService,
  * MemoryQueryService, CrossProjectLearningService,
- * MemorySummarizationService, and ContextBudgetService for use by other
- * modules (orchestrator, agents, context recovery).
+ * MemorySummarizationService, ContextBudgetService,
+ * and MemoryLifecycleService for use by other modules
+ * (orchestrator, agents, context recovery).
  */
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -32,6 +35,7 @@ import { MemoryQueryService } from './services/memory-query.service';
 import { CrossProjectLearningService } from './services/cross-project-learning.service';
 import { MemorySummarizationService } from './services/memory-summarization.service';
 import { ContextBudgetService } from './services/context-budget.service';
+import { MemoryLifecycleService } from './services/memory-lifecycle.service';
 import { MemoryController } from './memory.controller';
 
 @Module({
@@ -48,6 +52,7 @@ import { MemoryController } from './memory.controller';
     CrossProjectLearningService,
     MemorySummarizationService, // Story 12.7: Memory Summarization
     ContextBudgetService, // Story 12.8: Context Budget System
+    MemoryLifecycleService, // Story 12.9: Memory Lifecycle Management
     // Story 12.6: Provide CrossProjectLearningService as string token for optional injection in MemoryQueryService
     {
       provide: 'CrossProjectLearningService',
@@ -63,6 +68,7 @@ import { MemoryController } from './memory.controller';
     CrossProjectLearningService, // Story 12.6: Exported for context module access
     MemorySummarizationService, // Story 12.7: Exported for orchestrator module access
     ContextBudgetService, // Story 12.8: Exported for orchestrator module access
+    MemoryLifecycleService, // Story 12.9: Exported for orchestrator module access
   ],
 })
 export class MemoryModule {}

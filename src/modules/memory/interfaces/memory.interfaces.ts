@@ -418,3 +418,109 @@ export interface SummarizationStats {
   oldestSummary: Date | null;
   newestSummary: Date | null;
 }
+
+// ─── Memory Lifecycle Interfaces (Story 12.9) ──────────────────────────────
+
+/**
+ * Workspace-configurable lifecycle policy stored in Neo4j.
+ * Controls pruning, consolidation, archival, and cap enforcement behavior.
+ */
+export interface MemoryLifecyclePolicy {
+  workspaceId: string;
+  pruneAfterDays: number;
+  consolidateThreshold: number;
+  archiveAfterDays: number;
+  maxMemoriesPerProject: number;
+  retainDecisionsForever: boolean;
+  retainPatternsForever: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Result of a full lifecycle run across a workspace.
+ */
+export interface LifecycleResult {
+  workspaceId: string;
+  pruneResult: PruneResult;
+  consolidationResults: ConsolidationResult[];
+  archiveResult: ArchiveResult;
+  capResults: CapEnforcementResult[];
+  totalDurationMs: number;
+  errors: string[];
+}
+
+/**
+ * Result of pruning stale, low-confidence memories.
+ */
+export interface PruneResult {
+  prunedCount: number;
+  prunedEpisodeIds: string[];
+  skippedPinned: number;
+  skippedDecisions: number;
+  skippedPatterns: number;
+  durationMs: number;
+}
+
+/**
+ * Result of consolidating redundant memories for a project.
+ */
+export interface ConsolidationResult {
+  projectId: string;
+  consolidatedCount: number;
+  newEpisodeIds: string[];
+  archivedOriginalIds: string[];
+  durationMs: number;
+}
+
+/**
+ * Result of archiving old memories.
+ */
+export interface ArchiveResult {
+  archivedCount: number;
+  archivedEpisodeIds: string[];
+  skippedDecisions: number;
+  skippedPatterns: number;
+  skippedPinned: number;
+  durationMs: number;
+}
+
+/**
+ * Result of enforcing the project memory cap.
+ */
+export interface CapEnforcementResult {
+  projectId: string;
+  activeCountBefore: number;
+  activeCountAfter: number;
+  archivedCount: number;
+  durationMs: number;
+}
+
+/**
+ * Lifecycle metrics report for a workspace.
+ */
+export interface LifecycleReport {
+  workspaceId: string;
+  generatedAt: Date;
+  totalProjects: number;
+  totalActiveEpisodes: number;
+  totalArchivedEpisodes: number;
+  totalPrunedAllTime: number;
+  totalConsolidatedAllTime: number;
+  graphSizeMetrics: {
+    totalNodes: number;
+    totalEdges: number;
+    estimatedStorageMB: number;
+  };
+  queryPerformanceMetrics: {
+    averageQueryTimeMs: number;
+    cacheHitRate: number;
+  };
+  projectBreakdown: Array<{
+    projectId: string;
+    activeEpisodes: number;
+    archivedEpisodes: number;
+    recommendation: 'healthy' | 'needs-pruning' | 'too-few' | 'over-cap';
+  }>;
+  lastLifecycleRun: Date | null;
+}
