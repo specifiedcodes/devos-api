@@ -163,6 +163,22 @@ export class WorkspaceSettings {
   @Column({ type: 'boolean', default: false, name: 'auto_downgrade_paused' })
   autoDowngradePaused!: boolean;
 
+  // Model preferences (Story 13-9)
+  @Column({ type: 'varchar', length: 20, default: 'balanced', name: 'model_preset' })
+  modelPreset!: string; // 'auto' | 'economy' | 'quality' | 'balanced'
+
+  @Column({ type: 'jsonb', default: '{}', name: 'task_model_overrides' })
+  taskModelOverrides!: Record<string, { model: string; fallback: string }>;
+
+  @Column({ type: 'jsonb', default: '[]', name: 'enabled_providers' })
+  enabledProviders!: string[]; // ['anthropic', 'google', 'deepseek', 'openai']
+
+  @Column({ type: 'jsonb', default: '[]', name: 'provider_priority' })
+  providerPriority!: string[]; // Ordered list, first = highest priority
+
+  @Column({ type: 'boolean', default: false, name: 'model_preferences_enabled' })
+  modelPreferencesEnabled!: boolean;
+
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;
 
