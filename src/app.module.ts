@@ -85,6 +85,8 @@ import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { MemoryModule } from './modules/memory/memory.module';
 import { ContextModule } from './modules/context/context.module';
 import { ModelRegistryModule } from './modules/model-registry/model-registry.module';
+import { BenchmarkModule } from './modules/benchmarks/benchmark.module';
+import { ModelPerformance } from './database/entities/model-performance.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 
@@ -154,6 +156,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
         HandoffHistory,
         FailureRecoveryHistory,
         ModelDefinition,
+        ModelPerformance,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -205,6 +208,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     MemoryModule,
     ContextModule,
     ModelRegistryModule,
+    BenchmarkModule,
   ],
   controllers: [AppController],
   providers: [
