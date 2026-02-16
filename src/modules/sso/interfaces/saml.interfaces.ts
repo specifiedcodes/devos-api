@@ -51,6 +51,7 @@ export interface SamlCallbackResult {
   accessToken: string;
   refreshToken: string;
   samlSessionIndex?: string;
+  federatedSessionId?: string;
 }
 
 export interface ParsedIdpMetadata {

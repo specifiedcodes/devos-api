@@ -21,6 +21,8 @@ import {
   SamlIdpConfig,
 } from '../interfaces/saml.interfaces';
 import { SAML_CONSTANTS } from '../constants/saml.constants';
+import { SessionFederationService } from '../session/session-federation.service';
+import { SsoProviderType } from '../../../database/entities/sso-federated-session.entity';
 
 @Injectable()
 export class SamlService {
@@ -36,6 +38,7 @@ export class SamlService {
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
     private readonly jitProvisioningService: JitProvisioningService,
+    private readonly sessionFederationService: SessionFederationService,
   ) {
     this.appUrl = this.configService.get<string>('APP_URL', 'http://localhost:3001');
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
@@ -250,6 +253,28 @@ export class SamlService {
       },
     });
 
+    // Create federated session linking SSO provider session with DevOS session
+    let federatedSessionId: string | undefined;
+    try {
+      const timeoutConfig = await this.sessionFederationService.getWorkspaceTimeoutConfig(workspaceId);
+      const federatedSession = await this.sessionFederationService.createFederatedSession({
+        userId: user.id,
+        workspaceId,
+        providerType: SsoProviderType.SAML,
+        providerConfigId: config.id,
+        idpSessionId: assertionResult.sessionIndex,
+        devosSessionId: authResponse.accessTokenJti || authResponse.tokens.access_token.substring(0, 36),
+        accessTokenJti: authResponse.accessTokenJti,
+        refreshTokenJti: authResponse.refreshTokenJti,
+        sessionTimeoutMinutes: timeoutConfig.sessionTimeoutMinutes,
+        idleTimeoutMinutes: timeoutConfig.idleTimeoutMinutes,
+      });
+      federatedSessionId = federatedSession.id;
+    } catch (error) {
+      this.logger.error('Failed to create federated session', error);
+      // Non-blocking: SSO login still succeeds even if federation tracking fails
+    }
+
     return {
       userId: user.id,
       email: user.email,
@@ -258,6 +283,7 @@ export class SamlService {
       accessToken: authResponse.tokens.access_token,
       refreshToken: authResponse.tokens.refresh_token,
       samlSessionIndex: assertionResult.sessionIndex,
+      federatedSessionId,
     };
   }
 
@@ -272,7 +298,20 @@ export class SamlService {
     if (samlRequest) {
       // IdP-initiated SLO
       this.logger.log(`Processing IdP-initiated SLO for workspace ${workspaceId}`);
-      // TODO: Parse LogoutRequest, find user, revoke sessions
+
+      // Extract SessionIndex from SAML LogoutRequest and terminate linked federated session
+      try {
+        // Parse the base64-decoded SAML request to extract SessionIndex
+        const decodedRequest = Buffer.from(samlRequest, 'base64').toString('utf8');
+        const sessionIndexMatch = decodedRequest.match(/SessionIndex="([^"]+)"/);
+        if (sessionIndexMatch && sessionIndexMatch[1]) {
+          await this.sessionFederationService.handleIdpLogout(sessionIndexMatch[1]);
+          this.logger.log(`IdP logout processed for SessionIndex: ${sessionIndexMatch[1]}`);
+        }
+      } catch (error) {
+        this.logger.error('Failed to process IdP-initiated logout', error);
+      }
+
       return { redirectUrl: `${this.frontendUrl}/auth/login` };
     }
 

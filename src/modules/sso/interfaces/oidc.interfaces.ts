@@ -66,6 +66,7 @@ export interface OidcCallbackResult {
   workspaceId: string;
   accessToken: string;
   refreshToken: string;
+  federatedSessionId?: string;
 }
 
 export interface JwksKey {

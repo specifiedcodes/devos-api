@@ -20,6 +20,8 @@ import {
   OidcAuthorizationParams,
   OidcCallbackResult,
 } from '../interfaces/oidc.interfaces';
+import { SessionFederationService } from '../session/session-federation.service';
+import { SsoProviderType } from '../../../database/entities/sso-federated-session.entity';
 
 @Injectable()
 export class OidcService {
@@ -36,6 +38,7 @@ export class OidcService {
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
     private readonly jitProvisioningService: JitProvisioningService,
+    private readonly sessionFederationService: SessionFederationService,
   ) {
     this.appUrl = this.configService.get<string>('APP_URL', 'http://localhost:3001');
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
@@ -232,6 +235,29 @@ export class OidcService {
         },
       });
 
+      // Create federated session linking OIDC provider session with DevOS session
+      let federatedSessionId: string | undefined;
+      try {
+        const sidClaim = (idTokenClaims as any).sid as string | undefined;
+        const timeoutConfig = await this.sessionFederationService.getWorkspaceTimeoutConfig(workspaceId);
+        const federatedSession = await this.sessionFederationService.createFederatedSession({
+          userId: user.id,
+          workspaceId,
+          providerType: SsoProviderType.OIDC,
+          providerConfigId: configId,
+          idpSessionId: sidClaim,
+          devosSessionId: authResponse.accessTokenJti || authResponse.tokens.access_token.substring(0, 36),
+          accessTokenJti: authResponse.accessTokenJti,
+          refreshTokenJti: authResponse.refreshTokenJti,
+          sessionTimeoutMinutes: timeoutConfig.sessionTimeoutMinutes,
+          idleTimeoutMinutes: timeoutConfig.idleTimeoutMinutes,
+        });
+        federatedSessionId = federatedSession.id;
+      } catch (fedError) {
+        this.logger.error('Failed to create federated session', fedError);
+        // Non-blocking: OIDC login still succeeds
+      }
+
       return {
         userId: user.id,
         email: user.email,
@@ -239,6 +265,7 @@ export class OidcService {
         workspaceId,
         accessToken: authResponse.tokens.access_token,
         refreshToken: authResponse.tokens.refresh_token,
+        federatedSessionId,
       };
     } catch (error) {
       // Update error stats for all failures

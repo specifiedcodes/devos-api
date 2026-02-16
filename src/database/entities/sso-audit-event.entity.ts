@@ -66,6 +66,16 @@ export enum SsoAuditEventType {
   SCIM_CONFIG_UPDATED = 'scim_config_updated',
   SCIM_AUTH_FAILURE = 'scim_auth_failure',
   SCIM_RATE_LIMITED = 'scim_rate_limited',
+
+  // Session Federation events (Story 17-7)
+  SESSION_CREATED = 'session_created',
+  SESSION_TERMINATED = 'session_terminated',
+  SESSION_EXPIRED = 'session_expired',
+  SESSION_IDLE_EXPIRED = 'session_idle_expired',
+  FORCED_REAUTH = 'forced_reauth',
+  SESSION_TIMEOUT_UPDATED = 'session_timeout_updated',
+  IDP_LOGOUT_RECEIVED = 'idp_logout_received',
+  SESSION_TOKEN_REFRESHED = 'session_token_refreshed',
 }
 
 @Entity('sso_audit_events')

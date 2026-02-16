@@ -38,6 +38,10 @@ import { ScimAuthGuard } from './scim/guards/scim-auth.guard';
 import { ScimUserController } from './scim/scim-user.controller';
 import { ScimGroupController } from './scim/scim-group.controller';
 import { ScimAdminController } from './scim/scim-admin.controller';
+import { SsoFederatedSession } from '../../database/entities/sso-federated-session.entity';
+import { SessionFederationService } from './session/session-federation.service';
+import { SessionFederationController } from './session/session-federation.controller';
+import { SessionCleanupScheduler } from './session/session-cleanup.scheduler';
 import { AuthModule } from '../auth/auth.module';
 import { RedisModule } from '../redis/redis.module';
 
@@ -54,6 +58,7 @@ import { RedisModule } from '../redis/redis.module';
       ScimGroup,
       ScimGroupMembership,
       ScimSyncLog,
+      SsoFederatedSession,
       User,
       WorkspaceMember,
     ]),
@@ -71,6 +76,7 @@ import { RedisModule } from '../redis/redis.module';
     ScimUserController,
     ScimGroupController,
     ScimAdminController,
+    SessionFederationController,
   ],
   providers: [
     SamlService,
@@ -89,6 +95,8 @@ import { RedisModule } from '../redis/redis.module';
     ScimTokenService,
     ScimSyncLogService,
     ScimAuthGuard,
+    SessionFederationService,
+    SessionCleanupScheduler,
   ],
   exports: [
     SamlService,
@@ -101,6 +109,7 @@ import { RedisModule } from '../redis/redis.module';
     ScimUserService,
     ScimGroupService,
     ScimTokenService,
+    SessionFederationService,
   ],
 })
 export class SsoModule {}

@@ -1291,7 +1291,7 @@ export class AuthService {
     workspaceId: string,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<AuthResponseDto> {
+  ): Promise<AuthResponseDto & { sessionId?: string; accessTokenJti?: string; refreshTokenJti?: string }> {
     const tokens = await this.generateTokens(user, ipAddress, userAgent, workspaceId);
 
     // Update last login
@@ -1308,6 +1308,8 @@ export class AuthService {
         refresh_token: tokens.refreshToken,
         expires_in: 86400,
       },
+      accessTokenJti: tokens.accessTokenJti,
+      refreshTokenJti: tokens.refreshTokenJti,
     };
   }
 
@@ -1506,6 +1508,23 @@ export class AuthService {
   async isTokenRevoked(jti: string): Promise<boolean> {
     const result = await this.redisService.get(`blacklist:${jti}`);
     return result === 'revoked';
+  }
+
+  // ============================================================================
+  // SSO SESSION FEDERATION (Story 17.7)
+  // ============================================================================
+
+  /**
+   * Validate SSO session during token refresh.
+   * If a federated session exists for the refresh token, validates it is still active.
+   * Returns the federated session ID if valid, null if no SSO session linked.
+   * Throws UnauthorizedException if SSO session exists but is expired/terminated.
+   */
+  async validateSsoSessionForRefresh(refreshTokenJti: string): Promise<string | null> {
+    // This method is a placeholder that can be wired to SessionFederationService
+    // when the SSO module is injected. The actual validation is done via direct
+    // method calls from the SSO module.
+    return null;
   }
 
   /**
