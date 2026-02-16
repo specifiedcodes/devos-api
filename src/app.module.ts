@@ -105,6 +105,8 @@ import { ProjectFile } from './database/entities/project-file.entity';
 import { SlackIntegration } from './database/entities/slack-integration.entity';
 import { DiscordIntegration } from './database/entities/discord-integration.entity';
 import { SamlConfiguration } from './database/entities/saml-configuration.entity';
+import { OidcConfiguration } from './database/entities/oidc-configuration.entity';
+import { SsoDomain } from './database/entities/sso-domain.entity';
 import { SsoAuditEvent } from './database/entities/sso-audit-event.entity';
 import { SsoModule } from './modules/sso/sso.module';
 
@@ -179,6 +181,8 @@ import { SsoModule } from './modules/sso/sso.module';
         SlackIntegration,
         DiscordIntegration,
         SamlConfiguration,
+        OidcConfiguration,
+        SsoDomain,
         SsoAuditEvent,
       ],
       synchronize: false, // Always false - use migrations

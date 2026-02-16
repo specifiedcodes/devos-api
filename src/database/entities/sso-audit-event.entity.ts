@@ -12,6 +12,7 @@ import { Workspace } from './workspace.entity';
 import { User } from './user.entity';
 import { SamlConfiguration } from './saml-configuration.entity';
 import { OidcConfiguration } from './oidc-configuration.entity';
+import { SsoDomain } from './sso-domain.entity';
 
 export enum SsoAuditEventType {
   SAML_LOGIN_SUCCESS = 'saml_login_success',
@@ -36,6 +37,13 @@ export enum SsoAuditEventType {
   OIDC_TEST_FAILURE = 'oidc_test_failure',
   OIDC_DISCOVERY_FETCHED = 'oidc_discovery_fetched',
   OIDC_DISCOVERY_ERROR = 'oidc_discovery_error',
+  DOMAIN_REGISTERED = 'domain_registered',
+  DOMAIN_VERIFIED = 'domain_verified',
+  DOMAIN_VERIFICATION_FAILED = 'domain_verification_failed',
+  DOMAIN_EXPIRED = 'domain_expired',
+  DOMAIN_REMOVED = 'domain_removed',
+  DOMAIN_PROVIDER_LINKED = 'domain_provider_linked',
+  DOMAIN_PROVIDER_UNLINKED = 'domain_provider_unlinked',
 }
 
 @Entity('sso_audit_events')
@@ -95,6 +103,15 @@ export class SsoAuditEvent {
   @ManyToOne(() => OidcConfiguration, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'oidc_config_id' })
   oidcConfiguration?: OidcConfiguration;
+
+  @Column({ type: 'uuid', name: 'domain_id', nullable: true })
+  @IsOptional()
+  @IsUUID()
+  domainId!: string | null;
+
+  @ManyToOne(() => SsoDomain, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'domain_id' })
+  ssoDomain?: SsoDomain;
 
   @Column({ type: 'varchar', length: 45, name: 'ip_address', nullable: true })
   @IsOptional()

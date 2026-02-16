@@ -10,6 +10,7 @@ export interface LogEventParams {
   targetUserId?: string;
   samlConfigId?: string;
   oidcConfigId?: string;
+  domainId?: string;
   ipAddress?: string;
   userAgent?: string;
   details?: Record<string, unknown>;
@@ -52,6 +53,7 @@ export class SsoAuditService {
         targetUserId: params.targetUserId || null,
         samlConfigId: params.samlConfigId || null,
         oidcConfigId: params.oidcConfigId || null,
+        domainId: params.domainId || null,
         ipAddress: params.ipAddress || null,
         userAgent: params.userAgent || null,
         details: params.details || {},
