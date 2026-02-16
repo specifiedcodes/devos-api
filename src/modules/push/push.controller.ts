@@ -1,12 +1,16 @@
 /**
  * Push Notification Controller
  * Story 10.4: Push Notifications Setup
+ * Story 16.7: VAPID Key Web Push Setup (admin endpoints)
  *
  * REST API endpoints for push notification management:
  * - GET /api/v1/push/config - Get VAPID public key
  * - POST /api/v1/push/subscriptions - Create subscription
  * - DELETE /api/v1/push/subscriptions - Remove subscription
  * - GET /api/v1/push/subscriptions/me - Get user's subscriptions
+ * - GET /api/v1/push/admin/vapid-status - VAPID key status (admin)
+ * - GET /api/v1/push/admin/stats - Push statistics (admin)
+ * - POST /api/v1/push/admin/cleanup - Trigger manual cleanup (admin)
  */
 
 import {
@@ -23,6 +27,7 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -33,16 +38,24 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { PushNotificationService } from './push.service';
+import { VapidKeyService } from './services/vapid-key.service';
+import { PushSubscriptionCleanupService, CleanupResult } from './services/push-subscription-cleanup.service';
 import {
   CreatePushSubscriptionDto,
   PushSubscriptionResponseDto,
   PushConfigResponseDto,
+  VapidKeyStatusResponseDto,
+  PushStatsResponseDto,
 } from './push.dto';
 
 @ApiTags('Push Notifications')
 @Controller('api/v1/push')
 export class PushController {
-  constructor(private readonly pushService: PushNotificationService) {}
+  constructor(
+    private readonly pushService: PushNotificationService,
+    private readonly vapidKeyService: VapidKeyService,
+    private readonly cleanupService: PushSubscriptionCleanupService,
+  ) {}
 
   /**
    * Get push notification configuration (public endpoint)
@@ -210,5 +223,84 @@ export class PushController {
     if (!deleted) {
       throw new NotFoundException('Subscription not found');
     }
+  }
+
+  /**
+   * Verify the requesting user has admin/owner privileges.
+   * Checks isPlatformAdmin flag or workspace role from JWT.
+   * TODO: Replace with @PlatformAdmin() decorator when admin module is imported.
+   */
+  private assertAdminAccess(req: any): void {
+    const user = req.user;
+    const isAdmin =
+      user?.isPlatformAdmin === true ||
+      user?.role === 'admin' ||
+      user?.role === 'owner';
+
+    if (!isAdmin) {
+      throw new ForbiddenException('Admin access required');
+    }
+  }
+
+  /**
+   * Get VAPID key status (admin endpoint)
+   */
+  @Get('admin/vapid-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get VAPID key configuration status (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'VAPID key status retrieved',
+    type: VapidKeyStatusResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  getVapidStatus(@Request() req: any): VapidKeyStatusResponseDto {
+    this.assertAdminAccess(req);
+    return this.vapidKeyService.getKeyStatus();
+  }
+
+  /**
+   * Get push subscription statistics (admin endpoint)
+   */
+  @Get('admin/stats')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get push subscription statistics (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Push subscription statistics',
+    type: PushStatsResponseDto,
+  })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  async getStats(@Request() req: any): Promise<PushStatsResponseDto> {
+    this.assertAdminAccess(req);
+    const subscriptionStats = await this.cleanupService.getSubscriptionStats();
+    const deliveryStats = this.pushService.getDeliveryStats();
+    const lastCleanup = this.cleanupService.getLastCleanupResult();
+
+    return {
+      subscriptions: subscriptionStats,
+      delivery: deliveryStats,
+      lastCleanup: lastCleanup || undefined,
+    };
+  }
+
+  /**
+   * Trigger manual subscription cleanup (admin endpoint)
+   */
+  @Post('admin/cleanup')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Trigger manual push subscription cleanup (admin)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Cleanup completed',
+  })
+  @ApiResponse({ status: 403, description: 'Admin access required' })
+  async triggerCleanup(@Request() req: any): Promise<CleanupResult> {
+    this.assertAdminAccess(req);
+    return this.cleanupService.handleWeeklyCleanup();
   }
 }

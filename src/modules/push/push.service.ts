@@ -1,12 +1,16 @@
 /**
  * Push Notification Service
  * Story 10.4: Push Notifications Setup
+ * Story 16.7: VAPID Key Web Push Setup (enhanced with retry, topics, delivery stats)
  *
  * Handles Web Push API integration including:
- * - VAPID configuration
  * - Subscription management
- * - Push notification delivery
+ * - Push notification delivery with retry logic
+ * - Topic-based notification support
+ * - Delivery statistics tracking
  * - Failed subscription cleanup
+ *
+ * VAPID configuration is delegated to VapidKeyService (Story 16.7).
  */
 
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
@@ -20,6 +24,7 @@ import {
   PushResultDto,
   NotificationUrgency,
 } from './push.dto';
+import { VapidKeyService } from './services/vapid-key.service';
 
 /**
  * Push service configuration
@@ -31,6 +36,21 @@ export interface PushServiceConfig {
   batchSize: number;
   ttl: number;
 }
+
+/**
+ * Delivery statistics
+ */
+export interface DeliveryStats {
+  totalSent: number;
+  totalFailed: number;
+  totalExpiredRemoved: number;
+}
+
+/**
+ * Maximum retry delay cap (30 seconds) to prevent unbounded backoff
+ * when retryAttempts or retryDelay are set to large values via env vars.
+ */
+const MAX_RETRY_DELAY_MS = 30_000;
 
 const DEFAULT_CONFIG: PushServiceConfig = {
   maxConcurrentPushes: 100,
@@ -44,39 +64,35 @@ const DEFAULT_CONFIG: PushServiceConfig = {
 export class PushNotificationService implements OnModuleInit {
   private readonly logger = new Logger(PushNotificationService.name);
   private readonly config: PushServiceConfig;
-  private isConfigured = false;
+  private deliveryStats: DeliveryStats = {
+    totalSent: 0,
+    totalFailed: 0,
+    totalExpiredRemoved: 0,
+  };
 
   constructor(
     @InjectRepository(PushSubscription)
     private readonly subscriptionRepository: Repository<PushSubscription>,
     private readonly configService: ConfigService,
+    private readonly vapidKeyService: VapidKeyService,
   ) {
     this.config = {
       ...DEFAULT_CONFIG,
       maxConcurrentPushes: this.configService.get<number>('PUSH_MAX_CONCURRENT', DEFAULT_CONFIG.maxConcurrentPushes),
       retryAttempts: this.configService.get<number>('PUSH_RETRY_ATTEMPTS', DEFAULT_CONFIG.retryAttempts),
+      retryDelay: this.configService.get<number>('PUSH_RETRY_DELAY', DEFAULT_CONFIG.retryDelay),
       batchSize: this.configService.get<number>('PUSH_BATCH_SIZE', DEFAULT_CONFIG.batchSize),
     };
   }
 
   /**
-   * Initialize VAPID details on module init
+   * Initialize - delegate VAPID configuration check to VapidKeyService
    */
   onModuleInit(): void {
-    const publicKey = this.configService.get<string>('VAPID_PUBLIC_KEY');
-    const privateKey = this.configService.get<string>('VAPID_PRIVATE_KEY');
-    const subject = this.configService.get<string>('VAPID_SUBJECT', 'mailto:support@devos.app');
-
-    if (publicKey && privateKey) {
-      try {
-        webPush.setVapidDetails(subject, publicKey, privateKey);
-        this.isConfigured = true;
-        this.logger.log('VAPID details configured successfully');
-      } catch (error) {
-        this.logger.error('Failed to configure VAPID details:', error);
-      }
+    if (this.vapidKeyService.isEnabled()) {
+      this.logger.log('Push notification service ready (VAPID configured via VapidKeyService)');
     } else {
-      this.logger.warn('VAPID keys not configured - push notifications disabled');
+      this.logger.warn('Push notifications disabled - VAPID keys not configured');
     }
   }
 
@@ -84,14 +100,14 @@ export class PushNotificationService implements OnModuleInit {
    * Check if push notifications are configured
    */
   isEnabled(): boolean {
-    return this.isConfigured;
+    return this.vapidKeyService.isEnabled();
   }
 
   /**
    * Get VAPID public key for client subscription
    */
   getPublicKey(): string | null {
-    return this.configService.get<string>('VAPID_PUBLIC_KEY') || null;
+    return this.vapidKeyService.getPublicKey();
   }
 
   /**
@@ -197,7 +213,7 @@ export class PushNotificationService implements OnModuleInit {
     userId: string,
     payload: PushNotificationPayloadDto,
   ): Promise<PushResultDto[]> {
-    if (!this.isConfigured) {
+    if (!this.isEnabled()) {
       this.logger.warn('Push notifications not configured');
       return [];
     }
@@ -222,7 +238,7 @@ export class PushNotificationService implements OnModuleInit {
     payload: PushNotificationPayloadDto,
     excludeUserId?: string,
   ): Promise<PushResultDto[]> {
-    if (!this.isConfigured) {
+    if (!this.isEnabled()) {
       this.logger.warn('Push notifications not configured');
       return [];
     }
@@ -245,6 +261,27 @@ export class PushNotificationService implements OnModuleInit {
   }
 
   /**
+   * Send push notification to a specific topic/tag.
+   * Groups all subscriptions for users matching the topic.
+   */
+  async sendToTopic(
+    workspaceId: string,
+    topic: string,
+    payload: PushNotificationPayloadDto,
+  ): Promise<PushResultDto[]> {
+    // Set tag on payload for client-side grouping
+    const taggedPayload = { ...payload, tag: topic };
+    return this.sendToWorkspace(workspaceId, taggedPayload);
+  }
+
+  /**
+   * Get delivery statistics
+   */
+  getDeliveryStats(): DeliveryStats {
+    return { ...this.deliveryStats };
+  }
+
+  /**
    * Send push notifications to multiple subscriptions
    */
   private async sendToSubscriptions(
@@ -259,7 +296,7 @@ export class PushNotificationService implements OnModuleInit {
       const batch = subscriptions.slice(i, i + this.config.batchSize);
 
       const batchResults = await Promise.allSettled(
-        batch.map(sub => this.sendPush(sub, payload))
+        batch.map(sub => this.sendPushWithRetry(sub, payload))
       );
 
       batchResults.forEach((result, index) => {
@@ -270,6 +307,8 @@ export class PushNotificationService implements OnModuleInit {
             subscriptionId: subscription.id,
             success: true,
           });
+
+          this.deliveryStats.totalSent++;
 
           // Update last used timestamp
           this.subscriptionRepository.update(
@@ -285,6 +324,8 @@ export class PushNotificationService implements OnModuleInit {
             error: error.message || 'Unknown error',
           });
 
+          this.deliveryStats.totalFailed++;
+
           // Mark expired subscriptions for deletion
           if (this.isExpiredError(error)) {
             toDelete.push(subscription.id);
@@ -296,6 +337,7 @@ export class PushNotificationService implements OnModuleInit {
     // Delete expired subscriptions
     if (toDelete.length > 0) {
       await this.deleteExpiredSubscriptions(toDelete);
+      this.deliveryStats.totalExpiredRemoved += toDelete.length;
     }
 
     const successful = results.filter(r => r.success).length;
@@ -303,6 +345,40 @@ export class PushNotificationService implements OnModuleInit {
     this.logger.log(`Push notifications sent: ${successful} successful, ${failed} failed`);
 
     return results;
+  }
+
+  /**
+   * Send push notification with retry for transient failures.
+   * Retries on 429 (Too Many Requests) and 5xx server errors.
+   */
+  private async sendPushWithRetry(
+    subscription: PushSubscription,
+    payload: PushNotificationPayloadDto,
+    attempt: number = 1,
+  ): Promise<webPush.SendResult> {
+    try {
+      return await this.sendPush(subscription, payload);
+    } catch (error: any) {
+      if (this.isRetryableError(error) && attempt < this.config.retryAttempts) {
+        const delay = Math.min(
+          this.config.retryDelay * Math.pow(2, attempt - 1),
+          MAX_RETRY_DELAY_MS,
+        );
+        this.logger.warn(
+          `Push send failed (attempt ${attempt}/${this.config.retryAttempts}), retrying in ${delay}ms: ${error.message}`,
+        );
+        await this.sleep(delay);
+        return this.sendPushWithRetry(subscription, payload, attempt + 1);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Check if error is retryable (429 or 5xx)
+   */
+  private isRetryableError(error: any): boolean {
+    return error.statusCode === 429 || (error.statusCode >= 500 && error.statusCode < 600);
   }
 
   /**
@@ -367,24 +443,6 @@ export class PushNotificationService implements OnModuleInit {
   }
 
   /**
-   * Cleanup stale subscriptions (not used in 30 days)
-   */
-  async cleanupStaleSubscriptions(daysInactive: number = 30): Promise<number> {
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - daysInactive);
-
-    const result = await this.subscriptionRepository.delete({
-      lastUsedAt: LessThan(cutoffDate),
-    });
-
-    if (result.affected && result.affected > 0) {
-      this.logger.log(`Cleaned up ${result.affected} stale push subscriptions`);
-    }
-
-    return result.affected || 0;
-  }
-
-  /**
    * Count subscriptions for a user
    */
   async countUserSubscriptions(userId: string): Promise<number> {
@@ -400,5 +458,12 @@ export class PushNotificationService implements OnModuleInit {
     return this.subscriptionRepository.count({
       where: { workspaceId },
     });
+  }
+
+  /**
+   * Sleep utility for retry backoff
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 }

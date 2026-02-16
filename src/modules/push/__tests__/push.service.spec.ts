@@ -1,14 +1,16 @@
 /**
  * Push Notification Service Tests
  * Story 10.4: Push Notifications Setup
+ * Story 16.7: VAPID Key Web Push Setup (enhanced with retry, topics, delivery stats)
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
-import { Repository, In, LessThan } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import * as webPush from 'web-push';
 import { PushNotificationService } from '../push.service';
+import { VapidKeyService } from '../services/vapid-key.service';
 import { PushSubscription } from '../../../database/entities/push-subscription.entity';
 import { PushNotificationPayloadDto, NotificationUrgency } from '../push.dto';
 
@@ -31,21 +33,28 @@ const mockRepository = () => ({
 const mockConfigService = () => ({
   get: jest.fn((key: string, defaultValue?: any) => {
     const config: Record<string, any> = {
-      VAPID_PUBLIC_KEY: 'test-public-key',
-      VAPID_PRIVATE_KEY: 'test-private-key',
-      VAPID_SUBJECT: 'mailto:test@example.com',
+      PUSH_RETRY_DELAY: 1, // Use 1ms for tests (fast)
+      PUSH_RETRY_ATTEMPTS: 3,
     };
     return config[key] ?? defaultValue;
   }),
+});
+
+const mockVapidKeyService = () => ({
+  isEnabled: jest.fn().mockReturnValue(true),
+  getPublicKey: jest.fn().mockReturnValue('test-public-key'),
+  getSubject: jest.fn().mockReturnValue('mailto:test@example.com'),
+  getKeyStatus: jest.fn(),
 });
 
 describe('PushNotificationService', () => {
   let service: PushNotificationService;
   let repository: jest.Mocked<Repository<PushSubscription>>;
   let configService: jest.Mocked<ConfigService>;
+  let vapidKeyService: jest.Mocked<VapidKeyService>;
 
   beforeEach(async () => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,32 +67,38 @@ describe('PushNotificationService', () => {
           provide: ConfigService,
           useFactory: mockConfigService,
         },
+        {
+          provide: VapidKeyService,
+          useFactory: mockVapidKeyService,
+        },
       ],
     }).compile();
 
     service = module.get<PushNotificationService>(PushNotificationService);
     repository = module.get(getRepositoryToken(PushSubscription));
     configService = module.get(ConfigService);
+    vapidKeyService = module.get(VapidKeyService);
 
     // Trigger onModuleInit
     service.onModuleInit();
   });
 
-  describe('initialization', () => {
-    it('should set VAPID details on module init', () => {
-      expect(webPush.setVapidDetails).toHaveBeenCalledWith(
-        'mailto:test@example.com',
-        'test-public-key',
-        'test-private-key',
-      );
+  describe('initialization - VapidKeyService delegation', () => {
+    it('should delegate VAPID configuration check to VapidKeyService', () => {
+      expect(vapidKeyService.isEnabled).toHaveBeenCalled();
     });
 
-    it('should report as enabled when configured', () => {
+    it('should report enabled state from VapidKeyService', () => {
+      vapidKeyService.isEnabled.mockReturnValue(true);
       expect(service.isEnabled()).toBe(true);
+
+      vapidKeyService.isEnabled.mockReturnValue(false);
+      expect(service.isEnabled()).toBe(false);
     });
 
-    it('should return public key', () => {
+    it('should return public key from VapidKeyService', () => {
       expect(service.getPublicKey()).toBe('test-public-key');
+      expect(vapidKeyService.getPublicKey).toHaveBeenCalled();
     });
   });
 
@@ -278,9 +293,9 @@ describe('PushNotificationService', () => {
       ] as PushSubscription[];
 
       repository.find.mockResolvedValue(mockSubscriptions);
-      (webPush.sendNotification as jest.Mock).mockRejectedValue(
-        new Error('Network error'),
-      );
+      const error = new Error('Network error') as any;
+      error.statusCode = 400; // non-retryable
+      (webPush.sendNotification as jest.Mock).mockRejectedValue(error);
 
       const results = await service.sendToUser('user-123', mockPayload);
 
@@ -319,6 +334,14 @@ describe('PushNotificationService', () => {
       await service.sendToUser('user-123', mockPayload);
 
       expect(repository.delete).toHaveBeenCalledWith({ id: In(['sub-1']) });
+    });
+
+    it('should return empty array when push is not configured', async () => {
+      vapidKeyService.isEnabled.mockReturnValue(false);
+
+      const results = await service.sendToUser('user-123', mockPayload);
+
+      expect(results).toHaveLength(0);
     });
   });
 
@@ -368,26 +391,211 @@ describe('PushNotificationService', () => {
     });
   });
 
-  describe('cleanupStaleSubscriptions', () => {
-    it('should delete subscriptions not used in specified days', async () => {
-      repository.delete.mockResolvedValue({ affected: 5, raw: {} });
+  describe('retry logic', () => {
+    const mockPayload: PushNotificationPayloadDto = {
+      id: 'notif-123',
+      title: 'Test Notification',
+      body: 'Test body',
+      url: '/dashboard',
+      type: 'test',
+    };
 
-      const result = await service.cleanupStaleSubscriptions(30);
+    it('should retry on 429 error with exponential backoff', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
 
-      expect(repository.delete).toHaveBeenCalledWith(
-        expect.objectContaining({
-          lastUsedAt: expect.any(Object),
-        }),
-      );
-      expect(result).toBe(5);
+      repository.find.mockResolvedValue(mockSubscriptions);
+
+      const error429 = new Error('Too Many Requests') as any;
+      error429.statusCode = 429;
+
+      (webPush.sendNotification as jest.Mock)
+        .mockRejectedValueOnce(error429)
+        .mockResolvedValueOnce({ statusCode: 201 });
+      repository.update.mockResolvedValue({ affected: 1, raw: {}, generatedMaps: [] });
+
+      const results = await service.sendToUser('user-123', mockPayload);
+
+      expect(webPush.sendNotification).toHaveBeenCalledTimes(2);
+      expect(results[0].success).toBe(true);
     });
 
-    it('should use custom days parameter', async () => {
-      repository.delete.mockResolvedValue({ affected: 0, raw: {} });
+    it('should retry on 500 error with exponential backoff', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
 
-      await service.cleanupStaleSubscriptions(60);
+      repository.find.mockResolvedValue(mockSubscriptions);
 
-      expect(repository.delete).toHaveBeenCalled();
+      const error500 = new Error('Internal Server Error') as any;
+      error500.statusCode = 500;
+
+      (webPush.sendNotification as jest.Mock)
+        .mockRejectedValueOnce(error500)
+        .mockResolvedValueOnce({ statusCode: 201 });
+      repository.update.mockResolvedValue({ affected: 1, raw: {}, generatedMaps: [] });
+
+      const results = await service.sendToUser('user-123', mockPayload);
+
+      expect(webPush.sendNotification).toHaveBeenCalledTimes(2);
+      expect(results[0].success).toBe(true);
+    });
+
+    it('should not retry on 410 Gone error (not retryable)', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+
+      const error410 = new Error('Gone') as any;
+      error410.statusCode = 410;
+
+      (webPush.sendNotification as jest.Mock).mockRejectedValue(error410);
+      repository.delete.mockResolvedValue({ affected: 1, raw: {} });
+
+      const results = await service.sendToUser('user-123', mockPayload);
+
+      // Should NOT retry - only one call to sendNotification
+      expect(webPush.sendNotification).toHaveBeenCalledTimes(1);
+      expect(results[0].success).toBe(false);
+    });
+
+    it('should not retry on 404 Not Found error (not retryable)', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+
+      const error404 = new Error('Not Found') as any;
+      error404.statusCode = 404;
+
+      (webPush.sendNotification as jest.Mock).mockRejectedValue(error404);
+      repository.delete.mockResolvedValue({ affected: 1, raw: {} });
+
+      const results = await service.sendToUser('user-123', mockPayload);
+
+      expect(webPush.sendNotification).toHaveBeenCalledTimes(1);
+      expect(results[0].success).toBe(false);
+    });
+
+    it('should stop retrying after max attempts', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+
+      const error429 = new Error('Too Many Requests') as any;
+      error429.statusCode = 429;
+
+      // All attempts fail
+      (webPush.sendNotification as jest.Mock).mockRejectedValue(error429);
+
+      const results = await service.sendToUser('user-123', mockPayload);
+
+      // config.retryAttempts = 3, so 3 total attempts
+      expect(webPush.sendNotification).toHaveBeenCalledTimes(3);
+      expect(results[0].success).toBe(false);
+    });
+  });
+
+  describe('sendToTopic', () => {
+    it('should send topic-tagged notification to workspace', async () => {
+      const workspaceId = 'workspace-123';
+      const mockSubscriptions = [
+        { id: 'sub-1', userId: 'user-1', workspaceId, endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+      (webPush.sendNotification as jest.Mock).mockResolvedValue({ statusCode: 201 });
+      repository.update.mockResolvedValue({ affected: 1, raw: {}, generatedMaps: [] });
+
+      const payload: PushNotificationPayloadDto = {
+        id: 'notif-123',
+        title: 'Topic Test',
+        body: 'Topic body',
+        url: '/dashboard',
+        type: 'test',
+      };
+
+      const results = await service.sendToTopic(workspaceId, 'deployment', payload);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].success).toBe(true);
+
+      // Verify the payload sent to webPush includes the tag
+      const sentPayload = JSON.parse(
+        (webPush.sendNotification as jest.Mock).mock.calls[0][1],
+      );
+      expect(sentPayload.tag).toBe('deployment');
+    });
+  });
+
+  describe('delivery statistics', () => {
+    const mockPayload: PushNotificationPayloadDto = {
+      id: 'notif-123',
+      title: 'Test Notification',
+      body: 'Test body',
+      url: '/dashboard',
+      type: 'test',
+    };
+
+    it('should track delivery statistics (totalSent increment)', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+      (webPush.sendNotification as jest.Mock).mockResolvedValue({ statusCode: 201 });
+      repository.update.mockResolvedValue({ affected: 1, raw: {}, generatedMaps: [] });
+
+      await service.sendToUser('user-123', mockPayload);
+
+      const stats = service.getDeliveryStats();
+      expect(stats.totalSent).toBe(1);
+    });
+
+    it('should track delivery statistics (totalFailed increment)', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+      const error = new Error('Bad Request') as any;
+      error.statusCode = 400;
+      (webPush.sendNotification as jest.Mock).mockRejectedValue(error);
+
+      await service.sendToUser('user-123', mockPayload);
+
+      const stats = service.getDeliveryStats();
+      expect(stats.totalFailed).toBe(1);
+    });
+
+    it('should track expired subscription removal count', async () => {
+      const mockSubscriptions = [
+        { id: 'sub-1', endpoint: 'endpoint-1', keys: { p256dh: 'key1', auth: 'auth1' } },
+      ] as PushSubscription[];
+
+      repository.find.mockResolvedValue(mockSubscriptions);
+      const error = new Error('Gone') as any;
+      error.statusCode = 410;
+      (webPush.sendNotification as jest.Mock).mockRejectedValue(error);
+      repository.delete.mockResolvedValue({ affected: 1, raw: {} });
+
+      await service.sendToUser('user-123', mockPayload);
+
+      const stats = service.getDeliveryStats();
+      expect(stats.totalExpiredRemoved).toBe(1);
+    });
+
+    it('should return zero stats initially', () => {
+      const stats = service.getDeliveryStats();
+      expect(stats.totalSent).toBe(0);
+      expect(stats.totalFailed).toBe(0);
+      expect(stats.totalExpiredRemoved).toBe(0);
     });
   });
 

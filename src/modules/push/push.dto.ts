@@ -1,6 +1,7 @@
 /**
  * Push Notification DTOs
  * Story 10.4: Push Notifications Setup
+ * Story 16.7: VAPID Key Web Push Setup (admin DTOs)
  *
  * Request and response DTOs for push notification endpoints.
  */
@@ -230,4 +231,100 @@ export class SendPushNotificationResponseDto {
 
   @ApiProperty({ description: 'Detailed results', type: [PushResultDto] })
   results!: PushResultDto[];
+}
+
+/**
+ * VAPID key status response DTO
+ * Story 16.7: VAPID Key Web Push Setup
+ */
+export class VapidKeyStatusResponseDto {
+  @ApiProperty({ description: 'Whether VAPID keys are properly configured' })
+  configured!: boolean;
+
+  @ApiProperty({ description: 'Whether public key is present' })
+  publicKeyPresent!: boolean;
+
+  @ApiProperty({ description: 'Whether private key is present' })
+  privateKeyPresent!: boolean;
+
+  @ApiProperty({ description: 'Whether VAPID subject is configured' })
+  subjectConfigured!: boolean;
+
+  @ApiProperty({ description: 'First 8 characters of public key for identification' })
+  publicKeyPrefix!: string;
+
+  @ApiProperty({ description: 'VAPID subject (mailto: address)' })
+  subject!: string;
+
+  @ApiProperty({ description: 'Key format validation status', enum: ['valid', 'invalid', 'missing'] })
+  keyFormat!: 'valid' | 'invalid' | 'missing';
+
+  @ApiPropertyOptional({ description: 'ISO timestamp of last key rotation' })
+  lastRotatedAt?: string;
+}
+
+/**
+ * Push subscription statistics response DTO
+ * Story 16.7: VAPID Key Web Push Setup
+ */
+export class PushSubscriptionStatsDto {
+  @ApiProperty({ description: 'Total active subscriptions' })
+  total!: number;
+
+  @ApiProperty({ description: 'Count of stale subscriptions (past threshold)' })
+  staleCount!: number;
+
+  @ApiProperty({ description: 'Count of expired subscriptions' })
+  expiredCount!: number;
+}
+
+/**
+ * Push delivery statistics DTO
+ * Story 16.7: VAPID Key Web Push Setup
+ */
+export class PushDeliveryStatsDto {
+  @ApiProperty({ description: 'Total notifications sent successfully' })
+  totalSent!: number;
+
+  @ApiProperty({ description: 'Total notifications that failed' })
+  totalFailed!: number;
+
+  @ApiProperty({ description: 'Total expired subscriptions auto-removed' })
+  totalExpiredRemoved!: number;
+}
+
+/**
+ * Cleanup result DTO
+ * Story 16.7: VAPID Key Web Push Setup
+ */
+export class CleanupResultDto {
+  @ApiProperty({ description: 'Number of stale subscriptions removed' })
+  staleRemoved!: number;
+
+  @ApiProperty({ description: 'Number of expired subscriptions removed' })
+  expiredRemoved!: number;
+
+  @ApiProperty({ description: 'Total subscriptions removed' })
+  totalRemoved!: number;
+
+  @ApiProperty({ description: 'ISO timestamp of cleanup execution' })
+  executedAt!: string;
+
+  @ApiProperty({ description: 'Cleanup duration in milliseconds' })
+  durationMs!: number;
+}
+
+/**
+ * Combined push statistics response DTO
+ * Story 16.7: VAPID Key Web Push Setup
+ */
+export class PushStatsResponseDto {
+  @ApiProperty({ description: 'Subscription statistics', type: PushSubscriptionStatsDto })
+  subscriptions!: PushSubscriptionStatsDto;
+
+  @ApiProperty({ description: 'Delivery statistics', type: PushDeliveryStatsDto })
+  delivery!: PushDeliveryStatsDto;
+
+  @ApiPropertyOptional({ description: 'Last cleanup result', type: CleanupResultDto })
+  lastCleanup?: CleanupResultDto;
 }

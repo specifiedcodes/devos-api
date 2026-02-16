@@ -1,23 +1,36 @@
+#!/usr/bin/env ts-node
 /**
  * VAPID Key Generation Script
  * Story 10.4: Push Notifications Setup
+ * Story 16.7: VAPID Key Web Push Setup (enhanced with rotation timestamp)
  *
- * Generates VAPID key pair for Web Push API.
- * Run once per environment and store in environment variables.
- *
+ * Generates a VAPID key pair for Web Push notifications.
  * Usage: npx ts-node scripts/generate-vapid-keys.ts
+ *
+ * Output: VAPID public and private keys in env-ready format.
  */
 
-import webPush from 'web-push';
+import * as webPush from 'web-push';
 
-const vapidKeys = webPush.generateVAPIDKeys();
+function generateVapidKeys(): void {
+  const keys = webPush.generateVAPIDKeys();
 
-console.log('\n=== VAPID Keys Generated ===\n');
-console.log('Add these to your environment variables:\n');
-console.log(`VAPID_PUBLIC_KEY=${vapidKeys.publicKey}`);
-console.log(`VAPID_PRIVATE_KEY=${vapidKeys.privateKey}`);
-console.log('VAPID_SUBJECT=mailto:support@devos.app');
-console.log('\n=== Important Notes ===');
-console.log('1. Store the private key securely (never expose to frontend)');
-console.log('2. Only regenerate keys if compromised (requires re-subscription)');
-console.log('3. Use different keys for development/staging/production\n');
+  console.log('');
+  console.log('=== VAPID Key Pair Generated ===');
+  console.log('');
+  console.log('Add these to your .env file:');
+  console.log('');
+  console.log(`VAPID_PUBLIC_KEY=${keys.publicKey}`);
+  console.log(`VAPID_PRIVATE_KEY=${keys.privateKey}`);
+  console.log(`VAPID_SUBJECT=mailto:admin@devos.app`);
+  console.log(`VAPID_LAST_ROTATED=${new Date().toISOString()}`);
+  console.log('');
+  console.log('IMPORTANT:');
+  console.log('- Keep VAPID_PRIVATE_KEY secret. Never commit it to version control.');
+  console.log('- The VAPID_PUBLIC_KEY is safe to expose to clients.');
+  console.log('- Rotating keys will invalidate all existing push subscriptions.');
+  console.log('- After rotation, clients must re-subscribe with the new public key.');
+  console.log('');
+}
+
+generateVapidKeys();
