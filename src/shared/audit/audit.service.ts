@@ -72,6 +72,13 @@ export enum AuditAction {
 
   // Chat export actions (Story 9.5) - HIGH-4 FIX: Audit logging for data export
   CHAT_EXPORT_REQUESTED = 'chat.export_requested',
+
+  // Admin user management actions (Story 14.6)
+  ADMIN_USER_VIEWED = 'admin.user_viewed',
+  ADMIN_USER_SUSPENDED = 'admin.user_suspended',
+  ADMIN_USER_UNSUSPENDED = 'admin.user_unsuspended',
+  ADMIN_USER_DELETED = 'admin.user_deleted',
+  ADMIN_USER_LISTED = 'admin.user_listed',
 }
 
 /**
@@ -410,6 +417,26 @@ export class AuditService {
         end: endDate.toISOString(),
       },
     };
+  }
+
+  /**
+   * Log an admin action (Story 14.6)
+   * Convenience wrapper for platform-wide admin actions
+   */
+  async logAdminAction(
+    adminId: string,
+    action: AuditAction,
+    targetUserId: string,
+    metadata?: Record<string, any>,
+    request?: any,
+  ): Promise<void> {
+    await this.log('platform', adminId, action, 'user', targetUserId, {
+      ...metadata,
+      adminId,
+      targetUserId,
+      ipAddress: request?.ip,
+      userAgent: request?.headers?.['user-agent'],
+    });
   }
 
   /**

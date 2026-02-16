@@ -59,6 +59,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
+    // 3a. Check if user is suspended (Story 14.6)
+    if (user.suspendedAt) {
+      throw new UnauthorizedException('Account has been suspended');
+    }
+
     // 4. Validate workspace access if workspaceId in token
     if (workspaceId) {
       // Verify user is still member of this workspace
@@ -85,6 +90,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jti,
       workspaceId: workspaceId || user.currentWorkspaceId,
       ...user,
+      isPlatformAdmin: user.isPlatformAdmin || false,
     };
   }
 

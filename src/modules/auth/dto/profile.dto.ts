@@ -15,4 +15,7 @@ export class ProfileDto {
 
   @ApiProperty({ description: 'Whether 2FA is enabled' })
   two_factor_enabled!: boolean;
+
+  @ApiProperty({ description: 'Whether user is a platform administrator' })
+  is_platform_admin!: boolean;
 }

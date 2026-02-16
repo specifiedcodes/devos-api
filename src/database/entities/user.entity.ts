@@ -46,6 +46,18 @@ export class User {
   @IsOptional()
   lastLoginAt!: Date | null;
 
+  @Column({ type: 'boolean', default: false, name: 'is_platform_admin' })
+  @IsBoolean()
+  isPlatformAdmin!: boolean;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'suspended_at' })
+  @IsOptional()
+  suspendedAt!: Date | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true, name: 'suspension_reason' })
+  @IsOptional()
+  suspensionReason!: string | null;
+
   @Column({ type: 'timestamp', nullable: true, name: 'deleted_at' })
   @Index()
   @IsOptional()

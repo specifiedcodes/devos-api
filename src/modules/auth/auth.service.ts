@@ -72,7 +72,7 @@ export class AuthService {
   async getProfile(userId: string): Promise<ProfileDto> {
     const user = await this.userRepository.findOne({
       where: { id: userId },
-      select: ['id', 'email', 'createdAt', 'lastLoginAt', 'twoFactorEnabled'],
+      select: ['id', 'email', 'createdAt', 'lastLoginAt', 'twoFactorEnabled', 'isPlatformAdmin'],
     });
 
     if (!user) {
@@ -85,6 +85,7 @@ export class AuthService {
       created_at: user.createdAt,
       last_login_at: user.lastLoginAt,
       two_factor_enabled: user.twoFactorEnabled,
+      is_platform_admin: user.isPlatformAdmin || false,
     };
   }
 
