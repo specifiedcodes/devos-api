@@ -4,11 +4,14 @@ import { HealthCheckService } from '../health.service';
 import { HealthController } from '../health.controller';
 import { HealthHistoryService } from '../health-history.service';
 import { HealthMetricsService } from '../health-metrics.service';
+import { IncidentQueryService } from '../incident-query.service';
 import { RedisService } from '../../redis/redis.service';
 import { MetricsService } from '../../metrics/metrics.service';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { getQueueToken } from '@nestjs/bull';
+import { getRepositoryToken } from '@nestjs/typeorm';
+import { Incident } from '../../../database/entities/incident.entity';
 import { Registry } from 'prom-client';
 
 describe('HealthModule', () => {
@@ -23,6 +26,20 @@ describe('HealthModule', () => {
         HealthCheckService,
         HealthHistoryService,
         HealthMetricsService,
+        IncidentQueryService,
+        {
+          provide: getRepositoryToken(Incident),
+          useValue: {
+            find: jest.fn().mockResolvedValue([]),
+            createQueryBuilder: jest.fn().mockReturnValue({
+              leftJoinAndSelect: jest.fn().mockReturnThis(),
+              where: jest.fn().mockReturnThis(),
+              andWhere: jest.fn().mockReturnThis(),
+              orderBy: jest.fn().mockReturnThis(),
+              getMany: jest.fn().mockResolvedValue([]),
+            }),
+          },
+        },
         {
           provide: DataSource,
           useValue: {

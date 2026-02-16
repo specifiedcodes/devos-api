@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { HealthController } from '../health.controller';
 import { HealthCheckService } from '../health.service';
 import { HealthHistoryService } from '../health-history.service';
+import { IncidentQueryService } from '../incident-query.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { NotFoundException } from '@nestjs/common';
 
@@ -78,6 +79,14 @@ describe('HealthController', () => {
       providers: [
         { provide: HealthCheckService, useValue: mockHealthCheckService },
         { provide: HealthHistoryService, useValue: mockHealthHistoryService },
+        {
+          provide: IncidentQueryService,
+          useValue: {
+            getActiveIncidents: jest.fn().mockResolvedValue([]),
+            getRecentlyResolvedIncidents: jest.fn().mockResolvedValue([]),
+            derivePlatformStatus: jest.fn().mockReturnValue('operational'),
+          },
+        },
       ],
     })
       .overrideGuard(JwtAuthGuard)

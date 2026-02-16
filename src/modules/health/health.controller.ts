@@ -13,6 +13,7 @@ import { Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
 import { HealthCheckService } from './health.service';
 import { HealthHistoryService } from './health-history.service';
+import { IncidentQueryService } from './incident-query.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import {
   HealthLivenessDto,
@@ -38,6 +39,7 @@ export class HealthController {
   constructor(
     private readonly healthCheckService: HealthCheckService,
     private readonly healthHistoryService: HealthHistoryService,
+    private readonly incidentQueryService: IncidentQueryService,
   ) {}
 
   /**
@@ -145,6 +147,106 @@ export class HealthController {
       entries,
       uptimePercentage,
       incidents,
+    };
+  }
+
+  /**
+   * Public Active Incidents: GET /health/incidents
+   * Story 14.9: Incident Management (AC6)
+   *
+   * Returns all active (non-resolved) incidents with their timeline updates.
+   * No authentication required (public status page).
+   * Ordered by severity (critical first), then createdAt DESC.
+   */
+  @Get('incidents')
+  @HttpCode(HttpStatus.OK)
+  async getPublicIncidents() {
+    const activeIncidents = await this.incidentQueryService.getActiveIncidents();
+    const overallStatus = this.incidentQueryService.derivePlatformStatus(activeIncidents);
+
+    return {
+      status: overallStatus,
+      activeIncidents,
+    };
+  }
+
+  /**
+   * Public Platform Status: GET /health/status
+   * Story 14.9: Incident Management (AC6)
+   *
+   * Returns aggregated platform status for the public status page.
+   * No authentication required.
+   */
+  @Get('status')
+  @HttpCode(HttpStatus.OK)
+  async getPublicStatus() {
+    // Get active incidents and recently resolved via dedicated service
+    const [activeIncidents, recentlyResolved] = await Promise.all([
+      this.incidentQueryService.getActiveIncidents(),
+      this.incidentQueryService.getRecentlyResolvedIncidents(),
+    ]);
+
+    // Derive overall platform status from active incidents
+    const overallStatus = this.incidentQueryService.derivePlatformStatus(activeIncidents);
+
+    // Get services health from health check
+    let healthData: HealthCheckResult | null = null;
+    try {
+      healthData = await this.healthCheckService.checkHealth();
+    } catch {
+      // If health check fails, continue without service-level data
+    }
+
+    // Build services status combining health checks + incident affected services
+    const serviceNames = ['api', 'websocket', 'database', 'redis', 'orchestrator'];
+    const affectedServiceSet = new Set<string>();
+    for (const incident of activeIncidents) {
+      for (const svc of incident.affectedServices) {
+        affectedServiceSet.add(svc.toLowerCase());
+      }
+    }
+
+    // Map service names to health check keys
+    const healthCheckKeyMap: Record<string, string> = {
+      api: 'database',       // API is operational if this endpoint responds; fallback to database health
+      websocket: 'redis',    // WebSocket depends on Redis for pub/sub
+      database: 'database',
+      redis: 'redis',
+      orchestrator: 'bullmq', // Orchestrator depends on BullMQ
+    };
+
+    const services: Record<string, string> = {};
+    for (const svc of serviceNames) {
+      if (affectedServiceSet.has(svc)) {
+        // Derive service status from most severe incident affecting it
+        const affectingIncidents = activeIncidents.filter((i) =>
+          i.affectedServices.some((s) => s.toLowerCase() === svc),
+        );
+        const hasCritical = affectingIncidents.some((i) => i.severity === 'critical');
+        const hasMajor = affectingIncidents.some((i) => i.severity === 'major');
+        if (hasCritical) {
+          services[svc] = 'major_outage';
+        } else if (hasMajor) {
+          services[svc] = 'partial_outage';
+        } else {
+          services[svc] = 'degraded_performance';
+        }
+      } else if (healthData?.services) {
+        // Map service name to its corresponding health check key
+        const healthKey = healthCheckKeyMap[svc] || svc;
+        const healthStatus = healthData.services[healthKey]?.status;
+        services[svc] = healthStatus === 'unhealthy' ? 'major_outage' : 'operational';
+      } else {
+        services[svc] = 'operational';
+      }
+    }
+
+    return {
+      status: overallStatus,
+      activeIncidents,
+      recentlyResolved,
+      services,
+      lastUpdated: new Date().toISOString(),
     };
   }
 

@@ -93,6 +93,13 @@ export enum AuditAction {
   ADMIN_ALERT_ACKNOWLEDGED = 'admin.alert_acknowledged',
   ADMIN_ALERT_RESOLVED = 'admin.alert_resolved',
   ADMIN_ALERT_HISTORY_VIEWED = 'admin.alert_history_viewed',
+
+  // Admin incident management actions (Story 14.9)
+  ADMIN_INCIDENT_CREATED = 'admin.incident_created',
+  ADMIN_INCIDENT_UPDATED = 'admin.incident_updated',
+  ADMIN_INCIDENT_UPDATE_ADDED = 'admin.incident_update_added',
+  ADMIN_INCIDENT_RESOLVED = 'admin.incident_resolved',
+  ADMIN_INCIDENT_LISTED = 'admin.incident_listed',
 }
 
 /**
