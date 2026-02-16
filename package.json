@@ -51,6 +51,7 @@
     "@nestjs/throttler": "^6.5.0",
     "@nestjs/typeorm": "^11.0.0",
     "@nestjs/websockets": "^11.1.13",
+    "@node-saml/node-saml": "^5.1.0",
     "@octokit/auth-oauth-app": "^9.0.3",
     "@octokit/rest": "^22.0.1",
     "@opentelemetry/api": "^1.9.0",
@@ -89,7 +90,10 @@
     "typeorm": "^0.3.28",
     "uuid": "^13.0.0",
     "web-push": "^3.6.7",
-    "winston": "^3.19.0"
+    "winston": "^3.19.0",
+    "xml-crypto": "^6.1.2",
+    "xml-encryption": "^3.1.0",
+    "xml2js": "^0.6.2"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",
@@ -109,6 +113,7 @@
     "@types/speakeasy": "^2.0.10",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
+    "@types/xml2js": "^0.4.14",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "eslint-config-prettier": "^10.1.8",

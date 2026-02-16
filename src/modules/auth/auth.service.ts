@@ -1279,6 +1279,39 @@ export class AuthService {
   }
 
   // ============================================================================
+  // SSO TOKEN GENERATION (Story 17.1)
+  // ============================================================================
+
+  /**
+   * Generate JWT tokens for an SSO-authenticated user
+   * Called by SamlService after successful SAML assertion validation
+   */
+  async generateTokensForSsoUser(
+    user: User,
+    workspaceId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    const tokens = await this.generateTokens(user, ipAddress, userAgent, workspaceId);
+
+    // Update last login
+    await this.userRepository.update(user.id, { lastLoginAt: new Date() });
+
+    return {
+      user: {
+        id: user.id,
+        email: user.email,
+        created_at: user.createdAt.toISOString(),
+      },
+      tokens: {
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_in: 86400,
+      },
+    };
+  }
+
+  // ============================================================================
   // SESSION MANAGEMENT & SECURITY MONITORING (Story 1.10)
   // ============================================================================
 

@@ -104,6 +104,9 @@ import { ProjectFilesModule } from './modules/project-files/project-files.module
 import { ProjectFile } from './database/entities/project-file.entity';
 import { SlackIntegration } from './database/entities/slack-integration.entity';
 import { DiscordIntegration } from './database/entities/discord-integration.entity';
+import { SamlConfiguration } from './database/entities/saml-configuration.entity';
+import { SsoAuditEvent } from './database/entities/sso-audit-event.entity';
+import { SsoModule } from './modules/sso/sso.module';
 
 @Module({
   imports: [
@@ -175,6 +178,8 @@ import { DiscordIntegration } from './database/entities/discord-integration.enti
         ProjectFile,
         SlackIntegration,
         DiscordIntegration,
+        SamlConfiguration,
+        SsoAuditEvent,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -236,6 +241,7 @@ import { DiscordIntegration } from './database/entities/discord-integration.enti
     WebSocketSecurityModule,
     FileStorageModule,
     ProjectFilesModule,
+    SsoModule,
   ],
   controllers: [AppController],
   providers: [
