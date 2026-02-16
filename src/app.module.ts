@@ -91,6 +91,7 @@ import { MetricsModule } from './modules/metrics/metrics.module';
 import { LoggingModule } from './modules/logging/logging.module';
 import { TracingModule } from './modules/tracing/tracing.module';
 import { TracingInterceptor } from './modules/tracing/interceptors/tracing.interceptor';
+import { HealthModule } from './modules/health/health.module';
 import { CorrelationIdMiddleware } from './modules/logging/middleware/correlation-id.middleware';
 import { RequestLoggingInterceptor } from './modules/logging/interceptors/request-logging.interceptor';
 import { ModelPerformance } from './database/entities/model-performance.entity';
@@ -220,6 +221,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     MetricsModule,
     LoggingModule,
     TracingModule,
+    HealthModule,
   ],
   controllers: [AppController],
   providers: [
