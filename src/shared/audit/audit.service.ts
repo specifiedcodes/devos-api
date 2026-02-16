@@ -79,6 +79,10 @@ export enum AuditAction {
   ADMIN_USER_UNSUSPENDED = 'admin.user_unsuspended',
   ADMIN_USER_DELETED = 'admin.user_deleted',
   ADMIN_USER_LISTED = 'admin.user_listed',
+
+  // Admin analytics actions (Story 14.7)
+  ADMIN_ANALYTICS_VIEWED = 'admin.analytics_viewed',
+  ADMIN_ANALYTICS_EXPORTED = 'admin.analytics_exported',
 }
 
 /**
