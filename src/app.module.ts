@@ -100,6 +100,8 @@ import { WorkspaceContextMiddleware } from './common/middleware/workspace-contex
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 import { WebSocketSecurityModule } from './modules/websocket-security/ws-security.module';
 import { FileStorageModule } from './modules/file-storage/file-storage.module';
+import { ProjectFilesModule } from './modules/project-files/project-files.module';
+import { ProjectFile } from './database/entities/project-file.entity';
 
 @Module({
   imports: [
@@ -168,6 +170,7 @@ import { FileStorageModule } from './modules/file-storage/file-storage.module';
         FailureRecoveryHistory,
         ModelDefinition,
         ModelPerformance,
+        ProjectFile,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -228,6 +231,7 @@ import { FileStorageModule } from './modules/file-storage/file-storage.module';
     AdminModule,
     WebSocketSecurityModule,
     FileStorageModule,
+    ProjectFilesModule,
   ],
   controllers: [AppController],
   providers: [

@@ -106,6 +106,12 @@ export enum AuditAction {
   ADMIN_AUDIT_LOG_EXPORTED = 'admin.audit_log_exported',
   ADMIN_AUDIT_LOG_SEARCH_SAVED = 'admin.audit_log_search_saved',
   ADMIN_AUDIT_LOG_SEARCH_DELETED = 'admin.audit_log_search_deleted',
+
+  // File storage actions (Story 16.2)
+  FILE_UPLOADED = 'file.uploaded',
+  FILE_DOWNLOADED = 'file.downloaded',
+  FILE_DELETED = 'file.deleted',
+  FILE_UPDATED = 'file.updated',
 }
 
 /**
