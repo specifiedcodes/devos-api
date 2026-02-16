@@ -98,6 +98,7 @@ import { RequestLoggingInterceptor } from './modules/logging/interceptors/reques
 import { ModelPerformance } from './database/entities/model-performance.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
+import { WebSocketSecurityModule } from './modules/websocket-security/ws-security.module';
 
 @Module({
   imports: [
@@ -224,6 +225,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     TracingModule,
     HealthModule,
     AdminModule,
+    WebSocketSecurityModule,
   ],
   controllers: [AppController],
   providers: [

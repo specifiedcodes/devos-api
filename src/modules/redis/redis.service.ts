@@ -519,6 +519,27 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Remove elements from sorted set by rank range (Story 15.7 - WebSocket buffer limits)
+   * Rank 0 is the element with the lowest score (oldest).
+   * @param key - Redis sorted set key
+   * @param start - Start rank (inclusive, 0-based)
+   * @param stop - Stop rank (inclusive, negative values count from the end)
+   * @returns Number of elements removed
+   */
+  async zremrangebyrank(key: string, start: number, stop: number): Promise<number | null> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zremrangebyrank');
+      return null;
+    }
+    try {
+      return await this.client.zremrangebyrank(key, start, stop);
+    } catch (error) {
+      this.logger.error(`Failed to zremrangebyrank from ${key}`, error);
+      return null;
+    }
+  }
+
+  /**
    * Execute Redis INFO command (Story 14.1 - Prometheus metrics)
    * Returns raw Redis INFO string for metrics collection
    * @returns Redis INFO response string or null on failure
