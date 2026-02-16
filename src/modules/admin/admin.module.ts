@@ -8,6 +8,8 @@ import { AlertRule } from '../../database/entities/alert-rule.entity';
 import { AlertHistory } from '../../database/entities/alert-history.entity';
 import { Incident } from '../../database/entities/incident.entity';
 import { IncidentUpdate } from '../../database/entities/incident-update.entity';
+import { AuditLog } from '../../database/entities/audit-log.entity';
+import { AuditSavedSearch } from '../../database/entities/audit-saved-search.entity';
 import { AdminUsersService } from './services/admin-users.service';
 import { AdminBootstrapService } from './services/admin-bootstrap.service';
 import { AdminAnalyticsService } from './services/admin-analytics.service';
@@ -16,10 +18,12 @@ import { AlertNotificationService } from './services/alert-notification.service'
 import { AlertRuleSeedService } from './services/alert-rule-seed.service';
 import { IncidentService } from './services/incident.service';
 import { IncidentNotificationService } from './services/incident-notification.service';
+import { AdminAuditLogService } from './services/admin-audit-log.service';
 import { AdminUsersController } from './controllers/admin-users.controller';
 import { AdminAnalyticsController } from './controllers/admin-analytics.controller';
 import { AlertRulesController } from './controllers/alert-rules.controller';
 import { IncidentController } from './controllers/incident.controller';
+import { AdminAuditLogController } from './controllers/admin-audit-log.controller';
 import { SuperAdminGuard } from './guards/super-admin.guard';
 import { HealthModule } from '../health/health.module';
 import { EmailModule } from '../email/email.module';
@@ -36,6 +40,8 @@ import { NotificationModule } from '../notification/notification.module';
       AlertHistory,
       Incident,
       IncidentUpdate,
+      AuditLog,
+      AuditSavedSearch,
     ]),
     HealthModule,
     EmailModule,
@@ -46,6 +52,7 @@ import { NotificationModule } from '../notification/notification.module';
     AdminAnalyticsController,
     AlertRulesController,
     IncidentController,
+    AdminAuditLogController,
   ],
   providers: [
     AdminUsersService,
@@ -57,6 +64,7 @@ import { NotificationModule } from '../notification/notification.module';
     AlertRuleSeedService,
     IncidentService,
     IncidentNotificationService,
+    AdminAuditLogService,
   ],
   exports: [SuperAdminGuard],
 })
