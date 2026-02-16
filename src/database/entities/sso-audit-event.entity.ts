@@ -44,6 +44,14 @@ export enum SsoAuditEventType {
   DOMAIN_REMOVED = 'domain_removed',
   DOMAIN_PROVIDER_LINKED = 'domain_provider_linked',
   DOMAIN_PROVIDER_UNLINKED = 'domain_provider_unlinked',
+  JIT_USER_PROVISIONED = 'jit_user_provisioned',
+  JIT_USER_PROFILE_UPDATED = 'jit_user_profile_updated',
+  JIT_USER_ROLE_UPDATED = 'jit_user_role_updated',
+  JIT_USER_LINKED = 'jit_user_linked_existing',
+  JIT_USER_REJECTED = 'jit_user_rejected',
+  JIT_PROVISIONING_ERROR = 'jit_provisioning_error',
+  JIT_CONFIG_CREATED = 'jit_config_created',
+  JIT_CONFIG_UPDATED = 'jit_config_updated',
 }
 
 @Entity('sso_audit_events')

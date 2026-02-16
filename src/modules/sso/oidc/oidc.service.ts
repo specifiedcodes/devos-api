@@ -6,13 +6,7 @@ import {
   ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
-import * as crypto from 'crypto';
-import * as bcrypt from 'bcrypt';
-import { User } from '../../../database/entities/user.entity';
-import { WorkspaceMember, WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { OidcConfigService } from './oidc-config.service';
 import { OidcTokenService } from './oidc-token.service';
 import { OidcDiscoveryService } from './oidc-discovery.service';
@@ -20,6 +14,7 @@ import { SsoAuditService } from '../sso-audit.service';
 import { SsoAuditEventType } from '../../../database/entities/sso-audit-event.entity';
 import { AuthService } from '../../auth/auth.service';
 import { RedisService } from '../../redis/redis.service';
+import { JitProvisioningService } from '../jit/jit-provisioning.service';
 import { OIDC_CONSTANTS } from '../constants/oidc.constants';
 import {
   OidcAuthorizationParams,
@@ -33,10 +28,6 @@ export class OidcService {
   private readonly frontendUrl: string;
 
   constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(WorkspaceMember)
-    private readonly workspaceMemberRepository: Repository<WorkspaceMember>,
     private readonly oidcConfigService: OidcConfigService,
     private readonly oidcTokenService: OidcTokenService,
     private readonly oidcDiscoveryService: OidcDiscoveryService,
@@ -44,6 +35,7 @@ export class OidcService {
     private readonly authService: AuthService,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly jitProvisioningService: JitProvisioningService,
   ) {
     this.appUrl = this.configService.get<string>('APP_URL', 'http://localhost:3001');
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
@@ -197,49 +189,20 @@ export class OidcService {
         }
       }
 
-      // JIT Provisioning
-      let user = await this.userRepository.findOne({ where: { email } });
-      let isNewUser = false;
-
-      if (!user) {
-        // Create new user with random password
-        const randomPassword = crypto.randomBytes(32).toString('hex');
-        const passwordHash = await bcrypt.hash(randomPassword, 12);
-
-        user = this.userRepository.create({
-          email,
-          passwordHash,
-          twoFactorEnabled: false,
-        });
-        user = await this.userRepository.save(user);
-        isNewUser = true;
-
-        // Create workspace membership
-        const member = this.workspaceMemberRepository.create({
-          workspaceId,
-          userId: user.id,
-          role: WorkspaceRole.DEVELOPER,
-        });
-        await this.workspaceMemberRepository.save(member);
-      } else {
-        // Ensure workspace membership exists
-        const existingMember = await this.workspaceMemberRepository.findOne({
-          where: { workspaceId, userId: user.id },
-        });
-
-        if (!existingMember) {
-          const member = this.workspaceMemberRepository.create({
-            workspaceId,
-            userId: user.id,
-            role: WorkspaceRole.DEVELOPER,
-          });
-          await this.workspaceMemberRepository.save(member);
-        }
-      }
+      // Centralized JIT Provisioning
+      const provisioningResult = await this.jitProvisioningService.provisionUser(
+        workspaceId,
+        userClaims,
+        'oidc',
+        ipAddress,
+        userAgent,
+      );
+      const user = { id: provisioningResult.user.id, email: provisioningResult.user.email };
+      const isNewUser = provisioningResult.isNewUser;
 
       // Generate JWT tokens
       const authResponse = await this.authService.generateTokensForSsoUser(
-        user,
+        user as any,
         workspaceId,
         ipAddress,
         userAgent,

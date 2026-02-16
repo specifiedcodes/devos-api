@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import {
   BadRequestException,
@@ -13,8 +12,7 @@ import { OidcDiscoveryService } from './oidc-discovery.service';
 import { SsoAuditService } from '../sso-audit.service';
 import { AuthService } from '../../auth/auth.service';
 import { RedisService } from '../../redis/redis.service';
-import { User } from '../../../database/entities/user.entity';
-import { WorkspaceMember, WorkspaceRole } from '../../../database/entities/workspace-member.entity';
+import { JitProvisioningService } from '../jit/jit-provisioning.service';
 import { SsoAuditEventType } from '../../../database/entities/sso-audit-event.entity';
 import { OidcProviderType } from '../../../database/entities/oidc-configuration.entity';
 
@@ -128,16 +126,18 @@ describe('OidcService', () => {
     }),
   };
 
-  const mockUserRepo = {
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
-  };
-
-  const mockWorkspaceMemberRepo = {
-    findOne: jest.fn(),
-    create: jest.fn(),
-    save: jest.fn(),
+  const mockJitProvisioningService = {
+    provisionUser: jest.fn().mockResolvedValue({
+      user: { id: 'new-user-id', email: 'user@example.com' },
+      isNewUser: true,
+      profileUpdated: false,
+      roleUpdated: false,
+      provisioningDetails: {},
+    }),
+    getConfig: jest.fn(),
+    updateConfig: jest.fn(),
+    extractAttributes: jest.fn(),
+    resolveRole: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -153,8 +153,7 @@ describe('OidcService', () => {
         { provide: AuthService, useValue: mockAuthService },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
-        { provide: getRepositoryToken(User), useValue: mockUserRepo },
-        { provide: getRepositoryToken(WorkspaceMember), useValue: mockWorkspaceMemberRepo },
+        { provide: JitProvisioningService, useValue: mockJitProvisioningService },
       ],
     }).compile();
 
@@ -215,25 +214,10 @@ describe('OidcService', () => {
 
     beforeEach(() => {
       mockRedisService.get.mockResolvedValue(JSON.stringify(stateData));
-      mockUserRepo.findOne.mockResolvedValue(null);
-      mockUserRepo.create.mockReturnValue({
-        id: 'new-user-id',
-        email: 'user@example.com',
-      });
-      mockUserRepo.save.mockResolvedValue({
-        id: 'new-user-id',
-        email: 'user@example.com',
-      });
-      mockWorkspaceMemberRepo.create.mockReturnValue({
-        workspaceId,
-        userId: 'new-user-id',
-        role: WorkspaceRole.DEVELOPER,
-      });
-      mockWorkspaceMemberRepo.save.mockResolvedValue({});
     });
 
     it('should validate state parameter against Redis', async () => {
-      const result = await service.handleCallback(workspaceId, 'auth-code', 'test-state');
+      await service.handleCallback(workspaceId, 'auth-code', 'test-state');
 
       expect(mockRedisService.get).toHaveBeenCalledWith('oidc:state:test-state');
       expect(mockRedisService.del).toHaveBeenCalledWith('oidc:state:test-state');
@@ -279,6 +263,30 @@ describe('OidcService', () => {
       );
     });
 
+    it('should call jitProvisioningService.provisionUser with merged userClaims', async () => {
+      await service.handleCallback(workspaceId, 'auth-code', 'test-state');
+
+      expect(mockJitProvisioningService.provisionUser).toHaveBeenCalledWith(
+        workspaceId,
+        expect.objectContaining({ email: 'user@example.com' }),
+        'oidc',
+        undefined,
+        undefined,
+      );
+    });
+
+    it('should pass oidc as provider type', async () => {
+      await service.handleCallback(workspaceId, 'auth-code', 'test-state');
+
+      expect(mockJitProvisioningService.provisionUser).toHaveBeenCalledWith(
+        workspaceId,
+        expect.any(Object),
+        'oidc',
+        undefined,
+        undefined,
+      );
+    });
+
     it('should apply attribute mapping to extract user info', async () => {
       const result = await service.handleCallback(workspaceId, 'auth-code', 'test-state');
 
@@ -308,19 +316,28 @@ describe('OidcService', () => {
     });
 
     it('should create new user on first OIDC login (JIT provisioning)', async () => {
-      mockUserRepo.findOne.mockResolvedValue(null);
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'new-user-id', email: 'user@example.com' },
+        isNewUser: true,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
 
       const result = await service.handleCallback(workspaceId, 'auth-code', 'test-state');
 
       expect(result.isNewUser).toBe(true);
-      expect(mockUserRepo.create).toHaveBeenCalled();
-      expect(mockUserRepo.save).toHaveBeenCalled();
+      expect(mockJitProvisioningService.provisionUser).toHaveBeenCalled();
     });
 
     it('should update existing user on subsequent OIDC logins', async () => {
-      const existingUser = { id: 'existing-user-id', email: 'user@example.com' };
-      mockUserRepo.findOne.mockResolvedValue(existingUser);
-      mockWorkspaceMemberRepo.findOne.mockResolvedValue({ userId: existingUser.id });
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'existing-user-id', email: 'user@example.com' },
+        isNewUser: false,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
 
       const result = await service.handleCallback(workspaceId, 'auth-code', 'test-state');
 
@@ -328,17 +345,15 @@ describe('OidcService', () => {
       expect(result.userId).toBe('existing-user-id');
     });
 
-    it('should create workspace membership for new users', async () => {
-      mockUserRepo.findOne.mockResolvedValue(null);
+    it('should still return correct OidcCallbackResult shape', async () => {
+      const result = await service.handleCallback(workspaceId, 'auth-code', 'test-state');
 
-      await service.handleCallback(workspaceId, 'auth-code', 'test-state');
-
-      expect(mockWorkspaceMemberRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspaceId,
-          role: WorkspaceRole.DEVELOPER,
-        }),
-      );
+      expect(result).toHaveProperty('userId');
+      expect(result).toHaveProperty('email');
+      expect(result).toHaveProperty('isNewUser');
+      expect(result).toHaveProperty('workspaceId');
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
     });
 
     it('should generate valid JWT tokens', async () => {
@@ -395,20 +410,14 @@ describe('OidcService', () => {
       expect(mockOidcConfigService.markAsTested).toHaveBeenCalledWith(configId);
     });
 
-    it('should create workspace membership for existing user without membership', async () => {
-      const existingUser = { id: 'existing-user-id', email: 'user@example.com' };
-      mockUserRepo.findOne.mockResolvedValue(existingUser);
-      mockWorkspaceMemberRepo.findOne.mockResolvedValue(null); // no membership
-
-      await service.handleCallback(workspaceId, 'auth-code', 'test-state');
-
-      expect(mockWorkspaceMemberRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          workspaceId,
-          userId: 'existing-user-id',
-          role: WorkspaceRole.DEVELOPER,
-        }),
+    it('should handle ForbiddenException from provisioning service', async () => {
+      mockJitProvisioningService.provisionUser.mockRejectedValue(
+        new ForbiddenException('JIT provisioning is disabled'),
       );
+
+      await expect(
+        service.handleCallback(workspaceId, 'auth-code', 'test-state'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

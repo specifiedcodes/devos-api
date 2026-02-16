@@ -7,6 +7,7 @@ import { SamlConfiguration } from '../../database/entities/saml-configuration.en
 import { OidcConfiguration } from '../../database/entities/oidc-configuration.entity';
 import { SsoAuditEvent } from '../../database/entities/sso-audit-event.entity';
 import { SsoDomain } from '../../database/entities/sso-domain.entity';
+import { JitProvisioningConfig } from '../../database/entities/jit-provisioning-config.entity';
 import { User } from '../../database/entities/user.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { SamlService } from './saml/saml.service';
@@ -22,19 +23,21 @@ import { SsoAuditService } from './sso-audit.service';
 import { DomainVerificationService } from './domain/domain-verification.service';
 import { DomainVerificationScheduler } from './domain/domain-verification.scheduler';
 import { DomainController } from './domain/domain.controller';
+import { JitProvisioningService } from './jit/jit-provisioning.service';
+import { JitProvisioningController } from './jit/jit-provisioning.controller';
 import { AuthModule } from '../auth/auth.module';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([SamlConfiguration, OidcConfiguration, SsoAuditEvent, SsoDomain, User, WorkspaceMember]),
+    TypeOrmModule.forFeature([SamlConfiguration, OidcConfiguration, SsoAuditEvent, SsoDomain, JitProvisioningConfig, User, WorkspaceMember]),
     ConfigModule,
     HttpModule.register({ timeout: 10000 }),
     AuthModule,
     RedisModule,
     ScheduleModule,
   ],
-  controllers: [SamlController, OidcController, DomainController],
+  controllers: [SamlController, OidcController, DomainController, JitProvisioningController],
   providers: [
     SamlService,
     SamlConfigService,
@@ -46,7 +49,8 @@ import { RedisModule } from '../redis/redis.module';
     SsoAuditService,
     DomainVerificationService,
     DomainVerificationScheduler,
+    JitProvisioningService,
   ],
-  exports: [SamlService, SamlConfigService, OidcService, OidcConfigService, SsoAuditService, DomainVerificationService],
+  exports: [SamlService, SamlConfigService, OidcService, OidcConfigService, SsoAuditService, DomainVerificationService, JitProvisioningService],
 })
 export class SsoModule {}

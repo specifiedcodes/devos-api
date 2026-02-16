@@ -72,6 +72,10 @@ export class User {
   @JoinColumn({ name: 'current_workspace_id' })
   currentWorkspace!: Workspace | null;
 
+  @Column({ type: 'jsonb', name: 'sso_profile_data', nullable: true, default: null })
+  @IsOptional()
+  ssoProfileData!: Record<string, unknown> | null;
+
   @OneToMany(() => WorkspaceMember, (member) => member.user)
   workspaceMembers!: WorkspaceMember[];
 

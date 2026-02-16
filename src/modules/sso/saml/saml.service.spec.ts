@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException } from '@nestjs/common';
 import { SamlService } from './saml.service';
@@ -8,8 +7,7 @@ import { SamlValidationService } from './saml-validation.service';
 import { SsoAuditService } from '../sso-audit.service';
 import { AuthService } from '../../auth/auth.service';
 import { RedisService } from '../../redis/redis.service';
-import { User } from '../../../database/entities/user.entity';
-import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
+import { JitProvisioningService } from '../jit/jit-provisioning.service';
 import { SsoAuditEventType } from '../../../database/entities/sso-audit-event.entity';
 
 // Mock @node-saml/node-saml
@@ -22,18 +20,6 @@ jest.mock('@node-saml/node-saml', () => ({
 
 describe('SamlService', () => {
   let service: SamlService;
-
-  const mockUserRepository = {
-    create: jest.fn(),
-    save: jest.fn(),
-    findOne: jest.fn(),
-  };
-
-  const mockWorkspaceMemberRepository = {
-    create: jest.fn(),
-    save: jest.fn(),
-    findOne: jest.fn(),
-  };
 
   const mockSamlConfigService = {
     getConfig: jest.fn(),
@@ -74,6 +60,14 @@ describe('SamlService', () => {
     }),
   };
 
+  const mockJitProvisioningService = {
+    provisionUser: jest.fn(),
+    getConfig: jest.fn(),
+    updateConfig: jest.fn(),
+    extractAttributes: jest.fn(),
+    resolveRole: jest.fn(),
+  };
+
   const mockWorkspaceId = '550e8400-e29b-41d4-a716-446655440000';
   const mockConfigId = '550e8400-e29b-41d4-a716-446655440002';
   const mockActorId = '550e8400-e29b-41d4-a716-446655440001';
@@ -84,14 +78,13 @@ describe('SamlService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         SamlService,
-        { provide: getRepositoryToken(User), useValue: mockUserRepository },
-        { provide: getRepositoryToken(WorkspaceMember), useValue: mockWorkspaceMemberRepository },
         { provide: SamlConfigService, useValue: mockSamlConfigService },
         { provide: SamlValidationService, useValue: mockSamlValidationService },
         { provide: SsoAuditService, useValue: mockSsoAuditService },
         { provide: AuthService, useValue: mockAuthService },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: JitProvisioningService, useValue: mockJitProvisioningService },
       ],
     }).compile();
 
@@ -167,12 +160,6 @@ describe('SamlService', () => {
   });
 
   describe('handleCallback', () => {
-    const mockUser = {
-      id: 'user-123',
-      email: 'user@example.com',
-      createdAt: new Date(),
-    };
-
     const mockActiveConfig = {
       id: mockConfigId,
       workspaceId: mockWorkspaceId,
@@ -208,12 +195,44 @@ describe('SamlService', () => {
       });
     });
 
+    it('should call jitProvisioningService.provisionUser with correct arguments', async () => {
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: true,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
+      mockAuthService.generateTokensForSsoUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
+        tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
+      });
+
+      await service.handleCallback(
+        mockWorkspaceId,
+        'base64SAMLResponse',
+        undefined,
+        '127.0.0.1',
+        'Mozilla/5.0',
+      );
+
+      expect(mockJitProvisioningService.provisionUser).toHaveBeenCalledWith(
+        mockWorkspaceId,
+        expect.objectContaining({ email: 'user@example.com' }),
+        'saml',
+        '127.0.0.1',
+        'Mozilla/5.0',
+      );
+    });
+
     it('should create new user on first SSO login (JIT provisioning)', async () => {
-      mockUserRepository.findOne.mockResolvedValue(null); // No existing user
-      mockUserRepository.create.mockReturnValue(mockUser);
-      mockUserRepository.save.mockResolvedValue(mockUser);
-      mockWorkspaceMemberRepository.create.mockReturnValue({});
-      mockWorkspaceMemberRepository.save.mockResolvedValue({});
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: true,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
       mockAuthService.generateTokensForSsoUser.mockResolvedValue({
         user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
         tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
@@ -231,13 +250,16 @@ describe('SamlService', () => {
       expect(result.userId).toBe('user-123');
       expect(result.accessToken).toBe('jwt-access');
       expect(result.refreshToken).toBe('jwt-refresh');
-      expect(mockUserRepository.create).toHaveBeenCalled();
-      expect(mockWorkspaceMemberRepository.create).toHaveBeenCalled();
     });
 
     it('should update existing user on subsequent SSO logins', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser); // Existing user
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ userId: 'user-123' }); // Existing member
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: false,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
       mockAuthService.generateTokensForSsoUser.mockResolvedValue({
         user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
         tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
@@ -250,28 +272,16 @@ describe('SamlService', () => {
 
       expect(result.isNewUser).toBe(false);
       expect(result.userId).toBe('user-123');
-      expect(mockUserRepository.create).not.toHaveBeenCalled();
     });
 
-    it('should create workspace membership for existing user without membership', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue(null); // No existing membership
-      mockWorkspaceMemberRepository.create.mockReturnValue({});
-      mockWorkspaceMemberRepository.save.mockResolvedValue({});
-      mockAuthService.generateTokensForSsoUser.mockResolvedValue({
-        user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
-        tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
+    it('should still return correct SamlCallbackResult shape', async () => {
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: false,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
       });
-
-      await service.handleCallback(mockWorkspaceId, 'base64SAMLResponse');
-
-      expect(mockWorkspaceMemberRepository.create).toHaveBeenCalled();
-      expect(mockWorkspaceMemberRepository.save).toHaveBeenCalled();
-    });
-
-    it('should generate valid JWT tokens after successful SAML auth', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ userId: 'user-123' });
       mockAuthService.generateTokensForSsoUser.mockResolvedValue({
         user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
         tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
@@ -279,19 +289,43 @@ describe('SamlService', () => {
 
       const result = await service.handleCallback(mockWorkspaceId, 'base64SAMLResponse');
 
-      expect(mockAuthService.generateTokensForSsoUser).toHaveBeenCalledWith(
-        mockUser,
-        mockWorkspaceId,
-        undefined,
-        undefined,
-      );
+      expect(result).toHaveProperty('userId');
+      expect(result).toHaveProperty('email');
+      expect(result).toHaveProperty('isNewUser');
+      expect(result).toHaveProperty('workspaceId');
+      expect(result).toHaveProperty('accessToken');
+      expect(result).toHaveProperty('refreshToken');
+      expect(result).toHaveProperty('samlSessionIndex');
+    });
+
+    it('should generate valid JWT tokens after successful SAML auth', async () => {
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: false,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
+      mockAuthService.generateTokensForSsoUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
+        tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
+      });
+
+      const result = await service.handleCallback(mockWorkspaceId, 'base64SAMLResponse');
+
+      expect(mockAuthService.generateTokensForSsoUser).toHaveBeenCalled();
       expect(result.accessToken).toBe('jwt-access');
       expect(result.refreshToken).toBe('jwt-refresh');
     });
 
     it('should increment login_count on SAML config', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ userId: 'user-123' });
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: false,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
       mockAuthService.generateTokensForSsoUser.mockResolvedValue({
         user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
         tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
@@ -303,8 +337,13 @@ describe('SamlService', () => {
     });
 
     it('should log saml_login_success audit event', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ userId: 'user-123' });
+      mockJitProvisioningService.provisionUser.mockResolvedValue({
+        user: { id: 'user-123', email: 'user@example.com' },
+        isNewUser: false,
+        profileUpdated: false,
+        roleUpdated: false,
+        provisioningDetails: {},
+      });
       mockAuthService.generateTokensForSsoUser.mockResolvedValue({
         user: { id: 'user-123', email: 'user@example.com', created_at: '2026-01-01' },
         tokens: { access_token: 'jwt-access', refresh_token: 'jwt-refresh', expires_in: 86400 },
@@ -342,6 +381,17 @@ describe('SamlService', () => {
       await expect(
         service.handleCallback(mockWorkspaceId, 'base64SAMLResponse'),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should handle ForbiddenException from provisioning service', async () => {
+      const { ForbiddenException } = require('@nestjs/common');
+      mockJitProvisioningService.provisionUser.mockRejectedValue(
+        new ForbiddenException('JIT provisioning is disabled'),
+      );
+
+      await expect(
+        service.handleCallback(mockWorkspaceId, 'base64SAMLResponse'),
+      ).rejects.toThrow(ForbiddenException);
     });
   });
 

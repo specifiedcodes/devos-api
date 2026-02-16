@@ -108,6 +108,7 @@ import { SamlConfiguration } from './database/entities/saml-configuration.entity
 import { OidcConfiguration } from './database/entities/oidc-configuration.entity';
 import { SsoDomain } from './database/entities/sso-domain.entity';
 import { SsoAuditEvent } from './database/entities/sso-audit-event.entity';
+import { JitProvisioningConfig } from './database/entities/jit-provisioning-config.entity';
 import { SsoModule } from './modules/sso/sso.module';
 
 @Module({
@@ -184,6 +185,7 @@ import { SsoModule } from './modules/sso/sso.module';
         OidcConfiguration,
         SsoDomain,
         SsoAuditEvent,
+        JitProvisioningConfig,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
