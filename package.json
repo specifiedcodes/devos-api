@@ -74,7 +74,8 @@
     "speakeasy": "^2.0.0",
     "typeorm": "^0.3.28",
     "uuid": "^13.0.0",
-    "web-push": "^3.6.7"
+    "web-push": "^3.6.7",
+    "winston": "^3.19.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",

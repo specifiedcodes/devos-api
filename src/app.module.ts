@@ -88,6 +88,9 @@ import { ModelRegistryModule } from './modules/model-registry/model-registry.mod
 import { BenchmarkModule } from './modules/benchmarks/benchmark.module';
 import { ModelPreferencesModule } from './modules/model-preferences/model-preferences.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
+import { LoggingModule } from './modules/logging/logging.module';
+import { CorrelationIdMiddleware } from './modules/logging/middleware/correlation-id.middleware';
+import { RequestLoggingInterceptor } from './modules/logging/interceptors/request-logging.interceptor';
 import { ModelPerformance } from './database/entities/model-performance.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
@@ -213,6 +216,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     BenchmarkModule,
     ModelPreferencesModule,
     MetricsModule,
+    LoggingModule,
   ],
   controllers: [AppController],
   providers: [
@@ -221,6 +225,11 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     {
       provide: APP_INTERCEPTOR,
       useClass: WorkspaceContextInterceptor,
+    },
+    // Apply RequestLoggingInterceptor globally for structured request/response logging (Story 14.3)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: RequestLoggingInterceptor,
     },
     // Disable global throttler in test environment
     ...(process.env.NODE_ENV !== 'test'
@@ -235,6 +244,8 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
+    // Apply CorrelationIdMiddleware first for trace ID propagation (Story 14.3)
+    consumer.apply(CorrelationIdMiddleware).forRoutes('*');
     // Apply WorkspaceContextMiddleware to all routes (Fix Issue #9)
     // Middleware will only activate when x-workspace-id header is present
     consumer.apply(WorkspaceContextMiddleware).forRoutes('*');

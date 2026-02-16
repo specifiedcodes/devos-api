@@ -6,12 +6,18 @@ import { AppModule } from './app.module';
 import { validateEnvironmentVariables } from './common/config/env.validation';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RetryAfterInterceptor } from './common/interceptors/retry-after.interceptor';
+import { LoggingService } from './modules/logging/logging.service';
 
 async function bootstrap() {
   // Validate environment variables before starting application
   validateEnvironmentVariables();
 
-  const app = await NestFactory.create(AppModule);
+  // Create Winston-based logger before NestFactory to capture bootstrap logs
+  const loggingService = new LoggingService();
+
+  const app = await NestFactory.create(AppModule, {
+    logger: loggingService,
+  });
 
   // Enable cookie parsing for JWT token management
   app.use(cookieParser());
@@ -56,7 +62,7 @@ async function bootstrap() {
 
   const port = process.env.PORT || 3001;
   await app.listen(port);
-  console.log(`DevOS API is running on: http://localhost:${port}`);
+  loggingService.log(`DevOS API is running on: http://localhost:${port}`, 'Bootstrap');
 }
 
 bootstrap();
