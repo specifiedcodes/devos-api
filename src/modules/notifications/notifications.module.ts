@@ -3,9 +3,10 @@
  * Story 10.5: Notification Triggers
  * Story 10.6: Configurable Notification Preferences
  * Story 16.4: Slack Notification Integration
+ * Story 16.5: Discord Notification Integration
  *
  * NestJS module for notification trigger system.
- * Integrates with EventEmitter2, BullMQ, Push, In-App, and Slack notifications.
+ * Integrates with EventEmitter2, BullMQ, Push, In-App, Slack, and Discord notifications.
  * Includes preferences management and quiet hours.
  */
 
@@ -27,9 +28,14 @@ import { SlackNotificationService } from './services/slack-notification.service'
 import { SlackOAuthService } from './services/slack-oauth.service';
 import { SlackBlockBuilderService } from './services/slack-block-builder.service';
 
+// Discord services (Story 16.5)
+import { DiscordNotificationService } from './services/discord-notification.service';
+import { DiscordEmbedBuilderService } from './services/discord-embed-builder.service';
+
 // Controllers
 import { NotificationPreferencesController } from './controllers/notification-preferences.controller';
 import { SlackNotificationController } from './controllers/slack-notification.controller';
+import { DiscordNotificationController } from './controllers/discord-notification.controller';
 
 // Processors
 import {
@@ -40,12 +46,17 @@ import {
   SlackMessageProcessor,
   SLACK_NOTIFICATIONS_QUEUE,
 } from './processors/slack-message.processor';
+import {
+  DiscordMessageProcessor,
+  DISCORD_NOTIFICATIONS_QUEUE,
+} from './processors/discord-message.processor';
 
 // Entities
 import { PushSubscription } from '../../database/entities/push-subscription.entity';
 import { Project } from '../../database/entities/project.entity';
 import { NotificationPreferences } from '../../database/entities/notification-preferences.entity';
 import { SlackIntegration } from '../../database/entities/slack-integration.entity';
+import { DiscordIntegration } from '../../database/entities/discord-integration.entity';
 
 // Related Modules
 import { PushModule } from '../push/push.module';
@@ -59,7 +70,7 @@ import { RedisModule } from '../redis/redis.module';
     // This module only needs EventEmitterModule features, not forRoot()
 
     // TypeORM for subscription, project, preferences, and Slack integration queries
-    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration]),
+    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration]),
 
     // BullMQ queue for batch processing
     BullModule.registerQueue({
@@ -89,6 +100,20 @@ import { RedisModule } from '../redis/redis.module';
       },
     }),
 
+    // BullMQ queue for Discord message delivery (Story 16.5)
+    BullModule.registerQueue({
+      name: DISCORD_NOTIFICATIONS_QUEUE,
+      defaultJobOptions: {
+        removeOnComplete: true,
+        removeOnFail: 100,
+        attempts: 3,
+        backoff: {
+          type: 'exponential',
+          delay: 3000,
+        },
+      },
+    }),
+
     // Related modules
     PushModule,
     NotificationModule,
@@ -98,6 +123,7 @@ import { RedisModule } from '../redis/redis.module';
   controllers: [
     NotificationPreferencesController,
     SlackNotificationController,
+    DiscordNotificationController,
   ],
   providers: [
     // Core services
@@ -116,9 +142,14 @@ import { RedisModule } from '../redis/redis.module';
     SlackOAuthService,
     SlackBlockBuilderService,
 
+    // Discord services (Story 16.5)
+    DiscordNotificationService,
+    DiscordEmbedBuilderService,
+
     // BullMQ processors
     NotificationBatchProcessor,
     SlackMessageProcessor,
+    DiscordMessageProcessor,
   ],
   exports: [
     NotificationTriggerService,
@@ -129,6 +160,7 @@ import { RedisModule } from '../redis/redis.module';
     QuietHoursService,
     SlackNotificationService,
     SlackOAuthService,
+    DiscordNotificationService,
   ],
 })
 export class NotificationsModule {}

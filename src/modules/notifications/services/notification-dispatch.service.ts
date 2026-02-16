@@ -3,8 +3,9 @@
  * Story 10.5: Notification Triggers
  * Story 10.6: Configurable Notification Preferences
  * Story 16.4: Slack Notification Integration
+ * Story 16.5: Discord Notification Integration
  *
- * Dispatches notifications to push, in-app, and Slack channels.
+ * Dispatches notifications to push, in-app, Slack, and Discord channels.
  * Routes urgent notifications immediately, queues batchable ones.
  * Respects user preferences for notification types and quiet hours.
  */
@@ -16,6 +17,7 @@ import { NotificationTemplateService } from './notification-template.service';
 import { NotificationPreferencesService } from './notification-preferences.service';
 import { QuietHoursService } from './quiet-hours.service';
 import { SlackNotificationService } from './slack-notification.service';
+import { DiscordNotificationService } from './discord-notification.service';
 import { PushNotificationService } from '../../push/push.service';
 import { NotificationService } from '../../notification/notification.service';
 import { PushNotificationPayloadDto, NotificationUrgency } from '../../push/push.dto';
@@ -37,6 +39,8 @@ export class NotificationDispatchService {
     private readonly quietHoursService?: QuietHoursService,
     @Optional() @Inject(forwardRef(() => SlackNotificationService))
     private readonly slackService?: SlackNotificationService,
+    @Optional() @Inject(forwardRef(() => DiscordNotificationService))
+    private readonly discordService?: DiscordNotificationService,
   ) {}
 
   /**
@@ -79,6 +83,9 @@ export class NotificationDispatchService {
 
     // Story 16.4: Slack notification delivery (fault-isolated)
     await this.dispatchToSlack(filteredNotification);
+
+    // Story 16.5: Discord notification delivery (fault-isolated)
+    await this.dispatchToDiscord(filteredNotification);
   }
 
   /**
@@ -100,6 +107,29 @@ export class NotificationDispatchService {
           error instanceof Error ? error.stack : String(error),
         );
         // Never let Slack failures block main dispatch
+      }
+    }
+  }
+
+  /**
+   * Dispatch notification to Discord for all unique workspace IDs.
+   * Story 16.5: Never lets Discord failures block main dispatch flow.
+   */
+  private async dispatchToDiscord(notification: NotificationEvent): Promise<void> {
+    if (!this.discordService) return;
+
+    // Get unique workspace IDs from recipients
+    const workspaceIds = [...new Set(notification.recipients.map(r => r.workspaceId))];
+
+    for (const workspaceId of workspaceIds) {
+      try {
+        await this.discordService.sendNotification(workspaceId, notification);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send Discord notification to workspace ${workspaceId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        // Never let Discord failures block main dispatch
       }
     }
   }

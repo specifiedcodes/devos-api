@@ -103,6 +103,7 @@ import { FileStorageModule } from './modules/file-storage/file-storage.module';
 import { ProjectFilesModule } from './modules/project-files/project-files.module';
 import { ProjectFile } from './database/entities/project-file.entity';
 import { SlackIntegration } from './database/entities/slack-integration.entity';
+import { DiscordIntegration } from './database/entities/discord-integration.entity';
 
 @Module({
   imports: [
@@ -173,6 +174,7 @@ import { SlackIntegration } from './database/entities/slack-integration.entity';
         ModelPerformance,
         ProjectFile,
         SlackIntegration,
+        DiscordIntegration,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',

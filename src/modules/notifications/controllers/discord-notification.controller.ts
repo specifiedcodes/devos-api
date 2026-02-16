@@ -1,0 +1,178 @@
+/**
+ * DiscordNotificationController
+ * Story 16.5: Discord Notification Integration (AC5)
+ *
+ * REST API endpoints for Discord webhook management and configuration.
+ */
+
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Query,
+  Body,
+  UseGuards,
+  Logger,
+  Request,
+  ParseUUIDPipe,
+  HttpCode,
+  HttpStatus,
+  NotFoundException,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
+import { DiscordNotificationService } from '../services/discord-notification.service';
+import {
+  AddDiscordWebhookDto,
+  UpdateDiscordConfigDto,
+  DiscordIntegrationStatusDto,
+} from '../dto/discord-notification.dto';
+
+@Controller('api/integrations/discord')
+@ApiTags('integrations')
+@ApiBearerAuth()
+export class DiscordNotificationController {
+  private readonly logger = new Logger(DiscordNotificationController.name);
+
+  constructor(
+    private readonly discordService: DiscordNotificationService,
+  ) {}
+
+  /**
+   * POST /api/integrations/discord/webhook?workspaceId=...
+   * Add/update a Discord webhook for a workspace.
+   * Validates the webhook URL and sends a test message.
+   */
+  @Post('webhook')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Add or update Discord webhook' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Webhook configured successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid webhook URL' })
+  async addWebhook(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() body: AddDiscordWebhookDto,
+    @Request() req: any,
+  ): Promise<{ success: boolean; guildName?: string; channelName?: string; error?: string }> {
+    const userId = req.user.sub || req.user.userId || req.user.id;
+    return this.discordService.addWebhook(workspaceId, userId, body.webhookUrl, body.channelName);
+  }
+
+  /**
+   * GET /api/integrations/discord/status?workspaceId=...
+   * Get Discord integration status for workspace
+   */
+  @Get('status')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get Discord integration status' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Integration status returned' })
+  async getStatus(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<{
+    connected: boolean;
+    name?: string;
+    guildName?: string;
+    defaultChannelName?: string;
+    status?: string;
+    messageCount?: number;
+    lastMessageAt?: string;
+  }> {
+    const integration = await this.discordService.getIntegration(workspaceId);
+
+    if (!integration) {
+      return { connected: false };
+    }
+
+    return {
+      connected: true,
+      name: integration.name,
+      guildName: integration.guildName,
+      defaultChannelName: integration.defaultChannelName,
+      status: integration.status,
+      messageCount: integration.messageCount,
+      lastMessageAt: integration.lastMessageAt?.toISOString?.() || (integration.lastMessageAt as any) || undefined,
+    };
+  }
+
+  /**
+   * POST /api/integrations/discord/test?workspaceId=...
+   * Send a test message to verify connection
+   */
+  @Post('test')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Send test Discord notification' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Test message sent' })
+  async testConnection(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    return this.discordService.testConnection(workspaceId);
+  }
+
+  /**
+   * PUT /api/integrations/discord/config?workspaceId=...
+   * Update Discord notification configuration
+   */
+  @Put('config')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Update Discord notification configuration' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Configuration updated' })
+  async updateConfig(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() config: UpdateDiscordConfigDto,
+  ): Promise<DiscordIntegrationStatusDto> {
+    const integration = await this.discordService.getIntegration(workspaceId);
+    if (!integration) {
+      throw new NotFoundException('No Discord integration found for this workspace');
+    }
+
+    const updated = await this.discordService.updateConfig(workspaceId, config);
+
+    return {
+      connected: true,
+      name: updated.name,
+      guildName: updated.guildName,
+      guildId: updated.guildId,
+      defaultChannelName: updated.defaultChannelName,
+      status: updated.status,
+      quietHoursConfig: updated.quietHoursConfig,
+      rateLimitPerMinute: updated.rateLimitPerMinute,
+      mentionConfig: updated.mentionConfig,
+      messageCount: updated.messageCount,
+      errorCount: updated.errorCount,
+      lastMessageAt: updated.lastMessageAt?.toISOString?.() || undefined,
+      connectedAt: updated.connectedAt?.toISOString?.() || undefined,
+    };
+  }
+
+  /**
+   * DELETE /api/integrations/discord/disconnect?workspaceId=...
+   * Disconnect Discord integration
+   */
+  @Delete('disconnect')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Disconnect Discord integration' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 204, description: 'Discord disconnected' })
+  async disconnect(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<void> {
+    const integration = await this.discordService.getIntegration(workspaceId);
+    if (!integration) {
+      throw new NotFoundException('No Discord integration found for this workspace');
+    }
+
+    await this.discordService.disconnect(workspaceId);
+  }
+}
