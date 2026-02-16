@@ -76,6 +76,10 @@ export class User {
   @IsOptional()
   ssoProfileData!: Record<string, unknown> | null;
 
+  @Column({ type: 'varchar', length: 255, name: 'scim_external_id', nullable: true, default: null })
+  @IsOptional()
+  scimExternalId!: string | null;
+
   @OneToMany(() => WorkspaceMember, (member) => member.user)
   workspaceMembers!: WorkspaceMember[];
 

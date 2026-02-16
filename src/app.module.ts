@@ -109,6 +109,11 @@ import { OidcConfiguration } from './database/entities/oidc-configuration.entity
 import { SsoDomain } from './database/entities/sso-domain.entity';
 import { SsoAuditEvent } from './database/entities/sso-audit-event.entity';
 import { JitProvisioningConfig } from './database/entities/jit-provisioning-config.entity';
+import { ScimConfiguration } from './database/entities/scim-configuration.entity';
+import { ScimToken } from './database/entities/scim-token.entity';
+import { ScimGroup } from './database/entities/scim-group.entity';
+import { ScimGroupMembership } from './database/entities/scim-group-membership.entity';
+import { ScimSyncLog } from './database/entities/scim-sync-log.entity';
 import { SsoModule } from './modules/sso/sso.module';
 
 @Module({
@@ -186,6 +191,11 @@ import { SsoModule } from './modules/sso/sso.module';
         SsoDomain,
         SsoAuditEvent,
         JitProvisioningConfig,
+        ScimConfiguration,
+        ScimToken,
+        ScimGroup,
+        ScimGroupMembership,
+        ScimSyncLog,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',

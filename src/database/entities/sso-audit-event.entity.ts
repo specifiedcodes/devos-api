@@ -52,6 +52,20 @@ export enum SsoAuditEventType {
   JIT_PROVISIONING_ERROR = 'jit_provisioning_error',
   JIT_CONFIG_CREATED = 'jit_config_created',
   JIT_CONFIG_UPDATED = 'jit_config_updated',
+  SCIM_USER_CREATED = 'scim_user_created',
+  SCIM_USER_UPDATED = 'scim_user_updated',
+  SCIM_USER_DEACTIVATED = 'scim_user_deactivated',
+  SCIM_USER_REACTIVATED = 'scim_user_reactivated',
+  SCIM_USER_DELETED = 'scim_user_deleted',
+  SCIM_GROUP_CREATED = 'scim_group_created',
+  SCIM_GROUP_UPDATED = 'scim_group_updated',
+  SCIM_GROUP_DELETED = 'scim_group_deleted',
+  SCIM_TOKEN_CREATED = 'scim_token_created',
+  SCIM_TOKEN_REVOKED = 'scim_token_revoked',
+  SCIM_TOKEN_ROTATED = 'scim_token_rotated',
+  SCIM_CONFIG_UPDATED = 'scim_config_updated',
+  SCIM_AUTH_FAILURE = 'scim_auth_failure',
+  SCIM_RATE_LIMITED = 'scim_rate_limited',
 }
 
 @Entity('sso_audit_events')
