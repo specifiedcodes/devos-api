@@ -105,6 +105,10 @@ export class EmailService {
       return this.renderSpendingAlertTemplate(context as any);
     }
 
+    if (template === 'alert-notification') {
+      return this.renderAlertNotificationTemplate(context as any);
+    }
+
     // Default template
     return `
       <!DOCTYPE html>
@@ -201,6 +205,121 @@ export class EmailService {
       </body>
       </html>
     `;
+  }
+
+  /**
+   * Render alert notification email template (Story 14.8)
+   */
+  private renderAlertNotificationTemplate(context: {
+    alertName: string;
+    severity: string;
+    message: string;
+    condition: string;
+    threshold: string;
+    currentValue: string;
+    dashboardUrl: string;
+    firedAt: string;
+  }): string {
+    const {
+      alertName,
+      severity,
+      message,
+      condition,
+      threshold,
+      currentValue,
+      dashboardUrl,
+      firedAt,
+    } = context;
+
+    const colorMap: Record<string, { bg: string; border: string; badge: string }> = {
+      critical: { bg: '#fee2e2', border: '#dc2626', badge: '#dc2626' },
+      warning: { bg: '#fef3c7', border: '#f59e0b', badge: '#f59e0b' },
+      info: { bg: '#dbeafe', border: '#3b82f6', badge: '#3b82f6' },
+    };
+
+    const colors = colorMap[severity] || colorMap.info;
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 0; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border-radius: 0 0 8px 8px; }
+          .alert-box { background: ${colors.bg}; border-left: 4px solid ${colors.border}; padding: 16px; margin: 20px 0; border-radius: 4px; }
+          .severity-badge { display: inline-block; background: ${colors.badge}; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; text-transform: uppercase; }
+          .button { display: inline-block; background: #667eea; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px; margin-right: 10px; }
+          .button-secondary { display: inline-block; background: #6b7280; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 10px; }
+          .footer { text-align: center; margin-top: 30px; color: #6b7280; font-size: 14px; }
+          .details { margin: 16px 0; }
+          .details td { padding: 6px 12px 6px 0; }
+          .details td:first-child { font-weight: bold; color: #4b5563; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>DevOS Alert</h1>
+            <span class="severity-badge">${severity}</span>
+          </div>
+          <div class="content">
+            <div class="alert-box">
+              <h2 style="margin-top: 0;">${alertName}</h2>
+              <p>${message}</p>
+            </div>
+
+            <table class="details">
+              <tr><td>Condition:</td><td>${condition}</td></tr>
+              <tr><td>Threshold:</td><td>${threshold}</td></tr>
+              <tr><td>Current Value:</td><td>${currentValue}</td></tr>
+              <tr><td>Fired At:</td><td>${firedAt}</td></tr>
+            </table>
+
+            <div>
+              <a href="${dashboardUrl}" class="button">View Details</a>
+            </div>
+
+            <div class="footer">
+              <p>DevOS - Autonomous Development Platform</p>
+              <p>This is an automated alert notification. Manage alert rules in the admin dashboard.</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
+
+  /**
+   * Send alert notification email (Story 14.8)
+   */
+  async sendAlertEmail(
+    to: string,
+    alertName: string,
+    severity: string,
+    message: string,
+    condition: string,
+    threshold: string,
+    currentValue: string,
+    dashboardUrl: string,
+  ): Promise<void> {
+    await this.sendEmail({
+      to,
+      subject: `[DevOS ${severity.toUpperCase()}] ${alertName}`,
+      template: 'alert-notification',
+      context: {
+        alertName,
+        severity,
+        message,
+        condition,
+        threshold,
+        currentValue,
+        dashboardUrl,
+        firedAt: new Date().toISOString(),
+      },
+    });
   }
 
   /**

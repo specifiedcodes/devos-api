@@ -83,6 +83,16 @@ export enum AuditAction {
   // Admin analytics actions (Story 14.7)
   ADMIN_ANALYTICS_VIEWED = 'admin.analytics_viewed',
   ADMIN_ANALYTICS_EXPORTED = 'admin.analytics_exported',
+
+  // Admin alert management actions (Story 14.8)
+  ADMIN_ALERT_RULE_CREATED = 'admin.alert_rule_created',
+  ADMIN_ALERT_RULE_UPDATED = 'admin.alert_rule_updated',
+  ADMIN_ALERT_RULE_DELETED = 'admin.alert_rule_deleted',
+  ADMIN_ALERT_RULE_TOGGLED = 'admin.alert_rule_toggled',
+  ADMIN_ALERT_RULE_SILENCED = 'admin.alert_rule_silenced',
+  ADMIN_ALERT_ACKNOWLEDGED = 'admin.alert_acknowledged',
+  ADMIN_ALERT_RESOLVED = 'admin.alert_resolved',
+  ADMIN_ALERT_HISTORY_VIEWED = 'admin.alert_history_viewed',
 }
 
 /**
