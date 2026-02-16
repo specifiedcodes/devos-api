@@ -11,6 +11,7 @@ import { IsNotEmpty, IsOptional, IsUUID } from 'class-validator';
 import { Workspace } from './workspace.entity';
 import { User } from './user.entity';
 import { SamlConfiguration } from './saml-configuration.entity';
+import { OidcConfiguration } from './oidc-configuration.entity';
 
 export enum SsoAuditEventType {
   SAML_LOGIN_SUCCESS = 'saml_login_success',
@@ -24,6 +25,17 @@ export enum SsoAuditEventType {
   SAML_TEST_FAILURE = 'saml_test_failure',
   CERTIFICATE_ROTATED = 'certificate_rotated',
   IDP_CONNECTION_ERROR = 'idp_connection_error',
+  OIDC_LOGIN_SUCCESS = 'oidc_login_success',
+  OIDC_LOGIN_FAILURE = 'oidc_login_failure',
+  OIDC_CONFIG_CREATED = 'oidc_config_created',
+  OIDC_CONFIG_UPDATED = 'oidc_config_updated',
+  OIDC_CONFIG_DELETED = 'oidc_config_deleted',
+  OIDC_CONFIG_ACTIVATED = 'oidc_config_activated',
+  OIDC_CONFIG_DEACTIVATED = 'oidc_config_deactivated',
+  OIDC_TEST_SUCCESS = 'oidc_test_success',
+  OIDC_TEST_FAILURE = 'oidc_test_failure',
+  OIDC_DISCOVERY_FETCHED = 'oidc_discovery_fetched',
+  OIDC_DISCOVERY_ERROR = 'oidc_discovery_error',
 }
 
 @Entity('sso_audit_events')
@@ -74,6 +86,15 @@ export class SsoAuditEvent {
   @ManyToOne(() => SamlConfiguration, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'saml_config_id' })
   samlConfiguration?: SamlConfiguration;
+
+  @Column({ type: 'uuid', name: 'oidc_config_id', nullable: true })
+  @IsOptional()
+  @IsUUID()
+  oidcConfigId!: string | null;
+
+  @ManyToOne(() => OidcConfiguration, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'oidc_config_id' })
+  oidcConfiguration?: OidcConfiguration;
 
   @Column({ type: 'varchar', length: 45, name: 'ip_address', nullable: true })
   @IsOptional()
