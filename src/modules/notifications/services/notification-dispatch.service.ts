@@ -2,8 +2,9 @@
  * NotificationDispatchService
  * Story 10.5: Notification Triggers
  * Story 10.6: Configurable Notification Preferences
+ * Story 16.4: Slack Notification Integration
  *
- * Dispatches notifications to both push and in-app channels.
+ * Dispatches notifications to push, in-app, and Slack channels.
  * Routes urgent notifications immediately, queues batchable ones.
  * Respects user preferences for notification types and quiet hours.
  */
@@ -14,6 +15,7 @@ import { NotificationBatchService } from './notification-batch.service';
 import { NotificationTemplateService } from './notification-template.service';
 import { NotificationPreferencesService } from './notification-preferences.service';
 import { QuietHoursService } from './quiet-hours.service';
+import { SlackNotificationService } from './slack-notification.service';
 import { PushNotificationService } from '../../push/push.service';
 import { NotificationService } from '../../notification/notification.service';
 import { PushNotificationPayloadDto, NotificationUrgency } from '../../push/push.dto';
@@ -33,6 +35,8 @@ export class NotificationDispatchService {
     private readonly preferencesService?: NotificationPreferencesService,
     @Optional() @Inject(forwardRef(() => QuietHoursService))
     private readonly quietHoursService?: QuietHoursService,
+    @Optional() @Inject(forwardRef(() => SlackNotificationService))
+    private readonly slackService?: SlackNotificationService,
   ) {}
 
   /**
@@ -71,6 +75,32 @@ export class NotificationDispatchService {
     } else {
       // Queue for batched delivery
       await this.batchService.queueNotification(filteredNotification);
+    }
+
+    // Story 16.4: Slack notification delivery (fault-isolated)
+    await this.dispatchToSlack(filteredNotification);
+  }
+
+  /**
+   * Dispatch notification to Slack for all unique workspace IDs.
+   * Story 16.4: Never lets Slack failures block main dispatch flow.
+   */
+  private async dispatchToSlack(notification: NotificationEvent): Promise<void> {
+    if (!this.slackService) return;
+
+    // Get unique workspace IDs from recipients
+    const workspaceIds = [...new Set(notification.recipients.map(r => r.workspaceId))];
+
+    for (const workspaceId of workspaceIds) {
+      try {
+        await this.slackService.sendNotification(workspaceId, notification);
+      } catch (error) {
+        this.logger.error(
+          `Failed to send Slack notification to workspace ${workspaceId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        // Never let Slack failures block main dispatch
+      }
     }
   }
 
