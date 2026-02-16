@@ -17,6 +17,7 @@ import { SpendCapEnforcementService } from '../services/spend-cap-enforcement.se
 import { SpendCapConfigDto } from '../dto/spend-cap-config.dto';
 import { SpendCapOverrideDto } from '../dto/spend-cap-override.dto';
 import { WorkspaceSettings } from '../../../database/entities/workspace-settings.entity';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
@@ -32,6 +33,8 @@ import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
  * - PUT /override - Toggle override settings
  * - GET /evaluate - Get enforcement decision for a task type
  */
+@ApiTags('Usage & Costs')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/spend-cap')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class SpendCapController {

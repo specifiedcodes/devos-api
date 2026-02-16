@@ -20,6 +20,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
@@ -29,6 +30,8 @@ import { UpdateModelDefinitionDto } from '../dto/update-model-definition.dto';
 import { ModelRegistryFiltersDto } from '../dto/model-registry-filters.dto';
 import { VALID_TASK_TYPES, TaskType } from '../../../database/entities/model-definition.entity';
 
+@ApiTags('Model Registry')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/model-registry')
 @UseGuards(JwtAuthGuard)
 export class ModelRegistryController {

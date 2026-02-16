@@ -50,8 +50,8 @@ import {
 } from '../dto/email-notification.dto';
 
 @Controller('api/integrations/email')
-@ApiTags('integrations')
-@ApiBearerAuth()
+@ApiTags('Integrations - Email')
+@ApiBearerAuth('JWT-auth')
 export class EmailNotificationController {
   private readonly logger = new Logger(EmailNotificationController.name);
 

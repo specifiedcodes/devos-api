@@ -14,7 +14,7 @@ import {
   ParseIntPipe,
   DefaultValuePipe,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiQuery } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { ChatMetricsService } from '../services/chat-metrics.service';
 import {
@@ -25,6 +25,7 @@ import {
 } from '../interfaces/metrics.interfaces';
 
 @ApiTags('Agent Metrics')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/metrics/agent-performance')
 @UseGuards(JwtAuthGuard)
 export class AgentMetricsController {

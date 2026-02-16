@@ -9,6 +9,7 @@ import {
   BadRequestException,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { DeploymentMonitoringService } from './deployment-monitoring.service';
@@ -33,6 +34,8 @@ import {
  * distinguish from platform-specific endpoints (/railway/deployments,
  * /vercel/deployments).
  */
+@ApiTags('Deployments')
+@ApiBearerAuth('JWT-auth')
 @Controller(
   'api/v1/workspaces/:workspaceId/projects/:projectId/deployments',
 )

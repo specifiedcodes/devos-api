@@ -37,7 +37,7 @@ import {
 
 @Controller('api/v1/workspaces/:workspaceId/notification-preferences')
 @ApiTags('Notification Preferences')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 export class NotificationPreferencesController {
   private readonly logger = new Logger(NotificationPreferencesController.name);

@@ -35,8 +35,8 @@ import {
 
 @Controller('api/v1/workspaces/:workspaceId/projects')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
-@ApiTags('projects')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 

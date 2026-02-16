@@ -10,11 +10,14 @@ import {
   ValidationPipe,
   ParseUUIDPipe,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlatformAdmin } from '../decorators/platform-admin.decorator';
 import { AdminUsersService } from '../services/admin-users.service';
 import { ListUsersQueryDto } from '../dto/list-users-query.dto';
 import { SuspendUserDto, DeleteUserDto } from '../dto/admin-actions.dto';
 
+@ApiTags('Admin - Users')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/admin/users')
 export class AdminUsersController {
   constructor(private readonly adminUsersService: AdminUsersService) {}

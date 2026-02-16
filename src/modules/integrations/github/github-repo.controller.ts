@@ -38,7 +38,7 @@ import {
  * Separated from IntegrationController to keep repo-specific logic isolated.
  */
 @ApiTags('GitHub Repositories')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class GitHubRepoController {

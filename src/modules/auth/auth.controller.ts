@@ -186,7 +186,7 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard) // Require authentication to logout
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Logout user and invalidate tokens' })
   @ApiResponse({
     status: 200,
@@ -233,7 +233,7 @@ export class AuthController {
 
   @Get('me')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user profile with 2FA status' })
   @ApiResponse({
     status: 200,
@@ -377,7 +377,7 @@ export class AuthController {
   @Get('profile')
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 10, ttl: 60000 } }) // 10 requests per minute
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get current user profile' })
   @ApiResponse({
     status: 200,
@@ -394,7 +394,7 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
   @Throttle({ default: { limit: 3, ttl: 900000 } }) // 3 attempts per 15 minutes
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Change user password' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
   @ApiResponse({
@@ -420,7 +420,7 @@ export class AuthController {
   @Post('account/delete')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary:
       'Delete user account (GDPR compliance - soft delete with 30-day grace period)',
@@ -448,7 +448,7 @@ export class AuthController {
 
   @Get('security/dashboard')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get security dashboard metrics (admin only)' })
   @ApiResponse({
     status: 200,
@@ -464,7 +464,7 @@ export class AuthController {
 
   @Get('sessions')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get all active sessions for current user' })
   @ApiResponse({
     status: 200,
@@ -489,7 +489,7 @@ export class AuthController {
 
   @Delete('sessions/:sessionId')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Revoke a specific session' })
   @ApiResponse({ status: 200, description: 'Session revoked successfully' })
   @ApiResponse({ status: 404, description: 'Session not found' })
@@ -503,7 +503,7 @@ export class AuthController {
 
   @Delete('sessions/all')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Revoke all sessions except current one' })
   @ApiResponse({ status: 200, description: 'All other sessions revoked' })
   async revokeAllOtherSessions(

@@ -14,6 +14,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlatformAdmin } from '../decorators/platform-admin.decorator';
 import { AdminAuditLogService } from '../services/admin-audit-log.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
@@ -35,6 +36,8 @@ import {
  * must be registered BEFORE the /:id route to prevent NestJS
  * from treating path segments as log IDs.
  */
+@ApiTags('Admin - Audit Logs')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/admin/audit-logs')
 export class AdminAuditLogController {
   private readonly logger = new Logger(AdminAuditLogController.name);

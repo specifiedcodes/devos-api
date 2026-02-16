@@ -7,12 +7,15 @@ import {
   Res,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { AuditService, AuditAction, ByokAuditSummary } from './audit.service';
 import { JwtAuthGuard } from '../../modules/auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 import { WorkspaceAccessGuard } from '../guards/workspace-access.guard';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 
+@ApiTags('Workspace Audit Logs')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/audit-logs')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard)
 @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)

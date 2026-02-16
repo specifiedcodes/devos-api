@@ -19,11 +19,14 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { BenchmarkService } from '../services/benchmark.service';
 import { RecordPerformanceDto } from '../dto/record-performance.dto';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 
+@ApiTags('Benchmarks')
+@ApiBearerAuth('JWT-auth')
 @Controller()
 export class BenchmarkController {
   constructor(private readonly benchmarkService: BenchmarkService) {}

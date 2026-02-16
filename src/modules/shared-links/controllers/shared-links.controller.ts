@@ -29,8 +29,8 @@ import { plainToInstance } from 'class-transformer';
 
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/shared-links')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
-@ApiTags('shared-links')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Shared Links')
 export class SharedLinksController {
   constructor(private readonly sharedLinksService: SharedLinksService) {}
 

@@ -35,8 +35,8 @@ import { SlackOAuthService } from '../services/slack-oauth.service';
 import { UpdateSlackConfigDto, SlackIntegrationStatusDto } from '../dto/slack-notification.dto';
 
 @Controller('api/integrations/slack')
-@ApiTags('integrations')
-@ApiBearerAuth()
+@ApiTags('Integrations - Slack')
+@ApiBearerAuth('JWT-auth')
 export class SlackNotificationController {
   private readonly logger = new Logger(SlackNotificationController.name);
 

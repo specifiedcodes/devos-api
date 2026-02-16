@@ -8,6 +8,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { Response as ExpressResponse } from 'express';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlatformAdmin } from '../decorators/platform-admin.decorator';
 import { AdminAnalyticsService } from '../services/admin-analytics.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
@@ -20,6 +21,8 @@ import { AnalyticsQueryDto, AnalyticsExportQueryDto } from '../dto/analytics-que
  * All endpoints require @PlatformAdmin() decorator.
  * Provides 6 analytics endpoints with audit logging.
  */
+@ApiTags('Admin - Analytics')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/admin/analytics')
 export class AdminAnalyticsController {
   constructor(

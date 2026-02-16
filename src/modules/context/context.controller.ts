@@ -36,8 +36,8 @@ import {
 } from './interfaces/context-health.interfaces';
 import { ConfigService } from '@nestjs/config';
 
-@ApiTags('context')
-@ApiBearerAuth()
+@ApiTags('Context')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/context')
 @UseGuards(JwtAuthGuard)
 export class ContextController {

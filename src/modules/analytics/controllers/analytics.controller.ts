@@ -20,10 +20,10 @@ import { AnalyticsEventsService } from '../services/analytics-events.service';
 import { AnalyticsCalculationService } from '../services/analytics-calculation.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader, ApiQuery } from '@nestjs/swagger';
 
-@ApiTags('analytics')
+@ApiTags('Analytics')
 @Controller('api/v1/analytics')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class AnalyticsController {
   constructor(
     private readonly analyticsEventsService: AnalyticsEventsService,

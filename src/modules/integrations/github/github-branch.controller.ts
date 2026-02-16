@@ -44,7 +44,7 @@ import {
  * Separated from GitHubRepoController to keep branch logic isolated.
  */
 @ApiTags('GitHub Branches')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/github/branches')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class GitHubBranchController {

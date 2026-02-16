@@ -31,7 +31,7 @@ import { User } from '../../../database/entities/user.entity';
 @ApiTags('Kanban Preferences')
 @Controller('api/v1/users/me/preferences/kanban')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class UserKanbanPreferencesController {
   private readonly logger = new Logger(UserKanbanPreferencesController.name);
 

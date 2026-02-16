@@ -23,7 +23,7 @@ import {
  * API endpoints for agent status queries and history
  */
 @ApiTags('Agent Status')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class AgentStatusController {

@@ -63,7 +63,7 @@ import { MessageReadTrackingService } from './services/message-read-tracking.ser
  * Handles chat message endpoints for workspace-scoped messaging
  */
 @ApiTags('Chat')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/chat')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class ChatController {

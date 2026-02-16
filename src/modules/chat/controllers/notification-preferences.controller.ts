@@ -32,7 +32,7 @@ import {
  */
 @ApiTags('Notification Preferences')
 @Controller('api/v1/users/me/notification-preferences')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @UseGuards(JwtAuthGuard)
 export class NotificationPreferencesController {
   constructor(

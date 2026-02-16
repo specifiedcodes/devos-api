@@ -37,8 +37,8 @@ import { ListJobsQueryDto } from '../dto/list-jobs-query.dto';
  *
  * API endpoints for agent queue management
  */
-@ApiTags('agent-queue')
-@ApiBearerAuth()
+@ApiTags('Agent Queue')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/agent-queue')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class AgentQueueController {

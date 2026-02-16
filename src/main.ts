@@ -5,6 +5,7 @@ import './modules/tracing/tracing.instrumentation';
 
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { SwaggerModule } from '@nestjs/swagger';
 import * as cookieParser from 'cookie-parser';
 import * as session from 'express-session';
 import { AppModule } from './app.module';
@@ -12,6 +13,7 @@ import { validateEnvironmentVariables } from './common/config/env.validation';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { RetryAfterInterceptor } from './common/interceptors/retry-after.interceptor';
 import { LoggingService } from './modules/logging/logging.service';
+import { buildSwaggerConfig, swaggerCustomOptions } from './modules/swagger/swagger.config';
 
 async function bootstrap() {
   // Validate environment variables before starting application
@@ -65,9 +67,15 @@ async function bootstrap() {
     credentials: true,
   });
 
+  // Story 16.10: Swagger API Documentation (AC1)
+  const swaggerConfig = buildSwaggerConfig();
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('api/docs', app, document, swaggerCustomOptions);
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
   loggingService.log(`DevOS API is running on: http://localhost:${port}`, 'Bootstrap');
+  loggingService.log(`Swagger UI available at: http://localhost:${port}/api/docs`, 'Bootstrap');
 }
 
 bootstrap();

@@ -47,8 +47,8 @@ import { FileResponseDto } from './dto/file-response.dto';
 
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/files')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
-@ApiTags('project-files')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('File Storage')
 export class ProjectFilesController {
   constructor(private readonly projectFilesService: ProjectFilesService) {}
 

@@ -20,8 +20,11 @@ import { WorkspaceRole } from '../../../database/entities/workspace-member.entit
 import { BYOKKeyService, RequestContext } from '../services/byok-key.service';
 import { CreateBYOKKeyDto } from '../dto/create-byok-key.dto';
 import { UsageService } from '../../usage/services/usage.service';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Request } from 'express';
 
+@ApiTags('BYOK')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/byok-keys')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard)
 export class BYOKKeyController {

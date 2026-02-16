@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   Logger,
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -13,6 +14,7 @@ import { DataSource } from 'typeorm';
  *
  * Provides runtime verification that Row-Level Security is enabled
  */
+@ApiTags('Health')
 @Controller('api/v1/health')
 export class UsageHealthController {
   private readonly logger = new Logger(UsageHealthController.name);

@@ -47,7 +47,7 @@ import {
  * Separated from GitHubRepoController and GitHubBranchController to keep PR logic isolated.
  */
 @ApiTags('GitHub Pull Requests')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/github/pulls')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class GitHubPullRequestController {

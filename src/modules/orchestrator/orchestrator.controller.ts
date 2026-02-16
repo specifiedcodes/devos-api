@@ -26,6 +26,7 @@ import {
   Optional,
   Inject,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -40,6 +41,8 @@ import {
   FailureHistoryQueryDto,
 } from './interfaces/failure-recovery.interfaces';
 
+@ApiTags('Orchestrator')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/orchestrator')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class OrchestratorController {

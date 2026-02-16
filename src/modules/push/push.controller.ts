@@ -81,7 +81,7 @@ export class PushController {
    */
   @Post('subscriptions')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Create or update a push subscription' })
   @ApiQuery({ name: 'workspaceId', required: true, description: 'Workspace ID' })
   @ApiResponse({
@@ -145,7 +145,7 @@ export class PushController {
    */
   @Delete('subscriptions')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a push subscription' })
   @ApiQuery({ name: 'endpoint', required: true, description: 'Subscription endpoint URL' })
@@ -173,7 +173,7 @@ export class PushController {
    */
   @Get('subscriptions/me')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: "Get current user's push subscriptions" })
   @ApiResponse({
     status: 200,
@@ -203,7 +203,7 @@ export class PushController {
    */
   @Delete('subscriptions/:id')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Delete a push subscription by ID' })
   @ApiResponse({ status: 204, description: 'Subscription deleted' })
@@ -247,7 +247,7 @@ export class PushController {
    */
   @Get('admin/vapid-status')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get VAPID key configuration status (admin)' })
   @ApiResponse({
     status: 200,
@@ -265,7 +265,7 @@ export class PushController {
    */
   @Get('admin/stats')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get push subscription statistics (admin)' })
   @ApiResponse({
     status: 200,
@@ -291,7 +291,7 @@ export class PushController {
    */
   @Post('admin/cleanup')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Trigger manual push subscription cleanup (admin)' })
   @ApiResponse({

@@ -37,8 +37,8 @@ import {
 } from '../dto/discord-notification.dto';
 
 @Controller('api/integrations/discord')
-@ApiTags('integrations')
-@ApiBearerAuth()
+@ApiTags('Integrations - Discord')
+@ApiBearerAuth('JWT-auth')
 export class DiscordNotificationController {
   private readonly logger = new Logger(DiscordNotificationController.name);
 

@@ -31,8 +31,8 @@ import {
 
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/sprints')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
-@ApiTags('sprints')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Sprints')
 export class SprintsController {
   constructor(private readonly sprintsService: SprintsService) {}
 

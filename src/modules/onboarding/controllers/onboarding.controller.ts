@@ -30,7 +30,7 @@ import {
 import { OnboardingStatus } from '../../../database/entities/onboarding-status.entity';
 
 @ApiTags('Onboarding')
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/onboarding')
 @UseGuards(JwtAuthGuard)
 export class OnboardingController {

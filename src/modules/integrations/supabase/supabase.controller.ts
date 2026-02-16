@@ -24,6 +24,7 @@ import { SupabaseService } from './supabase.service';
 import { IntegrationConnectionService } from '../integration-connection.service';
 import { IntegrationProvider } from '../../../database/entities/integration-connection.entity';
 import { Project } from '../../../database/entities/project.entity';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import {
   CreateSupabaseProjectDto,
   SupabaseProjectResponseDto,
@@ -39,6 +40,8 @@ import {
  * Handles Supabase project creation, database provisioning, status polling,
  * connection string retrieval, and project lifecycle management (pause/resume).
  */
+@ApiTags('Deployments')
+@ApiBearerAuth('JWT-auth')
 @Controller(
   'api/v1/workspaces/:workspaceId/projects/:projectId/supabase',
 )

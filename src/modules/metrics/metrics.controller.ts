@@ -1,6 +1,7 @@
 import { Controller, Get, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
+import { ApiTags, ApiExcludeController } from '@nestjs/swagger';
 import { MetricsService } from './metrics.service';
 
 /**
@@ -10,7 +11,9 @@ import { MetricsService } from './metrics.service';
  * Exposes GET /metrics endpoint returning Prometheus text format.
  * No authentication required (Prometheus scraper needs unauthenticated access).
  * Excluded from rate limiting (frequent scraping).
+ * Excluded from Swagger docs (internal Prometheus scrape endpoint).
  */
+@ApiExcludeController()
 @Controller('metrics')
 @SkipThrottle()
 export class MetricsController {

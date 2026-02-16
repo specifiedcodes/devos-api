@@ -30,7 +30,7 @@ import {
 @ApiTags('Project Analytics')
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/analytics')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class ProjectAnalyticsController {
   constructor(private readonly analyticsService: ProjectAnalyticsService) {}
 

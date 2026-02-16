@@ -14,6 +14,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import { ApiTags, ApiBearerAuth, ApiExcludeController } from '@nestjs/swagger';
 import { CliSessionsService } from './cli-sessions.service';
 import { CliSessionArchiveService } from './cli-session-archive.service';
 import { CliSessionArchiveSchedulerService } from './cli-session-archive-scheduler.service';
@@ -35,6 +36,8 @@ import {
  *
  * Provides REST API endpoints for CLI session history management.
  */
+@ApiTags('CLI Sessions')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/workspaces/:workspaceId/cli-sessions')
 export class CliSessionsController {
   constructor(
@@ -150,6 +153,7 @@ export class CliSessionsController {
  * Used for service-to-service communication (orchestrator -> api)
  * Story 16.3: Added internal archive endpoint
  */
+@ApiExcludeController()
 @Controller('api/internal/cli-sessions')
 export class CliSessionsInternalController {
   constructor(

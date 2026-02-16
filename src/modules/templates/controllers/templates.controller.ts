@@ -11,10 +11,10 @@ import { TemplatesService } from '../services/templates.service';
 import { TemplateResponseDto } from '../dto/template-response.dto';
 import { TemplateCategory } from '../constants/template-registry.constant';
 
-@ApiTags('templates')
+@ApiTags('Templates')
 @Controller('api/v1/templates')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
+@ApiBearerAuth('JWT-auth')
 export class TemplatesController {
   constructor(private readonly templatesService: TemplatesService) {}
 

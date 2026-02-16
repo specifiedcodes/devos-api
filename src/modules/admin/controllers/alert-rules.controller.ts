@@ -14,6 +14,7 @@ import {
   ValidationPipe,
   Logger,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, FindOptionsWhere } from 'typeorm';
 import { PlatformAdmin } from '../decorators/platform-admin.decorator';
@@ -36,6 +37,8 @@ import {
  * Admin API for managing alert rules and alert history.
  * All endpoints require @PlatformAdmin() decorator.
  */
+@ApiTags('Admin - Alerts')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/admin/alerts')
 export class AlertRulesController {
   private readonly logger = new Logger(AlertRulesController.name);

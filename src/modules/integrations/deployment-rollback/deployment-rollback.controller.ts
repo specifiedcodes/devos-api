@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { DeploymentRollbackService } from './deployment-rollback.service';
@@ -38,6 +39,8 @@ import {
  * NOTE: Static routes (/summary, /auto) are declared BEFORE
  * parameterized routes (/:rollbackId) to prevent NestJS route shadowing.
  */
+@ApiTags('Deployments')
+@ApiBearerAuth('JWT-auth')
 @Controller(
   'api/v1/workspaces/:workspaceId/projects/:projectId/deployment-rollbacks',
 )

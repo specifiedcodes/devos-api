@@ -53,7 +53,7 @@ export class ProvisioningController {
    */
   @Get('status/:projectId')
   @UseGuards(JwtAuthGuard, ProjectWorkspaceAccessGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get provisioning status for a project' })
   @ApiParam({ name: 'projectId', description: 'Project ID', type: 'string' })
   @ApiResponse({
@@ -183,7 +183,7 @@ export class ProvisioningController {
    */
   @Patch('status/:projectId/retry')
   @UseGuards(JwtAuthGuard, ProjectWorkspaceAccessGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Retry failed provisioning workflow' })
   @ApiParam({ name: 'projectId', description: 'Project ID', type: 'string' })
   @ApiResponse({

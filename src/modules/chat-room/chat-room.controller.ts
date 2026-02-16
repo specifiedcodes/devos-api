@@ -13,6 +13,7 @@ import {
   Logger,
   Req,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
 import { ChatRoomService } from './services/chat-room.service';
@@ -45,6 +46,8 @@ import {
  *
  * REST API endpoints for chat room management
  */
+@ApiTags('Chat Rooms')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/chat-rooms')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class ChatRoomController {
@@ -462,6 +465,8 @@ export class ChatRoomController {
 /**
  * Invitation-specific controller (user's invitations)
  */
+@ApiTags('Chat Rooms')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/users/me/chat-invitations')
 @UseGuards(JwtAuthGuard)
 export class UserInvitationsController {

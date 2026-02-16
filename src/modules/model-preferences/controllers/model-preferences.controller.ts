@@ -21,12 +21,15 @@ import {
   Request,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { ModelPreferencesService } from '../services/model-preferences.service';
 import { UpdateModelPreferencesDto, ValidateModelDto } from '../dto/update-model-preferences.dto';
 
+@ApiTags('Model Preferences')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/model-preferences')
 @UseGuards(JwtAuthGuard, RoleGuard)
 export class ModelPreferencesController {

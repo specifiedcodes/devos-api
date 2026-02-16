@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { ConfigService } from '@nestjs/config';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
 import { IntegrationConnectionService } from './integration-connection.service';
@@ -31,6 +32,8 @@ import { SupabaseCallbackQueryDto } from './dto/supabase-callback-query.dto';
  * Handles integration management endpoints for workspaces.
  * OAuth callback is handled separately (no auth guard since providers redirect directly).
  */
+@ApiTags('Integrations')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/integrations')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class IntegrationController {
@@ -237,6 +240,7 @@ export class IntegrationController {
  * Providers redirect to a fixed URL, so we can't include workspace guards.
  * Authentication is done via the CSRF state parameter stored in Redis.
  */
+@ApiTags('Integrations')
 @Controller('api/v1/integrations')
 export class IntegrationCallbackController {
   private readonly logger = new Logger(IntegrationCallbackController.name);

@@ -33,8 +33,8 @@ import {
 
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/stories')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
-@ApiTags('stories')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Stories')
 export class StoriesController {
   constructor(private readonly storiesService: StoriesService) {}
 

@@ -24,7 +24,7 @@ import { InvalidPasswordException } from '../exceptions/shared-link.exceptions';
 import { plainToInstance } from 'class-transformer';
 
 @Controller('share')
-@ApiTags('shared-view')
+@ApiTags('Shared Links')
 export class SharedViewController {
   constructor(private readonly sharedLinksService: SharedLinksService) {}
 

@@ -34,8 +34,8 @@ import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 
 @Controller('api/v1/workspaces')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
-@ApiTags('workspaces')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Workspaces')
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
 

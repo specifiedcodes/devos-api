@@ -108,7 +108,7 @@ export class MemoryController {
 
   @Get('health')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get memory subsystem health status' })
   @ApiResponse({
     status: 200,
@@ -121,7 +121,7 @@ export class MemoryController {
   @Post('ingest')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Manually trigger memory ingestion for a completed task' })
   @ApiBody({ type: IngestMemoryDto })
   @ApiResponse({
@@ -156,7 +156,7 @@ export class MemoryController {
 
   @Get('ingestion-stats')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get memory ingestion statistics for a project' })
   @ApiQuery({ name: 'projectId', required: true, type: String })
   @ApiQuery({ name: 'workspaceId', required: true, type: String })
@@ -183,7 +183,7 @@ export class MemoryController {
   @Post('query')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Query memories with filters and semantic relevance' })
   @ApiBody({ type: MemoryQueryDto })
   @ApiResponse({
@@ -213,7 +213,7 @@ export class MemoryController {
   @Post('feedback')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Record relevance feedback on a memory episode' })
   @ApiBody({ type: MemoryFeedbackDto })
   @ApiResponse({
@@ -239,7 +239,7 @@ export class MemoryController {
   @Post('summarize')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Manually trigger memory summarization for a project' })
   @ApiBody({ type: SummarizeDto })
   @ApiResponse({
@@ -259,7 +259,7 @@ export class MemoryController {
 
   @Get('summaries')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get memory summaries for a project' })
   @ApiQuery({ name: 'projectId', required: true, type: String })
   @ApiQuery({ name: 'workspaceId', required: true, type: String })
@@ -282,7 +282,7 @@ export class MemoryController {
 
   @Get('summarization-stats')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get memory summarization statistics for a project' })
   @ApiQuery({ name: 'projectId', required: true, type: String })
   @ApiQuery({ name: 'workspaceId', required: true, type: String })
@@ -307,7 +307,7 @@ export class MemoryController {
 
   @Get('context-budget')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get context budget for a model' })
   @ApiQuery({ name: 'modelId', required: true, type: String, description: 'Model identifier (e.g., claude-3-5-sonnet, gpt-4)' })
   @ApiResponse({
@@ -329,7 +329,7 @@ export class MemoryController {
   @Post('lifecycle/run')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Manually trigger memory lifecycle for a workspace' })
   @ApiBody({ type: LifecycleRunDto })
   @ApiResponse({
@@ -346,7 +346,7 @@ export class MemoryController {
 
   @Get('lifecycle/policy')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get lifecycle policy for a workspace' })
   @ApiQuery({ name: 'workspaceId', required: true, type: String })
   @ApiResponse({
@@ -365,7 +365,7 @@ export class MemoryController {
 
   @Put('lifecycle/policy')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Update lifecycle policy for a workspace' })
   @ApiBody({ type: LifecyclePolicyUpdateDto })
   @ApiResponse({
@@ -385,7 +385,7 @@ export class MemoryController {
 
   @Get('lifecycle/report')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get lifecycle metrics report for a workspace' })
   @ApiQuery({ name: 'workspaceId', required: true, type: String })
   @ApiResponse({
@@ -405,7 +405,7 @@ export class MemoryController {
   @Post('episodes/:episodeId/pin')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Pin a memory to protect from lifecycle operations' })
   @ApiParam({ name: 'episodeId', description: 'Episode ID to pin', type: String })
   @ApiResponse({
@@ -426,7 +426,7 @@ export class MemoryController {
   @Post('episodes/:episodeId/unpin')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Unpin a memory to allow lifecycle operations' })
   @ApiParam({ name: 'episodeId', description: 'Episode ID to unpin', type: String })
   @ApiResponse({
@@ -447,7 +447,7 @@ export class MemoryController {
   @Delete('episodes/:episodeId')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Permanently delete a specific memory' })
   @ApiParam({ name: 'episodeId', description: 'Episode ID to delete', type: String })
   @ApiResponse({
@@ -469,7 +469,7 @@ export class MemoryController {
 
   @Get('patterns/:workspaceId')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Retrieve workspace patterns for cross-project learning' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: String })
   @ApiQuery({ name: 'type', required: false, enum: ['architecture', 'error', 'testing', 'deployment', 'security'] })
@@ -499,7 +499,7 @@ export class MemoryController {
   @Post('patterns/detect')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Trigger cross-project pattern detection for a workspace' })
   @ApiBody({ type: PatternDetectDto })
   @ApiResponse({
@@ -519,7 +519,7 @@ export class MemoryController {
   @Post('patterns/:patternId/override')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Override a workspace pattern' })
   @ApiParam({ name: 'patternId', description: 'Pattern ID to override', type: String })
   @ApiBody({ type: PatternOverrideDto })
@@ -549,7 +549,7 @@ export class MemoryController {
   @Post('patterns/:patternId/restore')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Restore an overridden workspace pattern' })
   @ApiParam({ name: 'patternId', description: 'Pattern ID to restore', type: String })
   @ApiResponse({
@@ -572,7 +572,7 @@ export class MemoryController {
 
   @Get('patterns/:workspaceId/recommendations')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get pattern recommendations for a task' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: String })
   @ApiQuery({ name: 'projectId', required: true, type: String })
@@ -598,7 +598,7 @@ export class MemoryController {
 
   @Get('patterns/:workspaceId/stats')
   @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
+  @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get pattern adoption statistics for a workspace' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: String })
   @ApiResponse({

@@ -10,6 +10,7 @@ import {
   Logger,
   ValidationPipe,
 } from '@nestjs/common';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { PlatformAdmin } from '../decorators/platform-admin.decorator';
 import { IncidentService } from '../services/incident.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
@@ -28,6 +29,8 @@ import {
  * Admin API for managing incidents and their timeline updates.
  * All endpoints require @PlatformAdmin() decorator.
  */
+@ApiTags('Admin - Incidents')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/admin/incidents')
 export class IncidentController {
   private readonly logger = new Logger(IncidentController.name);

@@ -21,6 +21,7 @@ import { RecordUsageDto } from '../dto/record-usage.dto';
 import { UsageQueryDto } from '../dto/usage-query.dto';
 import { ExportUsageDto } from '../dto/export-usage.dto';
 import { CostBreakdownQueryDto, CostGroupBy } from '../dto/cost-breakdown-query.dto';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { AuditService } from '../../../shared/audit/audit.service';
@@ -29,6 +30,8 @@ import { AuditService } from '../../../shared/audit/audit.service';
  * Controller for real-time cost tracking and usage aggregation
  * Provides endpoints for recording usage and querying aggregations
  */
+@ApiTags('Usage & Costs')
+@ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/usage')
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
 export class UsageV2Controller {

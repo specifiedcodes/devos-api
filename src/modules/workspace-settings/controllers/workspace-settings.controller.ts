@@ -27,8 +27,8 @@ import {
 
 @Controller('api/v1/workspaces/:workspaceId/spending-limits')
 @UseGuards(JwtAuthGuard, RoleGuard)
-@ApiBearerAuth()
-@ApiTags('workspace-settings')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Workspace Settings')
 export class WorkspaceSettingsController {
   constructor(
     private readonly workspaceSettingsService: WorkspaceSettingsService,

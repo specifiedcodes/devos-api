@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { SkipThrottle } from '@nestjs/throttler';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { HealthCheckService } from './health.service';
 import { HealthHistoryService } from './health-history.service';
 import { IncidentQueryService } from './incident-query.service';
@@ -33,6 +34,7 @@ import {
  * All health endpoints are excluded from throttling, request logging,
  * and tracing to avoid noise and circular dependencies.
  */
+@ApiTags('Health')
 @Controller('health')
 @SkipThrottle()
 export class HealthController {
@@ -115,6 +117,7 @@ export class HealthController {
    */
   @Get('detailed')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   async getDetailed(): Promise<HealthCheckResult> {
     return this.healthCheckService.checkHealth();
@@ -127,6 +130,7 @@ export class HealthController {
    */
   @Get('history')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   async getHistory(
     @Query('duration') duration: '1h' | '6h' | '24h' = '24h',
@@ -259,6 +263,7 @@ export class HealthController {
    */
   @Get('dependencies/:name')
   @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth('JWT-auth')
   @HttpCode(HttpStatus.OK)
   async getDependencyHealth(
     @Param('name') name: string,

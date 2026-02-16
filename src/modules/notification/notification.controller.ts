@@ -21,8 +21,8 @@ import { Notification } from '../../database/entities/notification.entity';
 
 @Controller('api/v1/notifications')
 @UseGuards(JwtAuthGuard)
-@ApiBearerAuth()
-@ApiTags('notifications')
+@ApiBearerAuth('JWT-auth')
+@ApiTags('Notifications')
 export class NotificationController {
   constructor(private readonly notificationService: NotificationService) {}
 

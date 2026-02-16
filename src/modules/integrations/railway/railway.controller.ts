@@ -26,6 +26,7 @@ import { RailwayService } from './railway.service';
 import { IntegrationConnectionService } from '../integration-connection.service';
 import { IntegrationProvider } from '../../../database/entities/integration-connection.entity';
 import { Project } from '../../../database/entities/project.entity';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import {
   CreateRailwayProjectDto,
   TriggerDeploymentDto,
@@ -44,6 +45,8 @@ import {
  * Handles Railway project creation, deployment triggering, status polling,
  * and environment variable management for project-linked Railway deployments.
  */
+@ApiTags('Deployments')
+@ApiBearerAuth('JWT-auth')
 @Controller(
   'api/v1/workspaces/:workspaceId/projects/:projectId/railway',
 )
