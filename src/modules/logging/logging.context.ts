@@ -11,6 +11,7 @@ import { AsyncLocalStorage } from 'async_hooks';
 
 export interface RequestContext {
   traceId: string;
+  spanId?: string;
   userId?: string;
   workspaceId?: string;
 }
@@ -39,4 +40,13 @@ export function getUserId(): string | undefined {
  */
 export function getWorkspaceId(): string | undefined {
   return loggingContext.getStore()?.workspaceId;
+}
+
+/**
+ * Get the current span ID from async context.
+ * Returns undefined if no span ID is set or outside request scope.
+ * Story 14.4: Jaeger Distributed Tracing (AC4)
+ */
+export function getSpanId(): string | undefined {
+  return loggingContext.getStore()?.spanId;
 }

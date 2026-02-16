@@ -1,3 +1,8 @@
+// CRITICAL: Tracing instrumentation MUST be loaded before any other imports
+// to ensure OpenTelemetry can monkey-patch HTTP, pg, and ioredis modules.
+// Story 14.4: Jaeger Distributed Tracing (AC2)
+import './modules/tracing/tracing.instrumentation';
+
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import * as cookieParser from 'cookie-parser';

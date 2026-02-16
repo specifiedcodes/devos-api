@@ -1,6 +1,6 @@
 import { LoggerService, Injectable } from '@nestjs/common';
 import * as winston from 'winston';
-import { getTraceId, getUserId, getWorkspaceId } from './logging.context';
+import { getTraceId, getUserId, getWorkspaceId, getSpanId } from './logging.context';
 
 /**
  * LoggingService
@@ -133,6 +133,7 @@ export class LoggingService implements LoggerService {
 
   /**
    * Build metadata object with request context from AsyncLocalStorage.
+   * Story 14.4: Added spanId for Jaeger trace-to-log correlation.
    */
   private buildMeta(context?: string): Record<string, any> {
     const meta: Record<string, any> = {};
@@ -142,6 +143,10 @@ export class LoggingService implements LoggerService {
     const traceId = getTraceId();
     if (traceId) {
       meta.traceId = traceId;
+    }
+    const spanId = getSpanId();
+    if (spanId) {
+      meta.spanId = spanId;
     }
     const userId = getUserId();
     if (userId) {

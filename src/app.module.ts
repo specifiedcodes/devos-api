@@ -89,6 +89,8 @@ import { BenchmarkModule } from './modules/benchmarks/benchmark.module';
 import { ModelPreferencesModule } from './modules/model-preferences/model-preferences.module';
 import { MetricsModule } from './modules/metrics/metrics.module';
 import { LoggingModule } from './modules/logging/logging.module';
+import { TracingModule } from './modules/tracing/tracing.module';
+import { TracingInterceptor } from './modules/tracing/interceptors/tracing.interceptor';
 import { CorrelationIdMiddleware } from './modules/logging/middleware/correlation-id.middleware';
 import { RequestLoggingInterceptor } from './modules/logging/interceptors/request-logging.interceptor';
 import { ModelPerformance } from './database/entities/model-performance.entity';
@@ -217,6 +219,7 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     ModelPreferencesModule,
     MetricsModule,
     LoggingModule,
+    TracingModule,
   ],
   controllers: [AppController],
   providers: [
@@ -230,6 +233,11 @@ import { WorkspaceContextInterceptor } from './common/interceptors/workspace-con
     {
       provide: APP_INTERCEPTOR,
       useClass: RequestLoggingInterceptor,
+    },
+    // Apply TracingInterceptor globally for HTTP span enrichment (Story 14.4)
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TracingInterceptor,
     },
     // Disable global throttler in test environment
     ...(process.env.NODE_ENV !== 'test'
