@@ -76,6 +76,17 @@ export enum SsoAuditEventType {
   SESSION_TIMEOUT_UPDATED = 'session_timeout_updated',
   IDP_LOGOUT_RECEIVED = 'idp_logout_received',
   SESSION_TOKEN_REFRESHED = 'session_token_refreshed',
+
+  // SSO Enforcement events (Story 17-8)
+  ENFORCEMENT_ENABLED = 'enforcement_enabled',
+  ENFORCEMENT_DISABLED = 'enforcement_disabled',
+  ENFORCEMENT_UPDATED = 'enforcement_updated',
+  ENFORCEMENT_GRACE_PERIOD_EXPIRED = 'enforcement_grace_period_expired',
+  ENFORCEMENT_LOGIN_BLOCKED = 'enforcement_login_blocked',
+  ENFORCEMENT_LOGIN_BYPASSED = 'enforcement_login_bypassed',
+  ENFORCEMENT_BYPASS_ADDED = 'enforcement_bypass_added',
+  ENFORCEMENT_BYPASS_REMOVED = 'enforcement_bypass_removed',
+  ENFORCEMENT_REGISTRATION_BLOCKED = 'enforcement_registration_blocked',
 }
 
 @Entity('sso_audit_events')

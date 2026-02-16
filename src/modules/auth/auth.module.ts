@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -17,6 +17,7 @@ import { CleanupService } from './tasks/cleanup.service';
 import { EmailModule } from '../email/email.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { OnboardingModule } from '../onboarding/onboarding.module';
+import { SsoModule } from '../sso/sso.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { OnboardingModule } from '../onboarding/onboarding.module';
     EmailModule,
     WorkspacesModule,
     OnboardingModule,
+    forwardRef(() => SsoModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

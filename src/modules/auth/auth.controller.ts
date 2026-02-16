@@ -13,6 +13,7 @@ import {
   Res,
   Param,
   UnauthorizedException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
@@ -33,6 +34,9 @@ import { SecurityDashboardDto } from './dto/security-dashboard.dto';
 import { SessionDto } from './dto/session.dto';
 import { LoginThrottlerGuard } from './guards/login-throttler.guard';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { SsoEnforcementGuard } from '../sso/enforcement/sso-enforcement.guard';
+import { SsoEnforcementService } from '../sso/enforcement/sso-enforcement.service';
+import { DomainVerificationService } from '../sso/domain/domain-verification.service';
 import { User } from '../../database/entities/user.entity';
 
 @ApiTags('Authentication')
@@ -40,7 +44,11 @@ import { User } from '../../database/entities/user.entity';
 export class AuthController {
   private readonly logger = new Logger(AuthController.name);
 
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly ssoEnforcementService: SsoEnforcementService,
+    private readonly domainVerificationService: DomainVerificationService,
+  ) {}
 
   private setCookies(
     response: Response,
@@ -93,6 +101,30 @@ export class AuthController {
     @Headers('user-agent') userAgent: string,
     @Res({ passthrough: true }) response: Response,
   ): Promise<AuthResponseDto> {
+    // Check SSO enforcement for registration (Story 17-8)
+    if (registerDto.email) {
+      const domain = registerDto.email.split('@')[1]?.toLowerCase();
+      if (domain) {
+        try {
+          const domainLookup = await this.domainVerificationService.lookupDomain(domain);
+          if (domainLookup) {
+            const status = await this.ssoEnforcementService.getEnforcementStatus(domainLookup.workspaceId);
+            if (status.enforced && status.registrationBlocked) {
+              throw new ForbiddenException(
+                'Registration is blocked for your email domain. Please contact your workspace admin to be provisioned via SSO.',
+              );
+            }
+          }
+        } catch (error) {
+          // Re-throw ForbiddenException, swallow other errors to not block registration
+          if (error instanceof ForbiddenException) {
+            throw error;
+          }
+          this.logger.warn('Error checking SSO enforcement during registration', error);
+        }
+      }
+    }
+
     const authResponse = await this.authService.register(
       registerDto,
       ipAddress,
@@ -104,7 +136,7 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @UseGuards(LoginThrottlerGuard)
+  @UseGuards(SsoEnforcementGuard, LoginThrottlerGuard)
   @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 attempts per 15 minutes (900,000ms), tracked by email+IP
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({

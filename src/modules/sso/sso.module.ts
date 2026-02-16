@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
@@ -39,9 +39,15 @@ import { ScimUserController } from './scim/scim-user.controller';
 import { ScimGroupController } from './scim/scim-group.controller';
 import { ScimAdminController } from './scim/scim-admin.controller';
 import { SsoFederatedSession } from '../../database/entities/sso-federated-session.entity';
+import { SsoEnforcementPolicy } from '../../database/entities/sso-enforcement-policy.entity';
+import { Workspace } from '../../database/entities/workspace.entity';
 import { SessionFederationService } from './session/session-federation.service';
 import { SessionFederationController } from './session/session-federation.controller';
 import { SessionCleanupScheduler } from './session/session-cleanup.scheduler';
+import { SsoEnforcementService } from './enforcement/sso-enforcement.service';
+import { SsoEnforcementController } from './enforcement/sso-enforcement.controller';
+import { SsoEnforcementGuard } from './enforcement/sso-enforcement.guard';
+import { SsoEnforcementScheduler } from './enforcement/sso-enforcement.scheduler';
 import { AuthModule } from '../auth/auth.module';
 import { RedisModule } from '../redis/redis.module';
 
@@ -59,12 +65,14 @@ import { RedisModule } from '../redis/redis.module';
       ScimGroupMembership,
       ScimSyncLog,
       SsoFederatedSession,
+      SsoEnforcementPolicy,
+      Workspace,
       User,
       WorkspaceMember,
     ]),
     ConfigModule,
     HttpModule.register({ timeout: 10000 }),
-    AuthModule,
+    forwardRef(() => AuthModule),
     RedisModule,
     ScheduleModule,
   ],
@@ -77,6 +85,7 @@ import { RedisModule } from '../redis/redis.module';
     ScimGroupController,
     ScimAdminController,
     SessionFederationController,
+    SsoEnforcementController,
   ],
   providers: [
     SamlService,
@@ -97,6 +106,9 @@ import { RedisModule } from '../redis/redis.module';
     ScimAuthGuard,
     SessionFederationService,
     SessionCleanupScheduler,
+    SsoEnforcementService,
+    SsoEnforcementGuard,
+    SsoEnforcementScheduler,
   ],
   exports: [
     SamlService,
@@ -110,6 +122,8 @@ import { RedisModule } from '../redis/redis.module';
     ScimGroupService,
     ScimTokenService,
     SessionFederationService,
+    SsoEnforcementService,
+    SsoEnforcementGuard,
   ],
 })
 export class SsoModule {}
