@@ -73,6 +73,7 @@
     "express-session": "^1.19.0",
     "ioredis": "^5.9.2",
     "js-yaml": "^4.1.1",
+    "minio": "^8.0.6",
     "neo4j-driver": "^6.0.1",
     "nodemailer": "^7.0.13",
     "openai": "^6.17.0",

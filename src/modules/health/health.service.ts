@@ -1,9 +1,10 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DataSource } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bull';
 import { RedisService } from '../redis/redis.service';
+import { FileStorageService } from '../file-storage/file-storage.service';
 import {
   HealthProbeResult,
   HealthCheckResult,
@@ -42,6 +43,7 @@ export class HealthCheckService {
     private readonly redisService: RedisService,
     @InjectQueue('agent-tasks') private readonly agentQueue: Queue,
     private readonly configService: ConfigService,
+    @Optional() private readonly fileStorageService?: FileStorageService,
   ) {
     this.probeTimeout = this.configService.get<number>(
       'HEALTH_PROBE_TIMEOUT_MS',
@@ -71,10 +73,11 @@ export class HealthCheckService {
       this.probeRedis(),
       this.probeBullMQ(),
       this.probeNeo4j(),
+      this.probeMinio(),
     ]);
 
     const services: Record<string, HealthProbeResult> = {};
-    const probeNames = ['database', 'redis', 'bullmq', 'neo4j'];
+    const probeNames = ['database', 'redis', 'bullmq', 'neo4j', 'minio'];
 
     probes.forEach((result, index) => {
       const name = probeNames[index];
@@ -103,9 +106,17 @@ export class HealthCheckService {
     }
 
     // Overall status = worst individual status
+    // MinIO is non-critical: its failure degrades to WARNING, not CRITICAL
+    const nonCriticalServices = ['minio'];
     let overallStatus: 'healthy' | 'degraded' | 'unhealthy' = 'healthy';
+
     if (summary.unhealthy > 0) {
-      overallStatus = 'unhealthy';
+      // Check if any critical service is unhealthy
+      const criticalUnhealthy = Object.entries(services).some(
+        ([name, probe]) =>
+          probe.status === 'unhealthy' && !nonCriticalServices.includes(name),
+      );
+      overallStatus = criticalUnhealthy ? 'unhealthy' : 'degraded';
     } else if (summary.degraded > 0) {
       overallStatus = 'degraded';
     }
@@ -171,6 +182,8 @@ export class HealthCheckService {
         return this.probeBullMQ();
       case 'neo4j':
         return this.probeNeo4j();
+      case 'minio':
+        return this.probeMinio();
       default:
         return null;
     }
@@ -373,6 +386,46 @@ export class HealthCheckService {
       } catch {
         // Ignore session cleanup errors
       }
+    }
+  }
+
+  /**
+   * MinIO probe: listBuckets() via FileStorageService.
+   * Story 16.1: MinIO S3 Storage Setup (AC7)
+   * MinIO failure degrades to WARNING (not CRITICAL) - the API can function without file storage.
+   */
+  private async probeMinio(): Promise<HealthProbeResult> {
+    const startTime = Date.now();
+
+    if (!this.fileStorageService) {
+      return {
+        status: 'degraded',
+        responseTimeMs: 0,
+        error: 'FileStorageService not available',
+        lastChecked: new Date().toISOString(),
+      };
+    }
+
+    try {
+      const client = this.fileStorageService.getClient();
+      const buckets = await this.withTimeout(client.listBuckets());
+      const responseTimeMs = Date.now() - startTime;
+
+      return {
+        status: 'healthy',
+        responseTimeMs,
+        details: {
+          buckets: buckets.length,
+        },
+        lastChecked: new Date().toISOString(),
+      };
+    } catch (err: any) {
+      return {
+        status: 'degraded', // WARNING, not CRITICAL
+        responseTimeMs: Date.now() - startTime,
+        error: err?.message || 'MinIO probe failed',
+        lastChecked: new Date().toISOString(),
+      };
     }
   }
 }

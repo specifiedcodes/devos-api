@@ -4,6 +4,7 @@ import { getQueueToken } from '@nestjs/bull';
 import { DataSource } from 'typeorm';
 import { HealthCheckService } from '../health.service';
 import { RedisService } from '../../redis/redis.service';
+import { FileStorageService } from '../../file-storage/file-storage.service';
 
 describe('HealthCheckService', () => {
   let service: HealthCheckService;
@@ -11,8 +12,19 @@ describe('HealthCheckService', () => {
   let mockRedisService: jest.Mocked<Partial<RedisService>>;
   let mockQueue: any;
   let mockConfigService: jest.Mocked<Partial<ConfigService>>;
+  let mockFileStorageService: any;
 
   beforeEach(async () => {
+    mockFileStorageService = {
+      getClient: jest.fn().mockReturnValue({
+        listBuckets: jest.fn().mockResolvedValue([
+          { name: 'devos-uploads' },
+          { name: 'devos-cli-sessions' },
+          { name: 'devos-exports' },
+          { name: 'devos-backups' },
+        ]),
+      }),
+    };
     mockDataSource = {
       query: jest.fn().mockResolvedValue([{ '?column?': 1 }]),
     };
@@ -50,6 +62,7 @@ describe('HealthCheckService', () => {
         { provide: RedisService, useValue: mockRedisService },
         { provide: getQueueToken('agent-tasks'), useValue: mockQueue },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: FileStorageService, useValue: mockFileStorageService },
       ],
     }).compile();
 
@@ -72,10 +85,11 @@ describe('HealthCheckService', () => {
       expect(result.version).toBeDefined();
       expect(result.services).toBeDefined();
       expect(result.summary).toBeDefined();
-      expect(result.summary.total).toBe(4);
-      // DB and BullMQ should be healthy (mocks resolve instantly)
+      expect(result.summary.total).toBe(5);
+      // DB, BullMQ, and MinIO should be healthy (mocks resolve instantly)
       expect(result.services.database.status).toBe('healthy');
       expect(result.services.bullmq.status).toBe('healthy');
+      expect(result.services.minio.status).toBe('healthy');
       // Redis and Neo4j may vary based on test runner timing
       expect(['healthy', 'degraded']).toContain(result.services.redis.status);
     });

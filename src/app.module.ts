@@ -99,6 +99,7 @@ import { ModelPerformance } from './database/entities/model-performance.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 import { WebSocketSecurityModule } from './modules/websocket-security/ws-security.module';
+import { FileStorageModule } from './modules/file-storage/file-storage.module';
 
 @Module({
   imports: [
@@ -226,6 +227,7 @@ import { WebSocketSecurityModule } from './modules/websocket-security/ws-securit
     HealthModule,
     AdminModule,
     WebSocketSecurityModule,
+    FileStorageModule,
   ],
   controllers: [AppController],
   providers: [
