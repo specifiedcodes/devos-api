@@ -1,5 +1,7 @@
 # DevOS API
 
+![CI](https://github.com/devos-platform/devos-api/actions/workflows/ci.yml/badge.svg)
+
 NestJS backend API for the DevOS platform - an AI-powered development platform with autonomous agent orchestration.
 
 ## Technology Stack

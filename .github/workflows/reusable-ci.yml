@@ -1,0 +1,88 @@
+name: Reusable CI
+
+# NOTE: This reusable workflow covers lint, build, and security jobs.
+# The test job is intentionally omitted because GitHub Actions workflow_call
+# does not support conditional service containers (postgres, redis).
+# Each repo's ci.yml defines its own test job with repo-specific services.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: '20'
+      run-lint:
+        type: boolean
+        default: true
+      lint-command:
+        type: string
+        default: 'npm run lint'
+      run-security:
+        type: boolean
+        default: true
+      build-command:
+        type: string
+        default: 'npm run build'
+      build-output-dir:
+        type: string
+        default: 'dist'
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Run linter
+        if: ${{ inputs.run-lint }}
+        run: ${{ inputs.lint-command }}
+
+      - name: TypeScript type check
+        run: npm run type-check
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Build
+        run: ${{ inputs.build-command }}
+
+      - name: Verify build output exists
+        run: test -d ${{ inputs.build-output-dir }}
+
+  security:
+    if: ${{ inputs.run-security }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Security audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+
+      - name: Output audit results
+        run: |
+          echo "### Security Audit Results" >> $GITHUB_STEP_SUMMARY
+          npm audit --audit-level=high 2>&1 | tail -20 >> $GITHUB_STEP_SUMMARY || true

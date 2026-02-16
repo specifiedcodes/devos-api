@@ -27,7 +27,8 @@
     "byok:reencrypt": "ts-node scripts/reencrypt-byok-keys.ts",
     "test:e2e:pipeline": "jest --testPathPatterns='orchestrator/e2e/.*\\.spec\\.ts' --testTimeout=300000",
     "test:e2e:pipeline:smoke": "E2E_TEST_MODE=smoke jest --testPathPatterns='orchestrator/e2e/smoke-mode\\.spec\\.ts' --testTimeout=120000",
-    "test:e2e:pipeline:full": "E2E_TEST_MODE=full jest --testPathPatterns='orchestrator/e2e/full-pipeline-e2e\\.integration\\.spec\\.ts' --testTimeout=1800000"
+    "test:e2e:pipeline:full": "E2E_TEST_MODE=full jest --testPathPatterns='orchestrator/e2e/full-pipeline-e2e\\.integration\\.spec\\.ts' --testTimeout=1800000",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.72.1",
