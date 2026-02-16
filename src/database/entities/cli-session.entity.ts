@@ -101,6 +101,21 @@ export class CliSession {
   @Column({ name: 'duration_seconds', type: 'int', nullable: true })
   durationSeconds!: number | null; // Calculated from startedAt to endedAt
 
+  /**
+   * Story 16.3: CLI Session Archive Storage
+   * MinIO object key once session output is archived (e.g., {workspaceId}/{projectId}/{sessionId}.gz)
+   */
+  @Column({ name: 'storage_key', type: 'varchar', length: 500, nullable: true })
+  storageKey!: string | null;
+
+  /**
+   * Story 16.3: CLI Session Archive Storage
+   * Timestamp when session output was archived to MinIO
+   */
+  @Index()
+  @Column({ name: 'archived_at', type: 'timestamptz', nullable: true })
+  archivedAt!: Date | null;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
 

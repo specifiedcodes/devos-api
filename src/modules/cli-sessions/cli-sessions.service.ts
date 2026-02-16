@@ -1,6 +1,6 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, Inject, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between, LessThan } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
 import { CliSession } from '../../database/entities/cli-session.entity';
@@ -11,6 +11,7 @@ import {
   PaginatedCliSessionsResult,
   CliSessionReplayDto,
 } from './dto';
+import { CliSessionArchiveService } from './cli-session-archive.service';
 
 const gzip = promisify(zlib.gzip);
 const gunzip = promisify(zlib.gunzip);
@@ -18,9 +19,10 @@ const gunzip = promisify(zlib.gunzip);
 /**
  * CLI Sessions Service
  * Story 8.5: CLI Session History and Replay
+ * Story 16.3: CLI Session Archive Storage (AC6)
  *
  * Handles CRUD operations for CLI session history with
- * compression/decompression support.
+ * compression/decompression support and archive-aware replay.
  */
 @Injectable()
 export class CliSessionsService {
@@ -29,6 +31,9 @@ export class CliSessionsService {
   constructor(
     @InjectRepository(CliSession)
     private readonly cliSessionRepository: Repository<CliSession>,
+    @Optional()
+    @Inject(CliSessionArchiveService)
+    private readonly archiveService?: CliSessionArchiveService,
   ) {}
 
   /**
@@ -102,6 +107,7 @@ export class CliSessionsService {
   /**
    * Gets paginated sessions for a workspace
    * Returns summary data without output text
+   * Story 16.3: Includes isArchived and archivedAt fields
    */
   async getWorkspaceSessions(
     options: GetSessionsOptions,
@@ -144,7 +150,7 @@ export class CliSessionsService {
       whereConditions.startedAt = Between(startDate, new Date());
     }
 
-    // Execute query
+    // Execute query - Story 16.3: include archivedAt and storageKey
     const [sessions, total] = await this.cliSessionRepository.findAndCount({
       where: whereConditions,
       order: { startedAt: 'DESC' },
@@ -160,10 +166,12 @@ export class CliSessionsService {
         'endedAt',
         'durationSeconds',
         'lineCount',
+        'archivedAt',
+        'storageKey',
       ],
     });
 
-    // Map to summary DTOs
+    // Map to summary DTOs - Story 16.3: include isArchived and archivedAt
     const data: CliSessionSummaryDto[] = sessions.map((session) => ({
       id: session.id,
       agentId: session.agentId,
@@ -174,6 +182,8 @@ export class CliSessionsService {
       endedAt: session.endedAt ? session.endedAt.toISOString() : null,
       durationSeconds: session.durationSeconds,
       lineCount: session.lineCount,
+      isArchived: !!session.storageKey,
+      archivedAt: session.archivedAt ? session.archivedAt.toISOString() : null,
     }));
 
     return {
@@ -187,6 +197,7 @@ export class CliSessionsService {
 
   /**
    * Gets a single session with decompressed output for replay
+   * Story 16.3: Archive-aware - fetches from MinIO if session is archived
    */
   async getSessionForReplay(
     workspaceId: string,
@@ -200,8 +211,18 @@ export class CliSessionsService {
       throw new NotFoundException(`CLI session ${sessionId} not found`);
     }
 
+    let compressedOutput: string;
+
+    if (session.storageKey && session.archivedAt && this.archiveService) {
+      // Story 16.3: Session is archived - fetch from MinIO (with Redis cache)
+      compressedOutput = await this.archiveService.getArchivedSessionOutput(session);
+    } else {
+      // Session is still in database
+      compressedOutput = session.outputText;
+    }
+
     // Decompress the output
-    const decompressedOutput = await this.decompressOutput(session.outputText);
+    const decompressedOutput = await this.decompressOutput(compressedOutput);
     const outputLines = this.splitOutputToLines(decompressedOutput);
 
     return {
@@ -214,6 +235,8 @@ export class CliSessionsService {
       endedAt: session.endedAt ? session.endedAt.toISOString() : null,
       durationSeconds: session.durationSeconds,
       lineCount: session.lineCount,
+      isArchived: !!session.storageKey,
+      archivedAt: session.archivedAt ? session.archivedAt.toISOString() : null,
       outputLines,
     };
   }
@@ -229,6 +252,7 @@ export class CliSessionsService {
 
   /**
    * Deletes a session (admin only)
+   * Story 16.3: Also cleans up MinIO archive and Redis cache if session is archived
    */
   async deleteSession(workspaceId: string, sessionId: string): Promise<void> {
     const session = await this.cliSessionRepository.findOne({
@@ -237,6 +261,18 @@ export class CliSessionsService {
 
     if (!session) {
       throw new NotFoundException(`CLI session ${sessionId} not found`);
+    }
+
+    // Story 16.3: If archived, delete from MinIO and invalidate cache
+    if (session.storageKey && this.archiveService) {
+      try {
+        await this.archiveService.deleteArchivedSession(session);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to delete archived session from storage: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        // Continue with DB deletion even if storage cleanup fails
+      }
     }
 
     await this.cliSessionRepository.remove(session);
@@ -251,13 +287,20 @@ export class CliSessionsService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const result = await this.cliSessionRepository.delete({
-      createdAt: LessThan(thirtyDaysAgo),
-    });
+    // Story 16.3: Only delete non-archived sessions.
+    // Archived sessions have their own cleanup lifecycle via cleanupExpiredArchives()
+    // which properly removes MinIO objects before deleting DB records.
+    const result = await this.cliSessionRepository
+      .createQueryBuilder()
+      .delete()
+      .from(CliSession)
+      .where('created_at < :thirtyDaysAgo', { thirtyDaysAgo })
+      .andWhere('archived_at IS NULL')
+      .execute();
 
     const deletedCount = result.affected || 0;
     if (deletedCount > 0) {
-      this.logger.log(`Cleaned up ${deletedCount} CLI sessions older than 30 days`);
+      this.logger.log(`Cleaned up ${deletedCount} non-archived CLI sessions older than 30 days`);
     }
 
     return deletedCount;

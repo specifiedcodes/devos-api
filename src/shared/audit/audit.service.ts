@@ -112,6 +112,11 @@ export enum AuditAction {
   FILE_DOWNLOADED = 'file.downloaded',
   FILE_DELETED = 'file.deleted',
   FILE_UPDATED = 'file.updated',
+
+  // CLI Session Archive actions (Story 16.3)
+  SESSION_ARCHIVED = 'session.archived',
+  SESSION_ARCHIVE_DELETED = 'session.archive_deleted',
+  SESSION_ARCHIVE_CLEANUP = 'session.archive_cleanup',
 }
 
 /**

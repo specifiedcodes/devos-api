@@ -10,9 +10,13 @@ import {
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
+  ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { CliSessionsService } from './cli-sessions.service';
+import { CliSessionArchiveService } from './cli-session-archive.service';
+import { CliSessionArchiveSchedulerService } from './cli-session-archive-scheduler.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
 import { WorkspaceAdminGuard } from '../workspaces/guards/workspace-admin.guard';
@@ -27,12 +31,17 @@ import {
 /**
  * CLI Sessions Controller
  * Story 8.5: CLI Session History and Replay
+ * Story 16.3: CLI Session Archive Storage (AC7)
  *
  * Provides REST API endpoints for CLI session history management.
  */
 @Controller('api/workspaces/:workspaceId/cli-sessions')
 export class CliSessionsController {
-  constructor(private readonly cliSessionsService: CliSessionsService) {}
+  constructor(
+    private readonly cliSessionsService: CliSessionsService,
+    private readonly archiveService: CliSessionArchiveService,
+    private readonly archiveScheduler: CliSessionArchiveSchedulerService,
+  ) {}
 
   /**
    * GET /api/workspaces/:workspaceId/cli-sessions
@@ -58,6 +67,31 @@ export class CliSessionsController {
   }
 
   /**
+   * GET /api/workspaces/:workspaceId/cli-sessions/archive-stats
+   * Get archive statistics for a workspace
+   * Story 16.3: CLI Session Archive Storage (AC7)
+   * IMPORTANT: Declared BEFORE :sessionId parameterized routes to prevent route collision
+   */
+  @Get('archive-stats')
+  @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
+  async getArchiveStats(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<{
+    totalArchived: number;
+    totalSizeBytes: number;
+    oldestArchive: string | null;
+    newestArchive: string | null;
+  }> {
+    const stats = await this.archiveService.getArchiveStats(workspaceId);
+    return {
+      totalArchived: stats.totalArchived,
+      totalSizeBytes: stats.totalSizeBytes,
+      oldestArchive: stats.oldestArchive ? stats.oldestArchive.toISOString() : null,
+      newestArchive: stats.newestArchive ? stats.newestArchive.toISOString() : null,
+    };
+  }
+
+  /**
    * GET /api/workspaces/:workspaceId/cli-sessions/:sessionId
    * Get a single session with output for replay
    */
@@ -68,6 +102,32 @@ export class CliSessionsController {
     @Param('sessionId', ParseUUIDPipe) sessionId: string,
   ): Promise<CliSessionReplayDto> {
     return this.cliSessionsService.getSessionForReplay(workspaceId, sessionId);
+  }
+
+  /**
+   * POST /api/workspaces/:workspaceId/cli-sessions/:sessionId/archive
+   * Manually trigger archive for a session (Admin/Owner only)
+   * Story 16.3: CLI Session Archive Storage (AC7)
+   */
+  @Post(':sessionId/archive')
+  @UseGuards(JwtAuthGuard, WorkspaceAdminGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
+  async archiveSession(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ): Promise<{ message: string }> {
+    const session = await this.cliSessionsService.getSession(workspaceId, sessionId);
+
+    if (!session) {
+      throw new NotFoundException(`CLI session ${sessionId} not found`);
+    }
+
+    if (session.storageKey) {
+      throw new ConflictException(`CLI session ${sessionId} is already archived`);
+    }
+
+    await this.archiveScheduler.enqueueSessionArchive(sessionId);
+    return { message: 'Session queued for archival' };
   }
 
   /**
@@ -88,10 +148,14 @@ export class CliSessionsController {
 /**
  * Internal CLI Sessions Controller
  * Used for service-to-service communication (orchestrator -> api)
+ * Story 16.3: Added internal archive endpoint
  */
 @Controller('api/internal/cli-sessions')
 export class CliSessionsInternalController {
-  constructor(private readonly cliSessionsService: CliSessionsService) {}
+  constructor(
+    private readonly cliSessionsService: CliSessionsService,
+    private readonly archiveScheduler: CliSessionArchiveSchedulerService,
+  ) {}
 
   /**
    * POST /api/internal/cli-sessions
@@ -107,5 +171,20 @@ export class CliSessionsInternalController {
   ): Promise<{ id: string }> {
     const session = await this.cliSessionsService.createSession(dto);
     return { id: session.id };
+  }
+
+  /**
+   * POST /api/internal/cli-sessions/:sessionId/archive
+   * Internal trigger for session archive (called by orchestrator when CLI session ends)
+   * Story 16.3: CLI Session Archive Storage (AC7)
+   */
+  @Post(':sessionId/archive')
+  @UseGuards(ServiceAuthGuard)
+  @HttpCode(HttpStatus.ACCEPTED)
+  async archiveSession(
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ): Promise<{ message: string }> {
+    await this.archiveScheduler.enqueueSessionArchive(sessionId);
+    return { message: 'Session queued for archival' };
   }
 }

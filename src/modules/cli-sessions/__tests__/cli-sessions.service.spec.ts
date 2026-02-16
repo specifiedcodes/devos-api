@@ -3,11 +3,13 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { NotFoundException } from '@nestjs/common';
 import { CliSessionsService } from '../cli-sessions.service';
+import { CliSessionArchiveService } from '../cli-session-archive.service';
 import { CliSession, CliSessionStatus, CliSessionAgentType } from '../../../database/entities/cli-session.entity';
 
 describe('CliSessionsService', () => {
   let service: CliSessionsService;
   let repository: jest.Mocked<Repository<CliSession>>;
+  let archiveService: jest.Mocked<CliSessionArchiveService>;
 
   const mockSession: CliSession = {
     id: '550e8400-e29b-41d4-a716-446655440001',
@@ -23,9 +25,19 @@ describe('CliSessionsService', () => {
     startedAt: new Date('2026-02-01T10:00:00Z'),
     endedAt: new Date('2026-02-01T10:30:00Z'),
     durationSeconds: 1800,
+    storageKey: null,
+    archivedAt: null,
     createdAt: new Date('2026-02-01T10:30:00Z'),
     updatedAt: new Date('2026-02-01T10:30:00Z'),
     workspace: {} as any,
+  };
+
+  const archivedSession: CliSession = {
+    ...mockSession,
+    id: '550e8400-e29b-41d4-a716-446655440010',
+    storageKey: '550e8400-e29b-41d4-a716-446655440003/550e8400-e29b-41d4-a716-446655440004/550e8400-e29b-41d4-a716-446655440010.gz',
+    archivedAt: new Date('2026-02-01T12:00:00Z'),
+    outputText: '',
   };
 
   beforeEach(async () => {
@@ -40,6 +52,11 @@ describe('CliSessionsService', () => {
       createQueryBuilder: jest.fn(),
     };
 
+    const mockArchiveService = {
+      getArchivedSessionOutput: jest.fn(),
+      deleteArchivedSession: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CliSessionsService,
@@ -47,11 +64,16 @@ describe('CliSessionsService', () => {
           provide: getRepositoryToken(CliSession),
           useValue: mockRepository,
         },
+        {
+          provide: CliSessionArchiveService,
+          useValue: mockArchiveService,
+        },
       ],
     }).compile();
 
     service = module.get<CliSessionsService>(CliSessionsService);
     repository = module.get(getRepositoryToken(CliSession));
+    archiveService = module.get(CliSessionArchiveService);
   });
 
   describe('compressOutput', () => {
@@ -168,7 +190,7 @@ describe('CliSessionsService', () => {
   });
 
   describe('getWorkspaceSessions', () => {
-    it('should return paginated sessions', async () => {
+    it('should return paginated sessions with isArchived and archivedAt fields', async () => {
       repository.findAndCount.mockResolvedValue([[mockSession], 1]);
 
       const result = await service.getWorkspaceSessions({
@@ -181,6 +203,38 @@ describe('CliSessionsService', () => {
       expect(result.total).toBe(1);
       expect(result.hasMore).toBe(false);
       expect(result.data[0].id).toBe(mockSession.id);
+      // Story 16.3: verify isArchived and archivedAt
+      expect(result.data[0].isArchived).toBe(false);
+      expect(result.data[0].archivedAt).toBeNull();
+    });
+
+    it('should return isArchived=true for archived sessions', async () => {
+      repository.findAndCount.mockResolvedValue([[archivedSession], 1]);
+
+      const result = await service.getWorkspaceSessions({
+        workspaceId: '550e8400-e29b-41d4-a716-446655440003',
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(result.data[0].isArchived).toBe(true);
+      expect(result.data[0].archivedAt).toBe(archivedSession.archivedAt!.toISOString());
+    });
+
+    it('should include archivedAt and storageKey in select query', async () => {
+      repository.findAndCount.mockResolvedValue([[], 0]);
+
+      await service.getWorkspaceSessions({
+        workspaceId: '550e8400-e29b-41d4-a716-446655440003',
+        limit: 20,
+        offset: 0,
+      });
+
+      expect(repository.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          select: expect.arrayContaining(['archivedAt', 'storageKey']),
+        }),
+      );
     });
 
     it('should apply filters correctly', async () => {
@@ -219,7 +273,7 @@ describe('CliSessionsService', () => {
   });
 
   describe('getSessionForReplay', () => {
-    it('should return session with decompressed output', async () => {
+    it('should return non-archived session with decompressed output from DB', async () => {
       // Create session with actual compressed output
       const compressedOutput = await service.compressOutput('test output\nline 2');
       const sessionWithCompressed = {
@@ -237,6 +291,27 @@ describe('CliSessionsService', () => {
 
       expect(result.outputLines).toEqual(['test output', 'line 2']);
       expect(result.id).toBe(mockSession.id);
+      expect(result.isArchived).toBe(false);
+      expect(result.archivedAt).toBeNull();
+      // Should NOT call archiveService for non-archived session
+      expect(archiveService.getArchivedSessionOutput).not.toHaveBeenCalled();
+    });
+
+    it('should fetch archived session output from MinIO via archiveService', async () => {
+      repository.findOne.mockResolvedValue(archivedSession);
+
+      const compressedOutput = await service.compressOutput('archived output\nline 2');
+      archiveService.getArchivedSessionOutput.mockResolvedValue(compressedOutput);
+
+      const result = await service.getSessionForReplay(
+        archivedSession.workspaceId,
+        archivedSession.id,
+      );
+
+      expect(archiveService.getArchivedSessionOutput).toHaveBeenCalledWith(archivedSession);
+      expect(result.outputLines).toEqual(['archived output', 'line 2']);
+      expect(result.isArchived).toBe(true);
+      expect(result.archivedAt).toBe(archivedSession.archivedAt!.toISOString());
     });
 
     it('should throw NotFoundException if session not found', async () => {
@@ -252,13 +327,36 @@ describe('CliSessionsService', () => {
   });
 
   describe('deleteSession', () => {
-    it('should delete existing session', async () => {
+    it('should delete non-archived session without calling archiveService', async () => {
       repository.findOne.mockResolvedValue(mockSession);
       repository.remove.mockResolvedValue(mockSession);
 
       await service.deleteSession(mockSession.workspaceId, mockSession.id);
 
       expect(repository.remove).toHaveBeenCalledWith(mockSession);
+      expect(archiveService.deleteArchivedSession).not.toHaveBeenCalled();
+    });
+
+    it('should delete archived session and clean up MinIO storage', async () => {
+      repository.findOne.mockResolvedValue(archivedSession);
+      repository.remove.mockResolvedValue(archivedSession);
+      archiveService.deleteArchivedSession.mockResolvedValue(undefined);
+
+      await service.deleteSession(archivedSession.workspaceId, archivedSession.id);
+
+      expect(archiveService.deleteArchivedSession).toHaveBeenCalledWith(archivedSession);
+      expect(repository.remove).toHaveBeenCalledWith(archivedSession);
+    });
+
+    it('should continue DB deletion even if MinIO cleanup fails', async () => {
+      repository.findOne.mockResolvedValue(archivedSession);
+      repository.remove.mockResolvedValue(archivedSession);
+      archiveService.deleteArchivedSession.mockRejectedValue(new Error('MinIO error'));
+
+      await service.deleteSession(archivedSession.workspaceId, archivedSession.id);
+
+      // DB deletion should still happen
+      expect(repository.remove).toHaveBeenCalledWith(archivedSession);
     });
 
     it('should throw NotFoundException if session not found', async () => {
@@ -274,17 +372,32 @@ describe('CliSessionsService', () => {
   });
 
   describe('cleanupOldSessions', () => {
-    it('should delete sessions older than 30 days', async () => {
-      repository.delete.mockResolvedValue({ affected: 5, raw: {} });
+    it('should delete non-archived sessions older than 30 days', async () => {
+      const mockQb = {
+        delete: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 5 }),
+      };
+      repository.createQueryBuilder.mockReturnValue(mockQb as any);
 
       const result = await service.cleanupOldSessions();
 
       expect(result).toBe(5);
-      expect(repository.delete).toHaveBeenCalled();
+      // Verify archived sessions are excluded
+      expect(mockQb.andWhere).toHaveBeenCalledWith('archived_at IS NULL');
     });
 
     it('should return 0 when no old sessions', async () => {
-      repository.delete.mockResolvedValue({ affected: 0, raw: {} });
+      const mockQb = {
+        delete: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 0 }),
+      };
+      repository.createQueryBuilder.mockReturnValue(mockQb as any);
 
       const result = await service.cleanupOldSessions();
 

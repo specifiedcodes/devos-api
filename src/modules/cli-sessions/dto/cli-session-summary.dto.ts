@@ -19,6 +19,8 @@ export interface CliSessionSummaryDto {
   endedAt: string | null;
   durationSeconds: number | null;
   lineCount: number;
+  isArchived: boolean;        // Story 16.3: true if session is archived to MinIO
+  archivedAt: string | null;  // Story 16.3: ISO timestamp when archived
 }
 
 /**
