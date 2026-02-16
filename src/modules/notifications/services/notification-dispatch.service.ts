@@ -4,8 +4,9 @@
  * Story 10.6: Configurable Notification Preferences
  * Story 16.4: Slack Notification Integration
  * Story 16.5: Discord Notification Integration
+ * Story 16.6: Production Email Service
  *
- * Dispatches notifications to push, in-app, Slack, and Discord channels.
+ * Dispatches notifications to push, in-app, Slack, Discord, and Email channels.
  * Routes urgent notifications immediately, queues batchable ones.
  * Respects user preferences for notification types and quiet hours.
  */
@@ -18,6 +19,7 @@ import { NotificationPreferencesService } from './notification-preferences.servi
 import { QuietHoursService } from './quiet-hours.service';
 import { SlackNotificationService } from './slack-notification.service';
 import { DiscordNotificationService } from './discord-notification.service';
+import { EmailNotificationService } from '../../email/services/email-notification.service';
 import { PushNotificationService } from '../../push/push.service';
 import { NotificationService } from '../../notification/notification.service';
 import { PushNotificationPayloadDto, NotificationUrgency } from '../../push/push.dto';
@@ -41,6 +43,8 @@ export class NotificationDispatchService {
     private readonly slackService?: SlackNotificationService,
     @Optional() @Inject(forwardRef(() => DiscordNotificationService))
     private readonly discordService?: DiscordNotificationService,
+    @Optional() @Inject(forwardRef(() => EmailNotificationService))
+    private readonly emailService?: EmailNotificationService,
   ) {}
 
   /**
@@ -86,6 +90,9 @@ export class NotificationDispatchService {
 
     // Story 16.5: Discord notification delivery (fault-isolated)
     await this.dispatchToDiscord(filteredNotification);
+
+    // Story 16.6: Email notification delivery (fault-isolated)
+    await this.dispatchToEmail(filteredNotification);
   }
 
   /**
@@ -130,6 +137,54 @@ export class NotificationDispatchService {
           error instanceof Error ? error.stack : String(error),
         );
         // Never let Discord failures block main dispatch
+      }
+    }
+  }
+
+  /**
+   * Dispatch notification to email for recipients who have email enabled.
+   * Story 16.6: Never lets email failures block main dispatch flow.
+   */
+  private async dispatchToEmail(notification: NotificationEvent): Promise<void> {
+    if (!this.emailService) return;
+
+    for (const recipient of notification.recipients) {
+      try {
+        // Check if user has email notifications enabled via preferences
+        if (this.preferencesService) {
+          try {
+            const prefs = await this.preferencesService.getPreferences(
+              recipient.userId,
+              recipient.workspaceId,
+            );
+            if (!prefs.emailEnabled) {
+              continue;
+            }
+          } catch {
+            // If preference check fails, skip email (fail closed for email)
+            continue;
+          }
+        }
+
+        // Look up user email - use payload email or recipient userId
+        // The recipientEmail should be resolved by the caller or from user entity
+        const recipientEmail = notification.payload.recipientEmail || notification.payload.email;
+        if (!recipientEmail) {
+          this.logger.debug(`No email address available for user ${recipient.userId}, skipping email dispatch`);
+          continue;
+        }
+
+        await this.emailService.sendNotification(
+          recipient.workspaceId,
+          notification,
+          recipientEmail,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to send email notification to user ${recipient.userId}`,
+          error instanceof Error ? error.stack : String(error),
+        );
+        // Never let email failures block main dispatch
       }
     }
   }

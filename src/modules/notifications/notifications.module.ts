@@ -4,9 +4,10 @@
  * Story 10.6: Configurable Notification Preferences
  * Story 16.4: Slack Notification Integration
  * Story 16.5: Discord Notification Integration
+ * Story 16.6: Production Email Service
  *
  * NestJS module for notification trigger system.
- * Integrates with EventEmitter2, BullMQ, Push, In-App, Slack, and Discord notifications.
+ * Integrates with EventEmitter2, BullMQ, Push, In-App, Slack, Discord, and Email notifications.
  * Includes preferences management and quiet hours.
  */
 
@@ -63,6 +64,7 @@ import { PushModule } from '../push/push.module';
 import { NotificationModule } from '../notification/notification.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { RedisModule } from '../redis/redis.module';
+import { EmailModule } from '../email/email.module';
 
 @Module({
   imports: [
@@ -119,6 +121,7 @@ import { RedisModule } from '../redis/redis.module';
     NotificationModule,
     WorkspacesModule,
     RedisModule,
+    EmailModule, // Story 16.6: Email notification support
   ],
   controllers: [
     NotificationPreferencesController,

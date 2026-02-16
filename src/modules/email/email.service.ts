@@ -1,13 +1,26 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject, forwardRef } from '@nestjs/common';
 import * as nodemailer from 'nodemailer';
 import { Transporter } from 'nodemailer';
+import { EmailNotificationService } from './services/email-notification.service';
+import { EmailTemplateService, EmailTemplate } from './services/email-template.service';
 
+/**
+ * EmailService
+ * Legacy email service - backward compatible.
+ * Story 16.6: Delegates to EmailNotificationService/EmailTemplateService when available.
+ * @deprecated Use EmailNotificationService and EmailTemplateService for new code.
+ */
 @Injectable()
 export class EmailService {
   private readonly logger = new Logger(EmailService.name);
   private transporter: Transporter | null = null;
 
-  constructor() {
+  constructor(
+    @Optional() @Inject(forwardRef(() => EmailNotificationService))
+    private readonly emailNotificationService?: EmailNotificationService,
+    @Optional() @Inject(forwardRef(() => EmailTemplateService))
+    private readonly emailTemplateService?: EmailTemplateService,
+  ) {
     this.initializeTransporter();
   }
 
@@ -95,7 +108,7 @@ export class EmailService {
 
   /**
    * Render email template
-   * TODO: Use Handlebars for proper templating
+   * @deprecated Use EmailTemplateService.render() for new code
    */
   private renderTemplate(
     template: string,

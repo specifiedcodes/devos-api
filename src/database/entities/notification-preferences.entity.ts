@@ -63,7 +63,7 @@ export interface EventNotificationSettings {
 export interface ChannelPreferences {
   push: boolean;    // Web Push notifications (browser/mobile)
   inApp: boolean;   // In-app notification center (always enabled)
-  email: boolean;   // Email notifications (future - disabled for now)
+  email: boolean;   // Email notifications via EmailNotificationService (Story 16.6)
 }
 
 /**
@@ -122,7 +122,7 @@ export const DEFAULT_EVENT_NOTIFICATION_SETTINGS: EventNotificationSettings = {
 export const DEFAULT_CHANNEL_PREFERENCES: ChannelPreferences = {
   push: true,
   inApp: true,    // Always enabled
-  email: false,   // Future feature
+  email: false,   // Email notifications (opt-in, Story 16.6)
 };
 
 /**
@@ -252,7 +252,7 @@ export class NotificationPreferences {
 
   /**
    * Email notifications enabled (AC #2)
-   * Future enhancement, disabled by default
+   * Story 16.6: Email via EmailNotificationService, disabled by default (opt-in)
    */
   @Column({ name: 'email_enabled', type: 'boolean', default: false })
   emailEnabled!: boolean;
