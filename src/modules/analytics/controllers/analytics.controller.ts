@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { CreateAnalyticsEventDto } from '../dto/create-analytics-event.dto';
+import { BatchAnalyticsEventDto } from '../dto/batch-analytics-event.dto';
 import { AnalyticsEventsService } from '../services/analytics-events.service';
 import { AnalyticsCalculationService } from '../services/analytics-calculation.service';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiHeader, ApiQuery } from '@nestjs/swagger';
@@ -157,5 +158,55 @@ export class AnalyticsController {
     }
 
     return this.analyticsCalculationService.calculateUserOnboardingMetrics(userId);
+  }
+
+  @Post('events/batch')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Log a batch of analytics events' })
+  @ApiResponse({ status: 201, description: 'Events logged successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request body or batch too large' })
+  @ApiResponse({ status: 401, description: 'User not authenticated' })
+  async logEventBatch(
+    @Body() batchDto: BatchAnalyticsEventDto,
+    @Request() req: any,
+  ) {
+    const userId = req.user?.userId;
+    const workspaceId = req.user?.currentWorkspaceId;
+
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+
+    if (!workspaceId) {
+      throw new BadRequestException('Workspace ID is required');
+    }
+
+    // Note: @ArrayMinSize(1) and @ArrayMaxSize(50) on BatchAnalyticsEventDto
+    // handle empty/oversized validation via the global ValidationPipe.
+    // This defensive check guards against edge cases where the pipe is bypassed.
+    if (!batchDto.events || batchDto.events.length === 0) {
+      throw new BadRequestException('Events array is required and cannot be empty');
+    }
+
+    const results = await Promise.allSettled(
+      batchDto.events.map(event =>
+        this.analyticsEventsService.logEvent(
+          userId,
+          workspaceId,
+          event.event,
+          event.data || {},
+        ),
+      ),
+    );
+
+    const successCount = results.filter(
+      r => r.status === 'fulfilled' && r.value !== null,
+    ).length;
+
+    return {
+      received: batchDto.events.length,
+      processed: successCount,
+      timestamp: new Date().toISOString(),
+    };
   }
 }
