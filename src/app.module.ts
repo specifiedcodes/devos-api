@@ -115,6 +115,9 @@ import { ScimGroup } from './database/entities/scim-group.entity';
 import { ScimGroupMembership } from './database/entities/scim-group-membership.entity';
 import { ScimSyncLog } from './database/entities/scim-sync-log.entity';
 import { SsoModule } from './modules/sso/sso.module';
+import { AgentDefinition } from './database/entities/agent-definition.entity';
+import { AgentDefinitionAuditEvent } from './database/entities/agent-definition-audit-event.entity';
+import { CustomAgentsModule } from './modules/custom-agents/custom-agents.module';
 
 @Module({
   imports: [
@@ -196,6 +199,8 @@ import { SsoModule } from './modules/sso/sso.module';
         ScimGroup,
         ScimGroupMembership,
         ScimSyncLog,
+        AgentDefinition,
+        AgentDefinitionAuditEvent,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -258,6 +263,7 @@ import { SsoModule } from './modules/sso/sso.module';
     FileStorageModule,
     ProjectFilesModule,
     SsoModule,
+    CustomAgentsModule,
   ],
   controllers: [AppController],
   providers: [

@@ -8,9 +8,11 @@ import {
   JoinColumn,
   Index,
 } from 'typeorm';
+import { IsOptional, IsUUID } from 'class-validator';
 import { User } from './user.entity';
 import { Workspace } from './workspace.entity';
 import { Project } from './project.entity';
+import { AgentDefinition } from './agent-definition.entity';
 import { AgentActivityStatus } from '../../modules/agents/enums/agent-activity-status.enum';
 
 export enum AgentType {
@@ -19,6 +21,7 @@ export enum AgentType {
   QA = 'qa',
   DEVOPS = 'devops',
   ORCHESTRATOR = 'orchestrator',
+  CUSTOM = 'custom',
 }
 
 export enum AgentStatus {
@@ -132,6 +135,15 @@ export class Agent {
 
   @Column({ name: 'last_heartbeat', type: 'timestamptz', nullable: true })
   lastHeartbeat!: Date | null;
+
+  @Column({ name: 'agent_definition_id', type: 'uuid', nullable: true })
+  @IsOptional()
+  @IsUUID()
+  agentDefinitionId!: string | null;
+
+  @ManyToOne(() => AgentDefinition, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'agent_definition_id' })
+  agentDefinition?: AgentDefinition;
 
   @CreateDateColumn({ name: 'created_at' })
   createdAt!: Date;
