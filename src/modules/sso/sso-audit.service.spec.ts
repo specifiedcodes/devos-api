@@ -111,6 +111,81 @@ describe('SsoAuditService', () => {
         }),
       );
     });
+
+    it('should trigger alert evaluation after save', async () => {
+      const mockAlertService = { evaluateAlertRules: jest.fn().mockResolvedValue([]) };
+      service.setAlertService(mockAlertService);
+
+      const event = { id: 'event-1', workspaceId: 'ws-123', eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS };
+      mockRepository.create.mockReturnValue(event);
+      mockRepository.save.mockResolvedValue(event);
+
+      await service.logEvent({ workspaceId: 'ws-123', eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS });
+
+      // Wait for fire-and-forget promise
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(mockAlertService.evaluateAlertRules).toHaveBeenCalledWith(event);
+    });
+
+    it('should queue webhook delivery after save', async () => {
+      const mockWebhookService = { queueDelivery: jest.fn().mockResolvedValue(undefined) };
+      service.setWebhookService(mockWebhookService);
+
+      const event = { id: 'event-1', workspaceId: 'ws-123', eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS };
+      mockRepository.create.mockReturnValue(event);
+      mockRepository.save.mockResolvedValue(event);
+
+      await service.logEvent({ workspaceId: 'ws-123', eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS });
+
+      await new Promise(resolve => setTimeout(resolve, 10));
+      expect(mockWebhookService.queueDelivery).toHaveBeenCalledWith(event);
+    });
+
+    it('should not throw when alert evaluation fails', async () => {
+      const mockAlertService = { evaluateAlertRules: jest.fn().mockRejectedValue(new Error('Alert error')) };
+      service.setAlertService(mockAlertService);
+
+      const event = { id: 'event-1' };
+      mockRepository.create.mockReturnValue(event);
+      mockRepository.save.mockResolvedValue(event);
+
+      const result = await service.logEvent({
+        workspaceId: 'ws-123',
+        eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS,
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should not throw when webhook queuing fails', async () => {
+      const mockWebhookService = { queueDelivery: jest.fn().mockRejectedValue(new Error('Webhook error')) };
+      service.setWebhookService(mockWebhookService);
+
+      const event = { id: 'event-1' };
+      mockRepository.create.mockReturnValue(event);
+      mockRepository.save.mockResolvedValue(event);
+
+      const result = await service.logEvent({
+        workspaceId: 'ws-123',
+        eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS,
+      });
+
+      expect(result).toBeDefined();
+    });
+
+    it('should work when alert/webhook services are not injected (optional)', async () => {
+      // No services set - should still work
+      const event = { id: 'event-1' };
+      mockRepository.create.mockReturnValue(event);
+      mockRepository.save.mockResolvedValue(event);
+
+      const result = await service.logEvent({
+        workspaceId: 'ws-123',
+        eventType: SsoAuditEventType.SAML_LOGIN_SUCCESS,
+      });
+
+      expect(result).toEqual(event);
+    });
   });
 
   describe('listEvents', () => {
@@ -206,6 +281,20 @@ describe('SsoAuditService', () => {
           take: 10,
         }),
       );
+    });
+  });
+
+  describe('setAlertService / setWebhookService', () => {
+    it('should set alert service reference', () => {
+      const alertService = { evaluateAlertRules: jest.fn() };
+      service.setAlertService(alertService);
+      // No assertion needed - just verifying no error
+    });
+
+    it('should set webhook service reference', () => {
+      const webhookService = { queueDelivery: jest.fn() };
+      service.setWebhookService(webhookService);
+      // No assertion needed - just verifying no error
     });
   });
 });

@@ -87,6 +87,18 @@ export enum SsoAuditEventType {
   ENFORCEMENT_BYPASS_ADDED = 'enforcement_bypass_added',
   ENFORCEMENT_BYPASS_REMOVED = 'enforcement_bypass_removed',
   ENFORCEMENT_REGISTRATION_BLOCKED = 'enforcement_registration_blocked',
+
+  // SSO Audit Management events (Story 17-9)
+  AUDIT_ALERT_RULE_CREATED = 'audit_alert_rule_created',
+  AUDIT_ALERT_RULE_UPDATED = 'audit_alert_rule_updated',
+  AUDIT_ALERT_RULE_DELETED = 'audit_alert_rule_deleted',
+  AUDIT_ALERT_TRIGGERED = 'audit_alert_triggered',
+  AUDIT_WEBHOOK_CREATED = 'audit_webhook_created',
+  AUDIT_WEBHOOK_UPDATED = 'audit_webhook_updated',
+  AUDIT_WEBHOOK_DELETED = 'audit_webhook_deleted',
+  AUDIT_WEBHOOK_AUTO_DISABLED = 'audit_webhook_auto_disabled',
+  AUDIT_EXPORT_REQUESTED = 'audit_export_requested',
+  AUDIT_RETENTION_CLEANUP = 'audit_retention_cleanup',
 }
 
 @Entity('sso_audit_events')

@@ -1,4 +1,4 @@
-import { Module, forwardRef } from '@nestjs/common';
+import { Module, forwardRef, OnModuleInit } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { HttpModule } from '@nestjs/axios';
@@ -15,6 +15,9 @@ import { ScimGroupMembership } from '../../database/entities/scim-group-membersh
 import { ScimSyncLog } from '../../database/entities/scim-sync-log.entity';
 import { User } from '../../database/entities/user.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
+import { SsoAuditAlertRule } from '../../database/entities/sso-audit-alert-rule.entity';
+import { SsoAuditWebhook } from '../../database/entities/sso-audit-webhook.entity';
+import { SsoAuditWebhookDelivery } from '../../database/entities/sso-audit-webhook-delivery.entity';
 import { SamlService } from './saml/saml.service';
 import { SamlController } from './saml/saml.controller';
 import { SamlConfigService } from './saml/saml-config.service';
@@ -48,8 +51,14 @@ import { SsoEnforcementService } from './enforcement/sso-enforcement.service';
 import { SsoEnforcementController } from './enforcement/sso-enforcement.controller';
 import { SsoEnforcementGuard } from './enforcement/sso-enforcement.guard';
 import { SsoEnforcementScheduler } from './enforcement/sso-enforcement.scheduler';
+import { SsoAuditExportService } from './audit/sso-audit-export.service';
+import { SsoAuditAlertService } from './audit/sso-audit-alert.service';
+import { SsoAuditWebhookService } from './audit/sso-audit-webhook.service';
+import { SsoAuditController } from './audit/sso-audit.controller';
+import { SsoAuditScheduler } from './audit/sso-audit.scheduler';
 import { AuthModule } from '../auth/auth.module';
 import { RedisModule } from '../redis/redis.module';
+import { ModuleRef } from '@nestjs/core';
 
 @Module({
   imports: [
@@ -66,6 +75,9 @@ import { RedisModule } from '../redis/redis.module';
       ScimSyncLog,
       SsoFederatedSession,
       SsoEnforcementPolicy,
+      SsoAuditAlertRule,
+      SsoAuditWebhook,
+      SsoAuditWebhookDelivery,
       Workspace,
       User,
       WorkspaceMember,
@@ -86,6 +98,7 @@ import { RedisModule } from '../redis/redis.module';
     ScimAdminController,
     SessionFederationController,
     SsoEnforcementController,
+    SsoAuditController,
   ],
   providers: [
     SamlService,
@@ -109,6 +122,10 @@ import { RedisModule } from '../redis/redis.module';
     SsoEnforcementService,
     SsoEnforcementGuard,
     SsoEnforcementScheduler,
+    SsoAuditExportService,
+    SsoAuditAlertService,
+    SsoAuditWebhookService,
+    SsoAuditScheduler,
   ],
   exports: [
     SamlService,
@@ -124,6 +141,26 @@ import { RedisModule } from '../redis/redis.module';
     SessionFederationService,
     SsoEnforcementService,
     SsoEnforcementGuard,
+    SsoAuditExportService,
+    SsoAuditAlertService,
+    SsoAuditWebhookService,
   ],
 })
-export class SsoModule {}
+export class SsoModule implements OnModuleInit {
+  constructor(private readonly moduleRef: ModuleRef) {}
+
+  onModuleInit() {
+    // Wire up alert and webhook services to SsoAuditService
+    // This avoids circular dependency by using lazy references
+    const auditService = this.moduleRef.get(SsoAuditService, { strict: false });
+    const alertService = this.moduleRef.get(SsoAuditAlertService, { strict: false });
+    const webhookService = this.moduleRef.get(SsoAuditWebhookService, { strict: false });
+
+    if (auditService && alertService) {
+      auditService.setAlertService(alertService);
+    }
+    if (auditService && webhookService) {
+      auditService.setWebhookService(webhookService);
+    }
+  }
+}

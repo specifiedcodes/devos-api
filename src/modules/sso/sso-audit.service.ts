@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, LessThanOrEqual, MoreThanOrEqual } from 'typeorm';
 import { SsoAuditEvent, SsoAuditEventType } from '../../database/entities/sso-audit-event.entity';
@@ -36,13 +36,33 @@ export interface PaginatedAuditEvents {
 export class SsoAuditService {
   private readonly logger = new Logger(SsoAuditService.name);
 
+  // Lazy-loaded references to avoid circular dependency
+  // Typed as partial interfaces to preserve type safety without importing concrete classes
+  private alertService: { evaluateAlertRules(event: SsoAuditEvent): Promise<unknown[]> } | null = null;
+  private webhookService: { queueDelivery(event: SsoAuditEvent): Promise<void> } | null = null;
+
   constructor(
     @InjectRepository(SsoAuditEvent)
     private readonly auditEventRepository: Repository<SsoAuditEvent>,
   ) {}
 
   /**
+   * Set the alert service reference (called by module initialization)
+   */
+  setAlertService(alertService: { evaluateAlertRules(event: SsoAuditEvent): Promise<unknown[]> }): void {
+    this.alertService = alertService;
+  }
+
+  /**
+   * Set the webhook service reference (called by module initialization)
+   */
+  setWebhookService(webhookService: { queueDelivery(event: SsoAuditEvent): Promise<void> }): void {
+    this.webhookService = webhookService;
+  }
+
+  /**
    * Log an SSO audit event (fire-and-forget)
+   * After saving, triggers alert evaluation and webhook queuing asynchronously.
    */
   async logEvent(params: LogEventParams): Promise<SsoAuditEvent> {
     try {
@@ -59,11 +79,33 @@ export class SsoAuditService {
         details: params.details || {},
       });
 
-      return await this.auditEventRepository.save(event);
+      const savedEvent = await this.auditEventRepository.save(event);
+
+      // Fire-and-forget: trigger alert evaluation and webhook queuing
+      this.processEventAsync(savedEvent);
+
+      return savedEvent;
     } catch (error) {
       this.logger.error('Failed to log SSO audit event', error);
       // Fire-and-forget: never throw from audit logging
       return {} as SsoAuditEvent;
+    }
+  }
+
+  /**
+   * Asynchronously process event for alerts and webhooks (fire-and-forget)
+   */
+  private processEventAsync(event: SsoAuditEvent): void {
+    if (this.alertService) {
+      Promise.resolve(this.alertService.evaluateAlertRules(event)).catch((error: any) => {
+        this.logger.error('Failed to evaluate alert rules for audit event', error);
+      });
+    }
+
+    if (this.webhookService) {
+      Promise.resolve(this.webhookService.queueDelivery(event)).catch((error: any) => {
+        this.logger.error('Failed to queue webhook delivery for audit event', error);
+      });
     }
   }
 
