@@ -27,7 +27,7 @@ export class BillingService {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
     if (secretKey) {
       this.stripe = new Stripe(secretKey, {
-        apiVersion: '2024-11-20.acacia',
+        apiVersion: '2026-01-28.clover',
       });
     }
     this.webhookSecret = this.configService.get<string>('STRIPE_WEBHOOK_SECRET') || '';

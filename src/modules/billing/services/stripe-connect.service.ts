@@ -42,12 +42,12 @@ export class StripeConnectService {
       this.logger.warn('STRIPE_SECRET_KEY not configured - Stripe Connect features will be disabled');
       // Create a dummy stripe instance to prevent null errors
       this.stripe = new Stripe('sk_test_dummy', {
-        apiVersion: '2024-11-20.acacia',
+        apiVersion: '2026-01-28.clover',
       });
       return;
     }
     this.stripe = new Stripe(secretKey, {
-      apiVersion: '2024-11-20.acacia',
+      apiVersion: '2026-01-28.clover',
     });
   }
 
@@ -264,8 +264,12 @@ export class StripeConnectService {
         break;
       }
       case 'account.application.deauthorized': {
-        const account = event.data.object as Stripe.Account;
-        await this.handleAccountDeauthorized(account);
+        const application = event.data.object as unknown as Stripe.Application;
+        // The application object has a property that references the account
+        const accountId = (application as any).account as string;
+        if (accountId) {
+          await this.handleAccountDeauthorizedById(accountId);
+        }
         break;
       }
       default:
@@ -283,7 +287,7 @@ export class StripeConnectService {
       return;
     }
 
-    const updateData: Partial<CreatorPayoutAccount> = {
+    const updateData = {
       onboardingComplete: account.details_submitted ?? false,
       chargesEnabled: account.charges_enabled ?? false,
       payoutsEnabled: account.payouts_enabled ?? false,
@@ -297,11 +301,11 @@ export class StripeConnectService {
         where: { stripeAccountId: account.id },
       });
       if (existing && !existing.onboardingComplete) {
-        updateData.onboardingCompletedAt = new Date();
+        (updateData as any).onboardingCompletedAt = new Date();
       }
     }
 
-    await this.payoutAccountRepo.update({ stripeAccountId: account.id }, updateData);
+    await this.payoutAccountRepo.update({ stripeAccountId: account.id }, updateData as any);
 
     this.logger.log(`Updated payout account status for Stripe account ${account.id}`);
   }
@@ -324,6 +328,27 @@ export class StripeConnectService {
         },
       );
       this.logger.log(`Deauthorized Stripe account ${account.id}`);
+    }
+  }
+
+  /**
+   * Handle account deauthorization by account ID.
+   */
+  private async handleAccountDeauthorizedById(stripeAccountId: string): Promise<void> {
+    const payoutAccount = await this.payoutAccountRepo.findOne({
+      where: { stripeAccountId },
+    });
+
+    if (payoutAccount) {
+      // Mark account as disabled rather than deleting
+      await this.payoutAccountRepo.update(
+        { stripeAccountId },
+        {
+          chargesEnabled: false,
+          payoutsEnabled: false,
+        },
+      );
+      this.logger.log(`Deauthorized Stripe account ${stripeAccountId}`);
     }
   }
 

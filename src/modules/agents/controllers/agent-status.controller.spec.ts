@@ -26,6 +26,7 @@ describe('AgentStatusController', () => {
     workspaceId: 'workspace-1',
     projectId: 'project-1',
     createdBy: 'user-1',
+    agentDefinitionId: null,
     config: null,
     context: null,
     currentTask: null,

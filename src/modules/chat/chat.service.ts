@@ -571,7 +571,7 @@ export class ChatService {
 
     // Build atomic update with conditional WHERE clause to prevent race conditions
     const now = new Date();
-    const updateData: Partial<ChatMessage> = {
+    const updateData: Record<string, unknown> = {
       status: status as ChatMessageStatus,
     };
 
@@ -591,7 +591,7 @@ export class ChatService {
     const result = await this.chatMessageRepository
       .createQueryBuilder()
       .update(ChatMessage)
-      .set(updateData)
+      .set(updateData as any)
       .where('id = :id', { id: messageId })
       .andWhere('status IN (:...validStatuses)', { validStatuses: validPreviousStatuses })
       .execute();

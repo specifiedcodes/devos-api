@@ -54,7 +54,7 @@ export class AgentDefinitionValidatorService {
       for (const err of validate.errors) {
         errors.push({
           path: err.instancePath || '/',
-          message: this.formatAjvError(err),
+          message: this.formatAjvError(err as unknown as Record<string, unknown>),
           keyword: err.keyword,
           params: err.params as Record<string, unknown>,
         });
@@ -317,7 +317,7 @@ export class AgentDefinitionValidatorService {
    * Get the JSON Schema for a given version.
    */
   getSchemaForVersion(version: string): object {
-    if (!AGENT_DEFINITION_CONSTANTS.SUPPORTED_SCHEMA_VERSIONS.includes(version)) {
+    if (!(AGENT_DEFINITION_CONSTANTS.SUPPORTED_SCHEMA_VERSIONS as unknown as string[]).includes(version)) {
       throw new BadRequestException(
         `Unsupported schema version '${version}'. Supported versions: ${AGENT_DEFINITION_CONSTANTS.SUPPORTED_SCHEMA_VERSIONS.join(', ')}`,
       );

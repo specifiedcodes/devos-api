@@ -264,9 +264,9 @@ export class BillingController {
   @ApiOperation({ summary: 'Get transaction history for creator' })
   @ApiResponse({ status: 200, description: 'Transaction history retrieved' })
   async getTransactionHistory(
+    @Req() req: any,
     @Query() query: PayoutQueryDto,
     @Query('type') type?: string,
-    @Req() req: any,
   ): Promise<any> {
     const userId = req.user?.sub;
 

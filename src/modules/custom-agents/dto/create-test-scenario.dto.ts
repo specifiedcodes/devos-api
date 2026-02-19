@@ -44,14 +44,14 @@ export class CreateTestScenarioDto {
 
   @ApiProperty({
     description: 'Sample input for the test scenario',
-    type: 'object',
+    type: Object,
   })
   @IsObject()
   sampleInput!: Record<string, unknown>;
 
   @ApiPropertyOptional({
     description: 'Expected behavior or outputs',
-    type: 'object',
+    type: Object,
   })
   @IsOptional()
   @IsObject()

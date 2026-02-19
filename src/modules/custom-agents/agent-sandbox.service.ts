@@ -443,7 +443,7 @@ export class AgentSandboxService {
     const customScenarios = await this.scenarioRepo.find({
       where: [
         { workspaceId, agentDefinitionId },
-        { workspaceId, agentDefinitionId: null }, // Reusable scenarios
+        { workspaceId, agentDefinitionId: null as any }, // Reusable scenarios
       ],
       order: { name: 'ASC' },
     });

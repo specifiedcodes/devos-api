@@ -105,9 +105,15 @@ describe('PayoutService', () => {
       const savedPayout = {
         id: 'payout-tx-id',
         payoutAccountId: mockPayoutAccountId,
+        stripePayoutId: null,
         amountCents: 5000,
         currency: 'USD',
         status: PayoutStatus.PENDING,
+        description: null,
+        failureReason: null,
+        processedAt: null,
+        completedAt: null,
+        createdAt: new Date(),
       };
 
       creatorEarningsService.canRequestPayout.mockResolvedValue({
@@ -390,9 +396,15 @@ describe('PayoutService', () => {
       const savedPayout = {
         id: 'auto-payout-id',
         payoutAccountId: mockPayoutAccountId,
+        stripePayoutId: null,
         amountCents: 5000,
         currency: 'USD',
         status: PayoutStatus.PENDING,
+        description: null,
+        failureReason: null,
+        processedAt: null,
+        completedAt: null,
+        createdAt: new Date(),
       };
 
       payoutAccountRepo.find.mockResolvedValue([

@@ -72,7 +72,7 @@ export class CreateSandboxSessionDto {
 
   @ApiPropertyOptional({
     description: 'Custom test inputs for the sandbox session',
-    type: 'object',
+    type: Object,
   })
   @IsOptional()
   @IsObject()
@@ -80,7 +80,7 @@ export class CreateSandboxSessionDto {
 
   @ApiPropertyOptional({
     description: 'Additional sandbox configuration options',
-    type: 'object',
+    type: Object,
   })
   @IsOptional()
   @IsObject()

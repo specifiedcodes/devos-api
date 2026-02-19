@@ -420,18 +420,32 @@ describe('AgentVersionService', () => {
 
       versionRepo.findOne
         .mockResolvedValueOnce({
+          id: 'v1',
+          agentDefinitionId: mockDefinitionId,
           version: '1.0.0',
           definitionSnapshot: {
             displayName: 'Test Agent',
             definition: { role: 'Old role' },
           },
+          changelog: null,
+          isPublished: true,
+          publishedAt: new Date(),
+          createdBy: mockActorId,
+          createdAt: new Date(),
         } as AgentVersion)
         .mockResolvedValueOnce({
+          id: 'v2',
+          agentDefinitionId: mockDefinitionId,
           version: '1.1.0',
           definitionSnapshot: {
             displayName: 'Test Agent',
             definition: { role: 'New role' },
           },
+          changelog: null,
+          isPublished: true,
+          publishedAt: new Date(),
+          createdBy: mockActorId,
+          createdAt: new Date(),
         } as AgentVersion);
 
       const result = await service.compareVersions(
@@ -492,7 +506,7 @@ describe('AgentVersionService', () => {
 
       versionRepo.findOne.mockResolvedValue(mockVersion);
 
-      dataSource.transaction = jest.fn((cb) =>
+      (dataSource.transaction as any) = jest.fn((cb: any) =>
         cb({
           save: jest.fn().mockResolvedValue({ ...mockVersion, isPublished: true }),
           update: jest.fn().mockResolvedValue({}),
@@ -559,11 +573,18 @@ describe('AgentVersionService', () => {
       } as AgentDefinition;
 
       const targetVersion = {
+        id: 'target-version-id',
+        agentDefinitionId: mockDefinitionId,
         version: '1.0.0',
         definitionSnapshot: {
           displayName: 'Old Name',
           definition: { role: 'Old role' },
         },
+        changelog: null,
+        isPublished: true,
+        publishedAt: new Date(),
+        createdBy: mockActorId,
+        createdAt: new Date(),
       } as AgentVersion;
 
       versionRepo.findOne.mockResolvedValue(targetVersion);
@@ -582,7 +603,7 @@ describe('AgentVersionService', () => {
         createdAt: new Date(),
       };
 
-      dataSource.transaction = jest.fn(async (cb) => {
+      (dataSource.transaction as any) = jest.fn(async (cb: any) => {
         const mockManager = {
           save: jest.fn()
             .mockResolvedValueOnce({}) // First save for definition

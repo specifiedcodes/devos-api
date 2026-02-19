@@ -226,16 +226,27 @@ describe('BillingController', () => {
             id: 'purchase-1',
             marketplaceAgentId: 'agent-1',
             marketplaceAgent: { displayName: 'Test Agent' } as any,
+            buyerUserId: 'user-uuid-123',
+            buyerWorkspaceId: 'workspace-uuid',
+            installedAgentId: null,
+            purchaseType: 'one_time' as any,
+            stripePaymentIntentId: 'pi_test_123',
+            stripeTransferId: null,
             amountCents: 1000,
+            platformFeeCents: 200,
+            creatorAmountCents: 800,
             currency: 'USD',
             status: 'completed' as any,
+            refundedAt: null,
+            refundReason: null,
+            refundedBy: null,
             createdAt: new Date(),
           },
         ],
         total: 1,
       });
 
-      const result = await controller.getUserPurchases(10, 0, mockReq);
+      const result = await controller.getUserPurchases({ limit: 10, offset: 0 }, mockReq);
 
       expect(result.purchases).toHaveLength(1);
       expect(result.total).toBe(1);
@@ -314,7 +325,7 @@ describe('BillingController', () => {
         total: 1,
       });
 
-      const result = await controller.getTransactionHistory({}, undefined, mockReq);
+      const result = await controller.getTransactionHistory(mockReq, {}, undefined);
 
       expect(result.transactions).toHaveLength(1);
     });
@@ -357,8 +368,15 @@ describe('BillingController', () => {
         payouts: [
           {
             id: 'payout-1',
+            payoutAccountId: 'payout-account-uuid',
+            stripePayoutId: 'po_test_123',
             amountCents: 5000,
+            currency: 'USD',
             status: 'completed' as any,
+            description: 'Payout to creator',
+            failureReason: null,
+            processedAt: new Date(),
+            completedAt: new Date(),
             createdAt: new Date(),
           },
         ],

@@ -19,7 +19,7 @@ export class SendSandboxMessageDto {
 
   @ApiPropertyOptional({
     description: 'Optional input variables for the message',
-    type: 'object',
+    type: Object,
   })
   @IsOptional()
   @IsObject()

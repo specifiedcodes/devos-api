@@ -592,10 +592,20 @@ describe('AgentSandboxService', () => {
       agentDefRepo.findOne.mockResolvedValue(mockAgentDef as AgentDefinition);
       scenarioRepo.create.mockReturnValue({
         id: 'new-scenario-id',
+        workspaceId: mockWorkspaceId,
+        isBuiltIn: false,
+        createdBy: mockUserId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         ...createDto,
       } as AgentTestScenario);
       scenarioRepo.save.mockResolvedValue({
         id: 'new-scenario-id',
+        workspaceId: mockWorkspaceId,
+        isBuiltIn: false,
+        createdBy: mockUserId,
+        createdAt: new Date(),
+        updatedAt: new Date(),
         ...createDto,
       } as AgentTestScenario);
     });

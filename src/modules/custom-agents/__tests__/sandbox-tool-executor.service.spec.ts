@@ -147,9 +147,9 @@ describe('SandboxToolExecutorService', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.output!.pullRequest).toBeDefined();
-        expect(result.output!.pullRequest.title).toBe('Test PR');
-        expect(result.output!.pullRequest.html_url).toContain('github.com');
+        expect((result.output as any).pullRequest).toBeDefined();
+        expect((result.output as any).pullRequest.title).toBe('Test PR');
+        expect((result.output as any).pullRequest.html_url).toContain('github.com');
       });
 
       it('should list files from file system', async () => {
@@ -167,7 +167,7 @@ describe('SandboxToolExecutorService', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.output!.files.length).toBe(2);
+        expect((result.output as any).files.length).toBe(2);
       });
     });
 
@@ -182,9 +182,9 @@ describe('SandboxToolExecutorService', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.output!.deployment).toBeDefined();
-        expect(result.output!.deployment.environment).toBe('staging');
-        expect(result.output!.deployment.note).toContain('sandbox');
+        expect((result.output as any).deployment).toBeDefined();
+        expect((result.output as any).deployment.environment).toBe('staging');
+        expect((result.output as any).deployment.note).toContain('sandbox');
       });
 
       it('should return mock deployment for deploy_production', async () => {
@@ -197,8 +197,8 @@ describe('SandboxToolExecutorService', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.output!.deployment.environment).toBe('production');
-        expect(result.output!.deployment.note).toContain('sandbox');
+        expect((result.output as any).deployment.environment).toBe('production');
+        expect((result.output as any).deployment.note).toContain('sandbox');
       });
 
       it('should return mock status for deployment status', async () => {
@@ -323,7 +323,7 @@ describe('SandboxToolExecutorService', () => {
         );
 
         expect(result.success).toBe(true);
-        expect(result.output!.files.length).toBe(2);
+        expect((result.output as any).files.length).toBe(2);
       });
     });
 

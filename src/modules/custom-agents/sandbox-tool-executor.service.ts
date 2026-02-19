@@ -19,7 +19,7 @@ export interface SandboxToolResult {
   output: Record<string, unknown> | null;
   denialReason?: string;
   errorMessage?: string;
-  durationMs: number;
+  durationMs?: number;
 }
 
 export interface ToolPermissions {
@@ -218,6 +218,7 @@ export class SandboxToolExecutorService {
       return {
         success: true,
         status: SandboxToolCallStatus.SUCCESS,
+        durationMs: 0,
         output: {
           message: 'Files retrieved from sandbox repository',
           files: {
@@ -233,6 +234,7 @@ export class SandboxToolExecutorService {
     return {
       success: true,
       status: SandboxToolCallStatus.SUCCESS,
+      durationMs: 0,
       output: {
         message: 'Files retrieved from sandbox',
         files,

@@ -32,6 +32,11 @@ Be precise about system states and operational concerns.`,
 Respond to the user's question about overall project status.
 Include active agents, current phase, and high-level progress.
 Provide a holistic view of the project's state and next steps.`,
+
+  [AgentType.CUSTOM]: `You are a Custom Agent. You perform specialized tasks as defined by your configuration.
+Respond to the user's question about your specific functionality.
+Include relevant status and progress information.
+Be helpful and provide clear explanations of your capabilities.`,
 };
 
 /**
@@ -144,6 +149,7 @@ export function getAgentTypeName(agentType: AgentType): string {
     [AgentType.PLANNER]: 'Planner Agent',
     [AgentType.DEVOPS]: 'DevOps Agent',
     [AgentType.ORCHESTRATOR]: 'Orchestrator',
+    [AgentType.CUSTOM]: 'Custom Agent',
   };
   return names[agentType] || agentType;
 }
