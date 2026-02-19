@@ -12,6 +12,8 @@ import {
 } from '@nestjs/common';
 import { CustomAgentsController } from '../custom-agents.controller';
 import { CustomAgentsService } from '../custom-agents.service';
+import { AgentSandboxService } from '../agent-sandbox.service';
+import { AgentVersionService } from '../agent-version.service';
 import { AgentDefinitionValidatorService } from '../agent-definition-validator.service';
 import { AgentDefinitionResponseDto, AgentDefinitionValidationResponseDto } from '../dto/agent-definition-response.dto';
 import { AGENT_DEFINITION_CONSTANTS, AGENT_DEFINITION_JSON_SCHEMA } from '../constants/agent-definition.constants';
@@ -75,6 +77,30 @@ describe('CustomAgentsController', () => {
           provide: AgentDefinitionValidatorService,
           useValue: {
             getSchemaForVersion: jest.fn(),
+          },
+        },
+        {
+          provide: AgentSandboxService,
+          useValue: {
+            createSession: jest.fn(),
+            listTestScenarios: jest.fn(),
+            createTestScenario: jest.fn(),
+            startSession: jest.fn(),
+            sendTestMessage: jest.fn(),
+            getSessionStatus: jest.fn(),
+            cancelSession: jest.fn(),
+            getSessionResults: jest.fn(),
+          },
+        },
+        {
+          provide: AgentVersionService,
+          useValue: {
+            createVersion: jest.fn(),
+            listVersions: jest.fn(),
+            getVersion: jest.fn(),
+            compareVersions: jest.fn(),
+            publishVersion: jest.fn(),
+            rollbackToVersion: jest.fn(),
           },
         },
       ],

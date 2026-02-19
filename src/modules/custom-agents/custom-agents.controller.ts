@@ -2,11 +2,13 @@
  * CustomAgentsController
  *
  * Story 18-1: Agent Definition Schema
+ * Story 18-3: Agent Sandbox Testing
+ * Story 18-4: Agent Versioning
  *
  * REST API endpoints for custom agent definition CRUD, validation,
- * import/export, and metadata queries.
+ * import/export, metadata queries, sandbox testing, and version management.
  *
- * Important: Static routes (/validate, /schema, /categories, /tools, /import)
+ * Important: Static routes (/validate, /schema, /categories, /tools, /import, /sandbox)
  * are registered BEFORE dynamic /:definitionId routes to prevent Express
  * from treating static segments as UUID parameters.
  */
@@ -37,12 +39,29 @@ import {
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CustomAgentsService } from './custom-agents.service';
+import { AgentSandboxService } from './agent-sandbox.service';
+import { AgentVersionService } from './agent-version.service';
 import { CreateAgentDefinitionDto } from './dto/create-agent-definition.dto';
 import { UpdateAgentDefinitionDto } from './dto/update-agent-definition.dto';
 import { ValidateAgentDefinitionDto } from './dto/validate-agent-definition.dto';
 import { ListAgentDefinitionsQueryDto } from './dto/list-agent-definitions-query.dto';
 import { ImportAgentDefinitionDto } from './dto/import-agent-definition.dto';
 import { AgentDefinitionResponseDto, AgentDefinitionValidationResponseDto } from './dto/agent-definition-response.dto';
+import { CreateSandboxSessionDto } from './dto/create-sandbox-session.dto';
+import {
+  SandboxSessionResponseDto,
+  SandboxSessionStatusDto,
+  SandboxSessionResultsDto,
+} from './dto/sandbox-session-response.dto';
+import { SendSandboxMessageDto } from './dto/send-sandbox-message.dto';
+import { TestScenarioDto, CreateTestScenarioDto } from './dto/create-test-scenario.dto';
+import { CreateAgentVersionDto } from './dto/create-agent-version.dto';
+import { ListVersionsQueryDto } from './dto/list-versions-query.dto';
+import {
+  AgentVersionResponseDto,
+  PaginatedVersionListDto,
+  VersionDiffResponseDto,
+} from './dto/agent-version-response.dto';
 import { AgentDefinitionValidatorService } from './agent-definition-validator.service';
 import { AGENT_DEFINITION_CONSTANTS } from './constants/agent-definition.constants';
 
@@ -54,6 +73,8 @@ export class CustomAgentsController {
   constructor(
     private readonly customAgentsService: CustomAgentsService,
     private readonly validatorService: AgentDefinitionValidatorService,
+    private readonly sandboxService: AgentSandboxService,
+    private readonly versionService: AgentVersionService,
   ) {}
 
   // ---- Static routes FIRST (before :definitionId) ----
@@ -262,5 +283,241 @@ export class CustomAgentsController {
       res.setHeader('Content-Type', 'text/yaml');
       return yamlStr;
     }
+  }
+
+  // ---- Sandbox Testing endpoints (Story 18-3) ----
+
+  @Post(':definitionId/sandbox')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new sandbox session for testing' })
+  @ApiResponse({ status: 201, type: SandboxSessionResponseDto })
+  @ApiResponse({ status: 400, description: 'Agent is inactive or session already exists' })
+  @ApiResponse({ status: 404, description: 'Agent definition not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  async createSandboxSession(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Body() dto: CreateSandboxSessionDto,
+    @Req() req: any,
+  ): Promise<SandboxSessionResponseDto> {
+    const userId = req.user?.id || req.user?.userId;
+    return this.sandboxService.createSession(workspaceId, definitionId, userId, dto);
+  }
+
+  @Get(':definitionId/test-scenarios')
+  @ApiOperation({ summary: 'List test scenarios for an agent' })
+  @ApiResponse({ status: 200, type: [TestScenarioDto] })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  async listTestScenarios(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+  ): Promise<TestScenarioDto[]> {
+    return this.sandboxService.listTestScenarios(workspaceId, definitionId);
+  }
+
+  @Post(':definitionId/test-scenarios')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a custom test scenario' })
+  @ApiResponse({ status: 201, type: TestScenarioDto })
+  @ApiResponse({ status: 404, description: 'Agent definition not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  async createTestScenario(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Body() dto: CreateTestScenarioDto,
+    @Req() req: any,
+  ): Promise<TestScenarioDto> {
+    const userId = req.user?.id || req.user?.userId;
+    return this.sandboxService.createTestScenario(workspaceId, definitionId, dto, userId);
+  }
+
+  // ---- Sandbox Session endpoints (using sandbox/:sessionId pattern) ----
+
+  @Post('sandbox/:sessionId/start')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start sandbox execution' })
+  @ApiResponse({ status: 200, description: 'Session started' })
+  @ApiResponse({ status: 400, description: 'Session cannot be started' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'sessionId', type: 'string', format: 'uuid' })
+  async startSandboxSession(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Req() req: any,
+  ): Promise<void> {
+    const userId = req.user?.id || req.user?.userId;
+    return this.sandboxService.startSession(sessionId, userId);
+  }
+
+  @Post('sandbox/:sessionId/message')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Send a test message to sandbox agent' })
+  @ApiResponse({ status: 200, description: 'Message sent' })
+  @ApiResponse({ status: 400, description: 'Session is not running' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'sessionId', type: 'string', format: 'uuid' })
+  async sendSandboxMessage(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Body() dto: SendSandboxMessageDto,
+  ): Promise<void> {
+    return this.sandboxService.sendTestMessage(sessionId, dto.message, dto.inputs);
+  }
+
+  @Get('sandbox/:sessionId')
+  @ApiOperation({ summary: 'Get sandbox session status' })
+  @ApiResponse({ status: 200, type: SandboxSessionStatusDto })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'sessionId', type: 'string', format: 'uuid' })
+  async getSandboxStatus(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ): Promise<SandboxSessionStatusDto> {
+    return this.sandboxService.getSessionStatus(sessionId);
+  }
+
+  @Post('sandbox/:sessionId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel sandbox session' })
+  @ApiResponse({ status: 200, description: 'Session cancelled' })
+  @ApiResponse({ status: 400, description: 'Session cannot be cancelled' })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'sessionId', type: 'string', format: 'uuid' })
+  async cancelSandboxSession(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @Req() req: any,
+  ): Promise<void> {
+    const userId = req.user?.id || req.user?.userId;
+    return this.sandboxService.cancelSession(sessionId, userId);
+  }
+
+  @Get('sandbox/:sessionId/results')
+  @ApiOperation({ summary: 'Get sandbox session results' })
+  @ApiResponse({ status: 200, type: SandboxSessionResultsDto })
+  @ApiResponse({ status: 404, description: 'Session not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'sessionId', type: 'string', format: 'uuid' })
+  async getSandboxResults(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+  ): Promise<SandboxSessionResultsDto> {
+    return this.sandboxService.getSessionResults(sessionId);
+  }
+
+  // ---- Version Management endpoints (Story 18-4) ----
+
+  @Get(':definitionId/versions')
+  @ApiOperation({ summary: 'List all versions for an agent definition' })
+  @ApiResponse({ status: 200, type: PaginatedVersionListDto })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  @ApiBearerAuth('JWT-auth')
+  async listVersions(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Query() query: ListVersionsQueryDto,
+  ): Promise<PaginatedVersionListDto> {
+    return this.versionService.listVersions(workspaceId, definitionId, query);
+  }
+
+  @Post(':definitionId/versions')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a new version from current definition' })
+  @ApiResponse({ status: 201, type: AgentVersionResponseDto })
+  @ApiResponse({ status: 400, description: 'Invalid version or validation failed' })
+  @ApiResponse({ status: 404, description: 'Agent definition not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  @ApiBearerAuth('JWT-auth')
+  async createVersion(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Body() dto: CreateAgentVersionDto,
+    @Req() req: any,
+  ): Promise<AgentVersionResponseDto> {
+    const actorId = req.user?.id || req.user?.userId;
+    return this.versionService.createVersion(workspaceId, definitionId, dto, actorId);
+  }
+
+  @Get(':definitionId/versions/:version')
+  @ApiOperation({ summary: 'Get a specific version' })
+  @ApiResponse({ status: 200, type: AgentVersionResponseDto })
+  @ApiResponse({ status: 404, description: 'Version not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'version', type: 'string', description: 'Semver version (e.g., 1.2.0)' })
+  @ApiBearerAuth('JWT-auth')
+  async getVersion(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Param('version') version: string,
+  ): Promise<AgentVersionResponseDto> {
+    return this.versionService.getVersion(workspaceId, definitionId, version);
+  }
+
+  @Get(':definitionId/versions/:fromVersion/compare/:toVersion')
+  @ApiOperation({ summary: 'Compare two versions and get diff' })
+  @ApiResponse({ status: 200, type: VersionDiffResponseDto })
+  @ApiResponse({ status: 404, description: 'Version not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'fromVersion', type: 'string', description: 'Source version' })
+  @ApiParam({ name: 'toVersion', type: 'string', description: 'Target version' })
+  @ApiBearerAuth('JWT-auth')
+  async compareVersions(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Param('fromVersion') fromVersion: string,
+    @Param('toVersion') toVersion: string,
+  ): Promise<VersionDiffResponseDto> {
+    return this.versionService.compareVersions(workspaceId, definitionId, fromVersion, toVersion);
+  }
+
+  @Post(':definitionId/versions/:version/publish')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Publish a version' })
+  @ApiResponse({ status: 200, type: AgentVersionResponseDto })
+  @ApiResponse({ status: 400, description: 'Version already published' })
+  @ApiResponse({ status: 404, description: 'Version not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'version', type: 'string' })
+  @ApiBearerAuth('JWT-auth')
+  async publishVersion(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Param('version') version: string,
+    @Req() req: any,
+  ): Promise<AgentVersionResponseDto> {
+    const actorId = req.user?.id || req.user?.userId;
+    return this.versionService.publishVersion(workspaceId, definitionId, version, actorId);
+  }
+
+  @Post(':definitionId/versions/:version/rollback')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Rollback to a specific version' })
+  @ApiResponse({ status: 200, type: AgentVersionResponseDto })
+  @ApiResponse({ status: 400, description: 'Cannot rollback to current version' })
+  @ApiResponse({ status: 404, description: 'Version not found' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'definitionId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'version', type: 'string' })
+  @ApiBearerAuth('JWT-auth')
+  async rollbackToVersion(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('definitionId', ParseUUIDPipe) definitionId: string,
+    @Param('version') targetVersion: string,
+    @Req() req: any,
+  ): Promise<AgentVersionResponseDto> {
+    const actorId = req.user?.id || req.user?.userId;
+    return this.versionService.rollbackToVersion(workspaceId, definitionId, targetVersion, actorId);
   }
 }

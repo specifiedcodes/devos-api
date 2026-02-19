@@ -118,6 +118,10 @@ import { SsoModule } from './modules/sso/sso.module';
 import { AgentDefinition } from './database/entities/agent-definition.entity';
 import { AgentDefinitionAuditEvent } from './database/entities/agent-definition-audit-event.entity';
 import { CustomAgentsModule } from './modules/custom-agents/custom-agents.module';
+import { MarketplaceAgent } from './database/entities/marketplace-agent.entity';
+import { MarketplaceReview } from './database/entities/marketplace-review.entity';
+import { InstalledAgent } from './database/entities/installed-agent.entity';
+import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 
 @Module({
   imports: [
@@ -201,6 +205,9 @@ import { CustomAgentsModule } from './modules/custom-agents/custom-agents.module
         ScimSyncLog,
         AgentDefinition,
         AgentDefinitionAuditEvent,
+        MarketplaceAgent,
+        MarketplaceReview,
+        InstalledAgent,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -264,6 +271,7 @@ import { CustomAgentsModule } from './modules/custom-agents/custom-agents.module
     ProjectFilesModule,
     SsoModule,
     CustomAgentsModule,
+    MarketplaceModule,
   ],
   controllers: [AppController],
   providers: [

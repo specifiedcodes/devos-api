@@ -8,10 +8,12 @@ import {
   JoinColumn,
   Index,
   Unique,
+  OneToMany,
 } from 'typeorm';
 import { IsNotEmpty, IsOptional, IsBoolean, IsUUID, MaxLength, Matches } from 'class-validator';
 import { Workspace } from './workspace.entity';
 import { User } from './user.entity';
+import { AgentVersion } from './agent-version.entity';
 
 export enum AgentDefinitionCategory {
   DEVELOPMENT = 'development',
@@ -125,6 +127,16 @@ export class AgentDefinition {
   @Column({ type: 'boolean', name: 'is_active', default: true })
   @IsBoolean()
   isActive!: boolean;
+
+  @Column({ type: 'varchar', length: 50, name: 'latest_published_version', nullable: true })
+  @IsOptional()
+  @Matches(/^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$/, {
+    message: 'latestPublishedVersion must follow semver format (e.g., 1.0.0, 1.0.0-beta.1)',
+  })
+  latestPublishedVersion!: string | null;
+
+  @OneToMany(() => AgentVersion, (version) => version.agentDefinition)
+  versions?: AgentVersion[];
 
   @Column({ type: 'uuid', name: 'created_by' })
   @IsUUID()

@@ -21,6 +21,10 @@ export enum AgentDefinitionAuditEventType {
   AGENT_DEF_PUBLISHED = 'agent_def_published',
   AGENT_DEF_UNPUBLISHED = 'agent_def_unpublished',
   AGENT_DEF_VALIDATION_FAILED = 'agent_def_validation_failed',
+  // Version management events (Story 18-4)
+  AGENT_VERSION_CREATED = 'agent_version_created',
+  AGENT_VERSION_PUBLISHED = 'agent_version_published',
+  AGENT_VERSION_ROLLBACK = 'agent_version_rollback',
 }
 
 @Entity('agent_definition_audit_events')
