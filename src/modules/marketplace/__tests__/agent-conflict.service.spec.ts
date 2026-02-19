@@ -147,14 +147,17 @@ describe('AgentConflictService', () => {
           marketplaceAgent: { displayName: 'Other Agent' },
         },
       ] as any);
-      definitionRepo.findOne.mockResolvedValue({
-        definition: {
-          spec: {
-            tools: { allowed: ['read_file', 'execute_command'] },
-            permissions: ['file_access'],
+      definitionRepo.find.mockResolvedValue([
+        {
+          id: 'local-def-1',
+          definition: {
+            spec: {
+              tools: { allowed: ['read_file', 'execute_command'] },
+              permissions: ['file_access'],
+            },
           },
         },
-      } as any);
+      ] as any);
 
       const conflicts = await service.checkToolPermissionConflicts(
         mockDefinition as any,
@@ -168,6 +171,7 @@ describe('AgentConflictService', () => {
 
     it('should return empty conflicts when no installed agents', async () => {
       installedAgentRepo.find.mockResolvedValue([] as any);
+      definitionRepo.find.mockResolvedValue([] as any);
 
       const conflicts = await service.checkToolPermissionConflicts(
         mockDefinition as any,
@@ -189,13 +193,16 @@ describe('AgentConflictService', () => {
           marketplaceAgent: { displayName: 'Other Agent' },
         },
       ] as any);
-      definitionRepo.findOne.mockResolvedValue({
-        definition: {
-          spec: {
-            triggers: [{ type: 'webhook', event: 'push' }],
+      definitionRepo.find.mockResolvedValue([
+        {
+          id: 'local-def-1',
+          definition: {
+            spec: {
+              triggers: [{ type: 'webhook', event: 'push' }],
+            },
           },
         },
-      } as any);
+      ] as any);
 
       const conflicts = await service.checkTriggerConflicts(
         mockDefinition as any,

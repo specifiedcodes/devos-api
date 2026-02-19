@@ -1682,6 +1682,7 @@ export class MarketplaceService {
    */
   async getInstallationStatus(
     installationId: string,
+    actorId: string,
   ): Promise<InstallationStatusDto> {
     const log = await this.installationLogRepo.findOne({
       where: { id: installationId },
@@ -1691,6 +1692,14 @@ export class MarketplaceService {
     if (!log) {
       throw new NotFoundException('Installation not found');
     }
+
+    // Validate workspace membership
+    await this.validateMemberRole(log.workspaceId, actorId, [
+      WorkspaceRole.OWNER,
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.DEVELOPER,
+      WorkspaceRole.VIEWER,
+    ]);
 
     return {
       id: log.id,
@@ -1729,6 +1738,13 @@ export class MarketplaceService {
     if (!log) {
       throw new NotFoundException('Installation not found');
     }
+
+    // Validate workspace membership (only workspace members can cancel)
+    await this.validateMemberRole(log.workspaceId, actorId, [
+      WorkspaceRole.OWNER,
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.DEVELOPER,
+    ]);
 
     if (log.status === InstallationStatus.COMPLETED) {
       throw new BadRequestException('Cannot cancel a completed installation');
@@ -1774,13 +1790,32 @@ export class MarketplaceService {
       throw new NotFoundException('Installation not found');
     }
 
+    // Validate workspace membership (only workspace members can rollback)
+    await this.validateMemberRole(log.workspaceId, actorId, [
+      WorkspaceRole.OWNER,
+      WorkspaceRole.ADMIN,
+      WorkspaceRole.DEVELOPER,
+    ]);
+
     if (log.status !== InstallationStatus.FAILED && log.status !== InstallationStatus.ROLLED_BACK) {
       throw new BadRequestException('Can only rollback failed or cancelled installations');
     }
 
     // If an agent was partially installed, clean it up
     if (log.installedAgentId) {
-      await this.installedAgentRepo.delete({ id: log.installedAgentId });
+      // Get the installed agent to find the local definition
+      const installedAgent = await this.installedAgentRepo.findOne({
+        where: { id: log.installedAgentId },
+      });
+
+      if (installedAgent) {
+        // Delete the local definition if it exists
+        if (installedAgent.localDefinitionId) {
+          await this.definitionRepo.delete({ id: installedAgent.localDefinitionId });
+        }
+        // Delete the installed agent record
+        await this.installedAgentRepo.delete({ id: log.installedAgentId });
+      }
     }
 
     // Update status

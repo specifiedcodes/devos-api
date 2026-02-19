@@ -286,8 +286,9 @@ describe('MarketplaceService - Installation Flow (Story 18-8)', () => {
         startedAt: new Date(),
         completedAt: new Date(),
       } as any);
+      memberRepo.findOne.mockResolvedValue(mockMember as any);
 
-      const status = await service.getInstallationStatus('install-1');
+      const status = await service.getInstallationStatus('install-1', 'user-1');
 
       expect(status.id).toBe('install-1');
       expect(status.status).toBe(InstallationStatus.COMPLETED);
@@ -297,7 +298,26 @@ describe('MarketplaceService - Installation Flow (Story 18-8)', () => {
     it('should throw NotFoundException when installation not found', async () => {
       installationLogRepo.findOne.mockResolvedValue(null);
 
-      await expect(service.getInstallationStatus('non-existent')).rejects.toThrow('Installation not found');
+      await expect(service.getInstallationStatus('non-existent', 'user-1')).rejects.toThrow('Installation not found');
+    });
+
+    it('should throw ForbiddenException when user is not workspace member', async () => {
+      installationLogRepo.findOne.mockResolvedValue({
+        id: 'install-1',
+        workspaceId: 'workspace-1',
+        marketplaceAgentId: 'agent-1',
+        marketplaceAgent: mockMarketplaceAgent,
+        targetVersion: '1.0.0',
+        status: InstallationStatus.COMPLETED,
+        currentStep: null,
+        progressPercentage: 100,
+        steps: [],
+        startedAt: new Date(),
+        completedAt: new Date(),
+      } as any);
+      memberRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.getInstallationStatus('install-1', 'user-1')).rejects.toThrow('You do not have permission');
     });
   });
 
@@ -305,8 +325,10 @@ describe('MarketplaceService - Installation Flow (Story 18-8)', () => {
     it('should cancel a pending installation', async () => {
       installationLogRepo.findOne.mockResolvedValue({
         id: 'install-1',
+        workspaceId: 'workspace-1',
         status: InstallationStatus.VALIDATING,
       } as any);
+      memberRepo.findOne.mockResolvedValue(mockMember as any);
       installationLogRepo.update.mockResolvedValue({} as any);
 
       await service.cancelInstallation('install-1', 'user-1');
@@ -321,8 +343,10 @@ describe('MarketplaceService - Installation Flow (Story 18-8)', () => {
     it('should throw error when trying to cancel completed installation', async () => {
       installationLogRepo.findOne.mockResolvedValue({
         id: 'install-1',
+        workspaceId: 'workspace-1',
         status: InstallationStatus.COMPLETED,
       } as any);
+      memberRepo.findOne.mockResolvedValue(mockMember as any);
 
       await expect(service.cancelInstallation('install-1', 'user-1')).rejects.toThrow(
         'Cannot cancel a completed installation',
@@ -334,9 +358,11 @@ describe('MarketplaceService - Installation Flow (Story 18-8)', () => {
     it('should rollback a failed installation', async () => {
       installationLogRepo.findOne.mockResolvedValue({
         id: 'install-1',
+        workspaceId: 'workspace-1',
         status: InstallationStatus.FAILED,
         installedAgentId: null,
       } as any);
+      memberRepo.findOne.mockResolvedValue(mockMember as any);
       installationLogRepo.update.mockResolvedValue({} as any);
 
       await service.rollbackInstallation('install-1', 'user-1');
@@ -345,25 +371,35 @@ describe('MarketplaceService - Installation Flow (Story 18-8)', () => {
       expect(eventsGateway.emitRollback).toHaveBeenCalled();
     });
 
-    it('should cleanup partially installed agent', async () => {
+    it('should cleanup partially installed agent and local definition', async () => {
       installationLogRepo.findOne.mockResolvedValue({
         id: 'install-1',
+        workspaceId: 'workspace-1',
         status: InstallationStatus.FAILED,
         installedAgentId: 'installed-1',
       } as any);
+      memberRepo.findOne.mockResolvedValue(mockMember as any);
+      installedAgentRepo.findOne.mockResolvedValue({
+        id: 'installed-1',
+        localDefinitionId: 'def-1',
+      } as any);
+      definitionRepo.delete.mockResolvedValue({} as any);
       installedAgentRepo.delete.mockResolvedValue({} as any);
       installationLogRepo.update.mockResolvedValue({} as any);
 
       await service.rollbackInstallation('install-1', 'user-1');
 
+      expect(definitionRepo.delete).toHaveBeenCalledWith({ id: 'def-1' });
       expect(installedAgentRepo.delete).toHaveBeenCalledWith({ id: 'installed-1' });
     });
 
     it('should throw error when trying to rollback non-failed installation', async () => {
       installationLogRepo.findOne.mockResolvedValue({
         id: 'install-1',
+        workspaceId: 'workspace-1',
         status: InstallationStatus.INSTALLING,
       } as any);
+      memberRepo.findOne.mockResolvedValue(mockMember as any);
 
       await expect(service.rollbackInstallation('install-1', 'user-1')).rejects.toThrow(
         'Can only rollback failed or cancelled installations',

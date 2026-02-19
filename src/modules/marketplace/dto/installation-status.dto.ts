@@ -18,29 +18,14 @@ import {
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
-export enum InstallationStatus {
-  PENDING = 'pending',
-  VALIDATING = 'validating',
-  DOWNLOADING = 'downloading',
-  RESOLVING_DEPENDENCIES = 'resolving_dependencies',
-  INSTALLING = 'installing',
-  CONFIGURING = 'configuring',
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  ROLLED_BACK = 'rolled_back',
-}
+// Re-export enums from entity to ensure single source of truth
+export {
+  InstallationStatus,
+  InstallationStep,
+} from '../../../database/entities/installation-log.entity';
 
-export enum InstallationStep {
-  PRE_CHECK = 'pre_check',
-  VALIDATE_PERMISSIONS = 'validate_permissions',
-  CHECK_DEPENDENCIES = 'check_dependencies',
-  CHECK_CONFLICTS = 'check_conflicts',
-  COPY_DEFINITION = 'copy_definition',
-  INSTALL_DEPENDENCIES = 'install_dependencies',
-  CONFIGURE_AGENT = 'configure_agent',
-  VERIFY_INSTALLATION = 'verify_installation',
-  COMPLETE = 'complete',
-}
+// Import for use in this file
+import { InstallationStatus, InstallationStep } from '../../../database/entities/installation-log.entity';
 
 class StepInfoDto {
   @ApiProperty({ description: 'Step identifier', enum: InstallationStep })
@@ -97,8 +82,8 @@ export class InstallationStatusDto {
 
   @ApiPropertyOptional({ description: 'Current step being executed', enum: InstallationStep })
   @IsOptional()
-  @IsString()
-  currentStep?: string;
+  @IsEnum(InstallationStep)
+  currentStep?: InstallationStep;
 
   @ApiProperty({ description: 'Progress percentage (0-100)', example: 50 })
   @IsNumber()

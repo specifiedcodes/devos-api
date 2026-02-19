@@ -7,7 +7,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, In } from 'typeorm';
 import { InstalledAgent } from '../../database/entities/installed-agent.entity';
 import { AgentDefinition } from '../../database/entities/agent-definition.entity';
 import { MarketplaceAgent } from '../../database/entities/marketplace-agent.entity';
@@ -192,19 +192,30 @@ export class AgentConflictService {
     const newAgentTools = this.extractToolsFromDefinition(definition);
     const newAgentPermissions = this.extractPermissionsFromDefinition(definition);
 
-    // Get all installed agents
+    // Get all installed agents with their local definitions in a single query
     const installedAgents = await this.installedAgentRepo.find({
       where: { workspaceId },
       relations: ['marketplaceAgent'],
     });
 
+    // Batch fetch all local definitions to avoid N+1 query
+    const localDefinitionIds = installedAgents
+      .filter((ia) => ia.localDefinitionId)
+      .map((ia) => ia.localDefinitionId);
+
+    const localDefinitions = localDefinitionIds.length > 0
+      ? await this.definitionRepo.find({
+          where: { id: In(localDefinitionIds) },
+        })
+      : [];
+
+    // Create a map for quick lookup
+    const definitionMap = new Map(localDefinitions.map((d) => [d.id, d]));
+
     for (const installed of installedAgents) {
       if (!installed.localDefinitionId) continue;
 
-      const localDef = await this.definitionRepo.findOne({
-        where: { id: installed.localDefinitionId },
-      });
-
+      const localDef = definitionMap.get(installed.localDefinitionId);
       if (!localDef) continue;
 
       const existingTools = this.extractToolsFromDefinition(localDef);
@@ -267,13 +278,24 @@ export class AgentConflictService {
       relations: ['marketplaceAgent'],
     });
 
+    // Batch fetch all local definitions to avoid N+1 query
+    const localDefinitionIds = installedAgents
+      .filter((ia) => ia.localDefinitionId)
+      .map((ia) => ia.localDefinitionId);
+
+    const localDefinitions = localDefinitionIds.length > 0
+      ? await this.definitionRepo.find({
+          where: { id: In(localDefinitionIds) },
+        })
+      : [];
+
+    // Create a map for quick lookup
+    const definitionMap = new Map(localDefinitions.map((d) => [d.id, d]));
+
     for (const installed of installedAgents) {
       if (!installed.localDefinitionId) continue;
 
-      const localDef = await this.definitionRepo.findOne({
-        where: { id: installed.localDefinitionId },
-      });
-
+      const localDef = definitionMap.get(installed.localDefinitionId);
       if (!localDef) continue;
 
       const existingTriggers = this.extractTriggersFromDefinition(localDef);

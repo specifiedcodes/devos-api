@@ -103,7 +103,7 @@ export class InstallationLog {
     name: 'current_step',
     nullable: true,
   })
-  @IsString()
+  @IsEnum(InstallationStep)
   @IsOptional()
   currentStep!: InstallationStep | null;
 

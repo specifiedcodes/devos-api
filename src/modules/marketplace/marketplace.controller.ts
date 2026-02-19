@@ -355,12 +355,15 @@ export class MarketplaceController {
   @Get('installations/:installationId')
   @ApiOperation({ summary: 'Get installation status/progress' })
   @ApiResponse({ status: 200, type: InstallationStatusDto })
+  @ApiResponse({ status: 403, description: 'Not a workspace member' })
   @ApiResponse({ status: 404, description: 'Installation not found' })
   @ApiParam({ name: 'installationId', type: 'string', format: 'uuid' })
   async getInstallationStatus(
     @Param('installationId', ParseUUIDPipe) installationId: string,
+    @Req() req: any,
   ): Promise<InstallationStatusDto> {
-    return this.marketplaceService.getInstallationStatus(installationId);
+    const actorId = req.user?.id || req.user?.userId;
+    return this.marketplaceService.getInstallationStatus(installationId, actorId);
   }
 
   @Post('installations/:installationId/cancel')
