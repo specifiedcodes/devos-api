@@ -4,6 +4,7 @@
  * Story 18-5: Agent Marketplace Backend
  * Story 18-7: Agent Rating & Reviews
  * Story 18-8: Agent Installation Flow
+ * Story 18-9: Agent Revenue Sharing
  *
  * Service for publishing, discovering, and installing marketplace agents.
  */
@@ -16,6 +17,7 @@ import {
   Logger,
   Inject,
   forwardRef,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, QueryRunner, SelectQueryBuilder } from 'typeorm';
@@ -44,6 +46,8 @@ import { AgentDefinitionValidatorService } from '../custom-agents/agent-definiti
 import { AgentDependencyService } from './agent-dependency.service';
 import { AgentConflictService } from './agent-conflict.service';
 import { MarketplaceEventsGateway } from './marketplace-events.gateway';
+import { PaymentRequiredException } from './payment-required.exception';
+import { AgentPurchaseService } from '../billing/services/agent-purchase.service';
 import {
   PublishAgentDto,
   UpdateListingDto,
@@ -116,6 +120,8 @@ export class MarketplaceService {
     private readonly conflictService: AgentConflictService,
     @Inject(forwardRef(() => MarketplaceEventsGateway))
     private readonly eventsGateway: MarketplaceEventsGateway,
+    @Optional()
+    private readonly purchaseService: AgentPurchaseService,
   ) {}
 
   // ---- Publishing ----
@@ -531,6 +537,9 @@ export class MarketplaceService {
     if (agent.status !== MarketplaceAgentStatus.PUBLISHED) {
       throw new BadRequestException('This agent is not available for installation');
     }
+
+    // Story 18-9: Validate purchase for paid agents
+    await this.validatePurchaseForInstall(marketplaceAgentId, actorId);
 
     // Check if already installed
     const existing = await this.installedAgentRepo.findOne({
@@ -2079,6 +2088,46 @@ export class MarketplaceService {
     if (!member || !allowedRoles.includes(member.role)) {
       throw new ForbiddenException(
         'You do not have permission to perform this action in this workspace',
+      );
+    }
+  }
+
+  /**
+   * Story 18-9: Validate purchase for paid agent installation.
+   * Checks if a paid agent requires purchase before installation.
+   * Throws PaymentRequiredException if not purchased.
+   */
+  async validatePurchaseForInstall(
+    marketplaceAgentId: string,
+    userId: string,
+  ): Promise<void> {
+    // Skip validation if purchase service not available
+    if (!this.purchaseService) {
+      return;
+    }
+
+    const agent = await this.marketplaceAgentRepo.findOne({
+      where: { id: marketplaceAgentId },
+    });
+
+    if (!agent) {
+      throw new NotFoundException('Agent not found');
+    }
+
+    // Free agents don't require purchase
+    if (agent.pricingType === MarketplacePricingType.FREE) {
+      return;
+    }
+
+    // Check if user has purchased access
+    const hasAccess = await this.purchaseService.hasPurchasedAccess(
+      marketplaceAgentId,
+      userId,
+    );
+
+    if (!hasAccess) {
+      throw new PaymentRequiredException(
+        'This agent requires purchase. Please complete payment before installing.',
       );
     }
   }

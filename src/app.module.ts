@@ -122,6 +122,11 @@ import { MarketplaceAgent } from './database/entities/marketplace-agent.entity';
 import { MarketplaceReview } from './database/entities/marketplace-review.entity';
 import { InstalledAgent } from './database/entities/installed-agent.entity';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
+import { BillingModule } from './modules/billing/billing.module';
+import { CreatorPayoutAccount } from './database/entities/creator-payout-account.entity';
+import { AgentPurchase } from './database/entities/agent-purchase.entity';
+import { PayoutTransaction } from './database/entities/payout-transaction.entity';
+import { AgentSubscription } from './database/entities/agent-subscription.entity';
 
 @Module({
   imports: [
@@ -208,6 +213,10 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
         MarketplaceAgent,
         MarketplaceReview,
         InstalledAgent,
+        CreatorPayoutAccount,
+        AgentPurchase,
+        PayoutTransaction,
+        AgentSubscription,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -272,6 +281,7 @@ import { MarketplaceModule } from './modules/marketplace/marketplace.module';
     SsoModule,
     CustomAgentsModule,
     MarketplaceModule,
+    BillingModule,
   ],
   controllers: [AppController],
   providers: [

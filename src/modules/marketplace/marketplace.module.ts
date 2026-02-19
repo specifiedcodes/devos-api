@@ -4,9 +4,10 @@
  * Story 18-5: Agent Marketplace Backend
  * Story 18-7: Agent Rating & Reviews
  * Story 18-8: Agent Installation Flow
+ * Story 18-9: Agent Revenue Sharing
  *
  * NestJS module for the agent marketplace with publishing,
- * discovery, installation, and review capabilities.
+ * discovery, installation, review, and payment capabilities.
  */
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -27,6 +28,7 @@ import { ReviewReport } from '../../database/entities/review-report.entity';
 import { InstallationLog } from '../../database/entities/installation-log.entity';
 import { AgentDefinitionValidatorService } from '../custom-agents/agent-definition-validator.service';
 import { ModelRegistryModule } from '../model-registry/model-registry.module';
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
   imports: [
@@ -42,6 +44,7 @@ import { ModelRegistryModule } from '../model-registry/model-registry.module';
       InstallationLog,
     ]),
     ModelRegistryModule,
+    BillingModule,
   ],
   controllers: [MarketplaceController],
   providers: [
