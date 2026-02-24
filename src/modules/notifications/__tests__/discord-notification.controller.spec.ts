@@ -7,6 +7,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
 import { DiscordNotificationController } from '../controllers/discord-notification.controller';
 import { DiscordNotificationService } from '../services/discord-notification.service';
+import { DiscordNotificationConfigService } from '../../integrations/discord/services/discord-notification-config.service';
 import { DiscordIntegration } from '../../../database/entities/discord-integration.entity';
 
 describe('DiscordNotificationController', () => {
@@ -51,6 +52,15 @@ describe('DiscordNotificationController', () => {
       controllers: [DiscordNotificationController],
       providers: [
         { provide: DiscordNotificationService, useValue: mockDiscordService },
+        {
+          provide: DiscordNotificationConfigService,
+          useValue: {
+            getConfigs: jest.fn().mockResolvedValue([]),
+            upsertConfig: jest.fn(),
+            toggleConfig: jest.fn(),
+            deleteConfig: jest.fn(),
+          },
+        },
       ],
     }).compile();
 

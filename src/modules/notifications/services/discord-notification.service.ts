@@ -1,13 +1,20 @@
 /**
  * DiscordNotificationService
  * Story 16.5: Discord Notification Integration (AC3)
+ * Story 21.3: Discord Webhook Integration (AC3, AC8)
  *
  * Core service for sending Discord notifications via webhooks with rate limiting,
  * quiet hours, embed formatting, and error handling.
  * Uses fetch() for Discord API calls (no discord.js dependency).
+ *
+ * Enhanced in Story 21.3 with:
+ * - getDetailedStatus: Full integration status for frontend health display
+ * - verifyWebhook: Validate webhook URL via Discord API
+ * - DiscordNotificationConfigService integration for per-event routing
+ * - seedDefaultConfigs on new integration creation
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
@@ -16,6 +23,7 @@ import { EncryptionService } from '../../../shared/encryption/encryption.service
 import { RedisService } from '../../redis/redis.service';
 import { DiscordEmbedBuilderService } from './discord-embed-builder.service';
 import { NotificationEvent, NotificationType } from '../events/notification.events';
+import { DiscordNotificationConfigService } from '../../integrations/discord/services/discord-notification-config.service';
 
 const RATE_LIMIT_PREFIX = 'discord-rl:';
 const CACHE_PREFIX = 'discord-integration:';
@@ -35,6 +43,8 @@ export class DiscordNotificationService {
     private readonly encryptionService: EncryptionService,
     private readonly redisService: RedisService,
     private readonly embedBuilder: DiscordEmbedBuilderService,
+    @Optional() @Inject(DiscordNotificationConfigService)
+    private readonly notificationConfigService?: DiscordNotificationConfigService,
   ) {
     this.frontendUrl = this.configService.get<string>('FRONTEND_URL', 'http://localhost:3000');
   }
@@ -278,7 +288,19 @@ export class DiscordNotificationService {
           messageCount: 0,
           errorCount: 0,
         });
-        await this.discordIntegrationRepo.save(newIntegration);
+        const savedIntegration = await this.discordIntegrationRepo.save(newIntegration);
+
+        // Story 21.3 AC8: Seed default notification configs for new integration
+        if (this.notificationConfigService) {
+          try {
+            await this.notificationConfigService.seedDefaultConfigs(savedIntegration.id);
+          } catch (seedError) {
+            // Seed failure is non-critical - don't fail the main flow
+            this.logger.warn(
+              `Failed to seed default notification configs for workspace ${workspaceId}: ${seedError instanceof Error ? seedError.message : String(seedError)}`,
+            );
+          }
+        }
       }
 
       // Invalidate cache
@@ -475,6 +497,103 @@ export class DiscordNotificationService {
 
     // Invalidate cache
     await this.redisService.del(`${CACHE_PREFIX}${workspaceId}`);
+  }
+
+  /**
+   * Get detailed integration status for frontend display.
+   * Includes connection health, stats, and config summary.
+   * Story 21.3 AC3
+   */
+  async getDetailedStatus(
+    workspaceId: string,
+  ): Promise<{
+    connected: boolean;
+    name?: string;
+    guildName?: string;
+    guildId?: string;
+    defaultWebhookId?: string;
+    defaultChannelName?: string;
+    status?: string;
+    quietHoursConfig?: { enabled: boolean; startTime: string; endTime: string; timezone: string } | null;
+    rateLimitPerMinute?: number;
+    mentionConfig?: Record<string, string | null>;
+    messageCount?: number;
+    errorCount?: number;
+    lastMessageAt?: string;
+    lastError?: string;
+    lastErrorAt?: string;
+    connectedAt?: string;
+    connectedBy?: string;
+  }> {
+    const integration = await this.getIntegration(workspaceId);
+    if (!integration) {
+      return { connected: false };
+    }
+
+    return {
+      connected: true,
+      name: integration.name,
+      guildName: integration.guildName,
+      guildId: integration.guildId,
+      defaultWebhookId: integration.defaultWebhookId,
+      defaultChannelName: integration.defaultChannelName,
+      status: integration.status,
+      quietHoursConfig: integration.quietHoursConfig,
+      rateLimitPerMinute: integration.rateLimitPerMinute,
+      mentionConfig: integration.mentionConfig,
+      messageCount: integration.messageCount,
+      errorCount: integration.errorCount,
+      lastMessageAt: integration.lastMessageAt?.toISOString?.() || (integration.lastMessageAt as unknown as string) || undefined,
+      lastError: integration.lastError || undefined,
+      lastErrorAt: integration.lastErrorAt?.toISOString?.() || (integration.lastErrorAt as unknown as string) || undefined,
+      connectedAt: integration.connectedAt?.toISOString?.() || (integration.connectedAt as unknown as string) || undefined,
+      connectedBy: integration.connectedBy,
+    };
+  }
+
+  /**
+   * Verify a Discord webhook URL is valid by calling Discord GET API.
+   * Does NOT send a message - just validates the webhook exists.
+   * Story 21.3 AC3
+   */
+  async verifyWebhook(
+    webhookUrl: string,
+  ): Promise<{ valid: boolean; guildName?: string; channelName?: string; error?: string }> {
+    const match = webhookUrl.match(DISCORD_WEBHOOK_URL_PATTERN);
+    if (!match) {
+      return { valid: false, error: 'Invalid Discord webhook URL format' };
+    }
+
+    const webhookId = match[2];
+    const webhookToken = match[3];
+
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+
+      let response: Response;
+      try {
+        response = await fetch(`https://discord.com/api/webhooks/${webhookId}/${webhookToken}`, {
+          method: 'GET',
+          signal: controller.signal,
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (!response.ok) {
+        return { valid: false, error: `Discord returned status ${response.status}` };
+      }
+
+      const webhookInfo = await response.json() as Record<string, unknown>;
+      return {
+        valid: true,
+        guildName: (webhookInfo.name as string) || undefined,
+        channelName: (webhookInfo.channel_id as string) || undefined,
+      };
+    } catch (error) {
+      return { valid: false, error: error instanceof Error ? error.message : String(error) };
+    }
   }
 
   /**

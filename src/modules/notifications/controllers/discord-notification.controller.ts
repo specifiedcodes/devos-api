@@ -1,8 +1,10 @@
 /**
  * DiscordNotificationController
  * Story 16.5: Discord Notification Integration (AC5)
+ * Story 21.3: Discord Webhook Integration (AC4)
  *
- * REST API endpoints for Discord webhook management and configuration.
+ * REST API endpoints for Discord webhook management, configuration,
+ * notification config CRUD, detailed status, and webhook verification.
  */
 
 import {
@@ -10,9 +12,11 @@ import {
   Get,
   Post,
   Put,
+  Patch,
   Delete,
   Query,
   Body,
+  Param,
   UseGuards,
   Logger,
   Request,
@@ -30,11 +34,19 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { DiscordNotificationService } from '../services/discord-notification.service';
+import { DiscordNotificationConfigService } from '../../integrations/discord/services/discord-notification-config.service';
 import {
   AddDiscordWebhookDto,
   UpdateDiscordConfigDto,
   DiscordIntegrationStatusDto,
 } from '../dto/discord-notification.dto';
+import {
+  UpsertDiscordNotificationConfigDto,
+  ToggleDiscordNotificationConfigDto,
+  VerifyDiscordWebhookDto,
+  DetailedDiscordStatusDto,
+} from '../../integrations/discord/dto/discord-notification-config.dto';
+import { DiscordNotificationConfig } from '../../../database/entities/discord-notification-config.entity';
 
 @Controller('api/integrations/discord')
 @ApiTags('Integrations - Discord')
@@ -44,6 +56,7 @@ export class DiscordNotificationController {
 
   constructor(
     private readonly discordService: DiscordNotificationService,
+    private readonly notificationConfigService: DiscordNotificationConfigService,
   ) {}
 
   /**
@@ -101,6 +114,106 @@ export class DiscordNotificationController {
       messageCount: integration.messageCount,
       lastMessageAt: integration.lastMessageAt?.toISOString?.() || (integration.lastMessageAt as any) || undefined,
     };
+  }
+
+  /**
+   * GET /api/integrations/discord/detailed-status?workspaceId=...
+   * Get detailed integration status including health, stats, and config summary.
+   * Story 21.3 AC4
+   */
+  @Get('detailed-status')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get detailed Discord integration status' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Detailed integration status returned' })
+  async getDetailedStatus(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<DetailedDiscordStatusDto> {
+    return this.discordService.getDetailedStatus(workspaceId);
+  }
+
+  /**
+   * POST /api/integrations/discord/verify-webhook
+   * Verify a Discord webhook URL is valid.
+   * Story 21.3 AC4
+   */
+  @Post('verify-webhook')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Verify Discord webhook URL' })
+  @ApiResponse({ status: 200, description: 'Webhook verification result' })
+  async verifyWebhook(
+    @Body() dto: VerifyDiscordWebhookDto,
+  ): Promise<{ valid: boolean; guildName?: string; channelName?: string; error?: string }> {
+    return this.discordService.verifyWebhook(dto.webhookUrl);
+  }
+
+  /**
+   * GET /api/integrations/discord/notification-configs?workspaceId=...
+   * Get all notification configs for the workspace.
+   * Story 21.3 AC4
+   */
+  @Get('notification-configs')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get Discord notification configs' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Notification configs returned' })
+  async getNotificationConfigs(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<DiscordNotificationConfig[]> {
+    return this.notificationConfigService.getConfigs(workspaceId);
+  }
+
+  /**
+   * PUT /api/integrations/discord/notification-configs?workspaceId=...
+   * Upsert a notification config for an event type.
+   * Story 21.3 AC4
+   */
+  @Put('notification-configs')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Upsert Discord notification config' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Notification config upserted' })
+  async upsertNotificationConfig(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: UpsertDiscordNotificationConfigDto,
+  ): Promise<DiscordNotificationConfig> {
+    return this.notificationConfigService.upsertConfig(workspaceId, dto);
+  }
+
+  /**
+   * PATCH /api/integrations/discord/notification-configs/:configId/toggle?workspaceId=...
+   * Toggle a notification config enabled/disabled.
+   * Story 21.3 AC4
+   */
+  @Patch('notification-configs/:configId/toggle')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Toggle Discord notification config' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Notification config toggled' })
+  async toggleNotificationConfig(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('configId', ParseUUIDPipe) configId: string,
+    @Body() dto: ToggleDiscordNotificationConfigDto,
+  ): Promise<DiscordNotificationConfig> {
+    return this.notificationConfigService.toggleConfig(workspaceId, configId, dto.isEnabled);
+  }
+
+  /**
+   * DELETE /api/integrations/discord/notification-configs/:configId?workspaceId=...
+   * Delete a notification config.
+   * Story 21.3 AC4
+   */
+  @Delete('notification-configs/:configId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete Discord notification config' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 204, description: 'Notification config deleted' })
+  async deleteNotificationConfig(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('configId', ParseUUIDPipe) configId: string,
+  ): Promise<void> {
+    return this.notificationConfigService.deleteConfig(workspaceId, configId);
   }
 
   /**

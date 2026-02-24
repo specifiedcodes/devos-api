@@ -58,6 +58,10 @@ import { Project } from '../../database/entities/project.entity';
 import { NotificationPreferences } from '../../database/entities/notification-preferences.entity';
 import { SlackIntegration } from '../../database/entities/slack-integration.entity';
 import { DiscordIntegration } from '../../database/entities/discord-integration.entity';
+import { DiscordNotificationConfig } from '../../database/entities/discord-notification-config.entity';
+
+// Story 21.3: Discord notification config service
+import { DiscordNotificationConfigService } from '../integrations/discord/services/discord-notification-config.service';
 
 // Story 21.1: Slack user mapping service (imported from SlackIntegrationModule)
 import { SlackUserMappingService } from '../integrations/slack/services/slack-user-mapping.service';
@@ -81,7 +85,7 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
     // This module only needs EventEmitterModule features, not forRoot()
 
     // TypeORM for subscription, project, preferences, and Slack integration queries
-    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration, SlackUserMapping, SlackNotificationConfig, SlackInteractionLog, User]),
+    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration, DiscordNotificationConfig, SlackUserMapping, SlackNotificationConfig, SlackInteractionLog, User]),
 
     // Story 21.1: Encryption module for user mapping service
     EncryptionModule,
@@ -167,6 +171,9 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
     // Story 21.2: Slack notification config service
     SlackNotificationConfigService,
 
+    // Story 21.3: Discord notification config service
+    DiscordNotificationConfigService,
+
     // BullMQ processors
     NotificationBatchProcessor,
     SlackMessageProcessor,
@@ -184,6 +191,7 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
     SlackUserMappingService,
     SlackNotificationConfigService,
     DiscordNotificationService,
+    DiscordNotificationConfigService,
   ],
 })
 export class NotificationsModule {}

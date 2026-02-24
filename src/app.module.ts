@@ -142,6 +142,8 @@ import { ApiToken } from './database/entities/api-token.entity';
 import { PermissionWebhook } from './database/entities/permission-webhook.entity';
 import { PermissionAnalyticsModule } from './modules/permission-analytics/permission-analytics.module';
 import { SlackIntegrationModule } from './modules/integrations/slack/slack-integration.module';
+import { DiscordIntegrationModule } from './modules/integrations/discord/discord-integration.module';
+import { DiscordNotificationConfig } from './database/entities/discord-notification-config.entity';
 
 @Module({
   imports: [
@@ -241,6 +243,7 @@ import { SlackIntegrationModule } from './modules/integrations/slack/slack-integ
         PermissionAuditEvent,
         ApiToken,
         PermissionWebhook,
+        DiscordNotificationConfig,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -312,6 +315,7 @@ import { SlackIntegrationModule } from './modules/integrations/slack/slack-integ
     PermissionAuditModule,
     PermissionAnalyticsModule,
     SlackIntegrationModule,
+    DiscordIntegrationModule,
   ],
   controllers: [AppController],
   providers: [
