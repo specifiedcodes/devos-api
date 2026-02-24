@@ -128,6 +128,7 @@ import { AgentPurchase } from './database/entities/agent-purchase.entity';
 import { PayoutTransaction } from './database/entities/payout-transaction.entity';
 import { AgentSubscription } from './database/entities/agent-subscription.entity';
 import { CustomRole } from './database/entities/custom-role.entity';
+import { RolePermission } from './database/entities/role-permission.entity';
 import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
 
 @Module({
@@ -220,6 +221,7 @@ import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
         PayoutTransaction,
         AgentSubscription,
         CustomRole,
+        RolePermission,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',

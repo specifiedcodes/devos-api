@@ -98,9 +98,13 @@ describe('CustomRoleService', () => {
               const manager = {
                 update: jest.fn().mockResolvedValue(undefined),
                 count: jest.fn().mockResolvedValue(0),
+                find: jest.fn().mockResolvedValue([]),
                 createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
                 create: jest.fn().mockImplementation((_entity: any, dto: any) => ({ ...dto, id: mockRoleId })),
-                save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...mockRole, ...entity })),
+                save: jest.fn().mockImplementation((entity: any) => {
+                  if (Array.isArray(entity)) return Promise.resolve(entity);
+                  return Promise.resolve({ ...mockRole, ...entity });
+                }),
               };
               return cb(manager);
             }),

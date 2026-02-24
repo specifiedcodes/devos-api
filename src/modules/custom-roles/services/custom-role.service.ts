@@ -12,6 +12,7 @@ import {
   CustomRole,
   BaseRole,
 } from '../../../database/entities/custom-role.entity';
+import { RolePermission } from '../../../database/entities/role-permission.entity';
 import {
   WorkspaceMember,
   WorkspaceRole,
@@ -365,7 +366,26 @@ export class CustomRoleService {
         createdBy: actorId,
       });
 
-      return manager.save(cloned);
+      const savedClone = await manager.save(cloned);
+
+      // Copy explicit permissions from source role to cloned role
+      const sourcePermissions = await manager.find(RolePermission, {
+        where: { roleId: sourceRoleId },
+      });
+
+      if (sourcePermissions.length > 0) {
+        const clonedPermissions = sourcePermissions.map((perm) =>
+          manager.create(RolePermission, {
+            roleId: savedClone.id,
+            resourceType: perm.resourceType,
+            permission: perm.permission,
+            granted: perm.granted,
+          }),
+        );
+        await manager.save(clonedPermissions);
+      }
+
+      return savedClone;
     });
 
     // Audit log (fire-and-forget, outside transaction)
@@ -375,6 +395,7 @@ export class CustomRoleService {
         sourceRoleId,
         sourceRoleName: sourceRole.name,
         clonedRoleName: saved.name,
+        permissionsCopied: true,
       })
       .catch(() => {});
 
