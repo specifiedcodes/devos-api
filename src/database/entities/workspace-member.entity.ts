@@ -6,9 +6,10 @@ import {
   ManyToOne,
   JoinColumn,
 } from 'typeorm';
-import { IsUUID, IsEnum } from 'class-validator';
+import { IsUUID, IsEnum, IsOptional } from 'class-validator';
 import { User } from './user.entity';
 import { Workspace } from './workspace.entity';
+import { CustomRole } from './custom-role.entity';
 
 export enum WorkspaceRole {
   OWNER = 'owner',
@@ -45,6 +46,15 @@ export class WorkspaceMember {
   })
   @IsEnum(WorkspaceRole)
   role!: WorkspaceRole;
+
+  @Column({ type: 'uuid', name: 'custom_role_id', nullable: true })
+  @IsUUID()
+  @IsOptional()
+  customRoleId!: string | null;
+
+  @ManyToOne(() => CustomRole, { onDelete: 'SET NULL', nullable: true })
+  @JoinColumn({ name: 'custom_role_id' })
+  customRole?: CustomRole;
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;

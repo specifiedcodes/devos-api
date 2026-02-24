@@ -127,6 +127,8 @@ import { CreatorPayoutAccount } from './database/entities/creator-payout-account
 import { AgentPurchase } from './database/entities/agent-purchase.entity';
 import { PayoutTransaction } from './database/entities/payout-transaction.entity';
 import { AgentSubscription } from './database/entities/agent-subscription.entity';
+import { CustomRole } from './database/entities/custom-role.entity';
+import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
 
 @Module({
   imports: [
@@ -217,6 +219,7 @@ import { AgentSubscription } from './database/entities/agent-subscription.entity
         AgentPurchase,
         PayoutTransaction,
         AgentSubscription,
+        CustomRole,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -282,6 +285,7 @@ import { AgentSubscription } from './database/entities/agent-subscription.entity
     CustomAgentsModule,
     MarketplaceModule,
     BillingModule,
+    CustomRolesModule,
   ],
   controllers: [AppController],
   providers: [
