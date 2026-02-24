@@ -1,6 +1,6 @@
-import { Injectable, Logger, InternalServerErrorException, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject } from '@nestjs/common';
+import { Injectable, Logger, InternalServerErrorException, NotFoundException, BadRequestException, ForbiddenException, forwardRef, Inject, Optional } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, QueryRunner, DataSource } from 'typeorm';
+import { Repository, QueryRunner, DataSource, In } from 'typeorm';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
 import * as crypto from 'crypto';
@@ -9,10 +9,14 @@ import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspac
 import { WorkspaceInvitation, InvitationStatus } from '../../database/entities/workspace-invitation.entity';
 import { User } from '../../database/entities/user.entity';
 import { SecurityEvent, SecurityEventType } from '../../database/entities/security-event.entity';
+import { CustomRole } from '../../database/entities/custom-role.entity';
+import { PermissionAuditEventType } from '../../database/entities/permission-audit-event.entity';
 import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { WorkspaceResponseDto } from './dto/workspace-response.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { InvitationResponseDto } from './dto/invitation-response.dto';
+import { UpdateMemberRoleDto, SystemRole } from './dto/update-member-role.dto';
+import { BulkUpdateMemberRolesDto } from './dto/bulk-update-member-roles.dto';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
 import { AuditService, AuditAction } from '../../shared/audit/audit.service';
@@ -40,6 +44,9 @@ export class WorkspacesService {
     private readonly emailService: EmailService,
     @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
+    @Optional()
+    @InjectRepository(CustomRole)
+    private readonly customRoleRepository?: Repository<CustomRole>,
   ) {}
 
   /**
@@ -1353,24 +1360,320 @@ export class WorkspacesService {
   }
 
   /**
-   * Get all members of a workspace
+   * Get all members of a workspace with enriched role information.
+   * Story 20-7: Enhanced to include custom role names, display names,
+   * avatar URLs, and last active timestamps for the Role Management UI.
+   *
    * @param workspaceId - Workspace ID
-   * @returns List of workspace members
+   * @returns List of workspace members with enriched role data
    */
   async getMembers(workspaceId: string): Promise<any[]> {
     const members = await this.workspaceMemberRepository.find({
       where: { workspaceId },
-      relations: ['user'],
+      relations: ['user', 'customRole'],
       order: { createdAt: 'ASC' },
     });
+
+    // Role display name map for system roles
+    const systemRoleDisplayNames: Record<string, string> = {
+      [WorkspaceRole.OWNER]: 'Owner',
+      [WorkspaceRole.ADMIN]: 'Admin',
+      [WorkspaceRole.DEVELOPER]: 'Developer',
+      [WorkspaceRole.VIEWER]: 'Viewer',
+    };
 
     return members.map((member) => ({
       id: member.id,
       userId: member.userId,
+      name: member.user?.email?.split('@')[0] ?? null,
       email: member.user?.email || 'Unknown',
       role: member.role,
+      roleName: member.customRole?.displayName ?? systemRoleDisplayNames[member.role] ?? member.role,
+      customRoleId: member.customRoleId ?? null,
+      customRoleName: member.customRole?.displayName ?? null,
+      lastActiveAt: null, // TODO: integrate with session tracking in future story
       joinedAt: member.createdAt,
+      avatarUrl: null, // TODO: integrate with profile service in future story
     }));
+  }
+
+  /**
+   * Update a single member's role with support for custom roles.
+   * Story 20-7: Role Management UI
+   *
+   * Business rules:
+   * - Cannot demote yourself if you are the only owner
+   * - Cannot assign Owner role to more than 5 users
+   * - Custom role must exist, belong to workspace, and be active
+   * - Invalidates permission cache for the affected user
+   * - Records MEMBER_ROLE_CHANGED audit event with before/after state
+   *
+   * @param workspaceId - Workspace ID
+   * @param memberId - Workspace member ID
+   * @param dto - Role update payload
+   * @param actorId - User making the change
+   * @returns Updated member with enriched data
+   */
+  async updateMemberRoleWithCustom(
+    workspaceId: string,
+    memberId: string,
+    dto: UpdateMemberRoleDto,
+    actorId: string,
+  ): Promise<any> {
+    // 1. Find the member
+    const member = await this.workspaceMemberRepository.findOne({
+      where: { id: memberId, workspaceId },
+      relations: ['user', 'customRole'],
+    });
+
+    if (!member) {
+      throw new NotFoundException('Member not found');
+    }
+
+    // Capture before state for audit
+    const beforeState = {
+      role: member.role,
+      customRoleId: member.customRoleId,
+      customRoleName: member.customRole?.displayName ?? null,
+    };
+
+    // 2. Validate based on whether system role or custom role is being assigned
+    if (dto.role) {
+      const newRole = dto.role as unknown as WorkspaceRole;
+
+      // Cannot assign Owner via this endpoint if it results in >5 owners
+      if (newRole === WorkspaceRole.OWNER) {
+        const ownerCount = await this.workspaceMemberRepository.count({
+          where: { workspaceId, role: WorkspaceRole.OWNER },
+        });
+        if (ownerCount >= 5) {
+          throw new BadRequestException('Cannot have more than 5 owners in a workspace');
+        }
+      }
+
+      // Cannot demote yourself if you are the only owner
+      if (member.userId === actorId && member.role === WorkspaceRole.OWNER && newRole !== WorkspaceRole.OWNER) {
+        const ownerCount = await this.workspaceMemberRepository.count({
+          where: { workspaceId, role: WorkspaceRole.OWNER },
+        });
+        if (ownerCount <= 1) {
+          throw new BadRequestException('Cannot demote yourself - you are the only owner');
+        }
+      }
+
+      // Update to system role - clear custom role
+      member.role = newRole;
+      member.customRoleId = null;
+    } else if (dto.customRoleId) {
+      // Validate custom role exists, belongs to workspace, and is active
+      if (!this.customRoleRepository) {
+        throw new BadRequestException('Custom roles are not available');
+      }
+
+      const customRole = await this.customRoleRepository.findOne({
+        where: { id: dto.customRoleId, workspaceId },
+      });
+
+      if (!customRole) {
+        throw new NotFoundException('Custom role not found in this workspace');
+      }
+
+      if (!customRole.isActive) {
+        throw new BadRequestException('Custom role is not active');
+      }
+
+      // Set custom role, keep system role as base
+      member.customRoleId = dto.customRoleId;
+    } else {
+      throw new BadRequestException('Either role or customRoleId must be provided');
+    }
+
+    // 3. Save the updated member
+    await this.workspaceMemberRepository.save(member);
+
+    // 4. Invalidate permission cache for the affected user
+    try {
+      const pattern = `perm:${workspaceId}:${member.userId}:*`;
+      const keys = await this.redisService.scanKeys(pattern);
+      if (keys.length > 0) {
+        await this.redisService.del(...keys);
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to invalidate permission cache for user=${member.userId}`);
+    }
+
+    // 5. Record permission audit event
+    const afterState = {
+      role: member.role,
+      customRoleId: member.customRoleId,
+    };
+
+    try {
+      await this.auditService.log(
+        workspaceId,
+        actorId,
+        AuditAction.MEMBER_ROLE_CHANGED,
+        'workspace_member',
+        member.userId,
+        {
+          beforeState,
+          afterState,
+          memberId,
+        },
+      );
+    } catch (err) {
+      this.logger.warn(`Failed to record permission audit for member role change`);
+    }
+
+    // 6. Reload member with relations for enriched response
+    const updated = await this.workspaceMemberRepository.findOne({
+      where: { id: memberId, workspaceId },
+      relations: ['user', 'customRole'],
+    });
+
+    const systemRoleDisplayNames: Record<string, string> = {
+      [WorkspaceRole.OWNER]: 'Owner',
+      [WorkspaceRole.ADMIN]: 'Admin',
+      [WorkspaceRole.DEVELOPER]: 'Developer',
+      [WorkspaceRole.VIEWER]: 'Viewer',
+    };
+
+    return {
+      id: updated!.id,
+      userId: updated!.userId,
+      name: updated!.user?.email?.split('@')[0] ?? null,
+      email: updated!.user?.email || 'Unknown',
+      role: updated!.role,
+      roleName: updated!.customRole?.displayName ?? systemRoleDisplayNames[updated!.role] ?? updated!.role,
+      customRoleId: updated!.customRoleId ?? null,
+      customRoleName: updated!.customRole?.displayName ?? null,
+      lastActiveAt: null,
+      joinedAt: updated!.createdAt,
+      avatarUrl: null,
+    };
+  }
+
+  /**
+   * Bulk update roles for multiple members.
+   * Story 20-7: Role Management UI
+   *
+   * Same validation as single assignment, applied to each member.
+   * Batched permission cache invalidation.
+   *
+   * @param workspaceId - Workspace ID
+   * @param dto - Bulk role update payload
+   * @param actorId - User making the change
+   */
+  async bulkUpdateMemberRoles(
+    workspaceId: string,
+    dto: BulkUpdateMemberRolesDto,
+    actorId: string,
+  ): Promise<void> {
+    // Find all members
+    const members = await this.workspaceMemberRepository.find({
+      where: {
+        workspaceId,
+        id: In(dto.memberIds),
+      },
+      relations: ['user', 'customRole'],
+    });
+
+    if (members.length === 0) {
+      throw new NotFoundException('No matching members found');
+    }
+
+    // Validate custom role if provided
+    let customRole: CustomRole | null = null;
+    if (dto.customRoleId) {
+      if (!this.customRoleRepository) {
+        throw new BadRequestException('Custom roles are not available');
+      }
+      const found = await this.customRoleRepository.findOne({
+        where: { id: dto.customRoleId, workspaceId },
+      });
+      if (!found) {
+        throw new NotFoundException('Custom role not found in this workspace');
+      }
+      if (!found.isActive) {
+        throw new BadRequestException('Custom role is not active');
+      }
+      customRole = found;
+    }
+
+    // Validate owner limit if assigning owner role
+    if (dto.role === SystemRole.OWNER) {
+      const currentOwnerCount = await this.workspaceMemberRepository.count({
+        where: { workspaceId, role: WorkspaceRole.OWNER },
+      });
+      const newOwners = members.filter((m) => m.role !== WorkspaceRole.OWNER).length;
+      if (currentOwnerCount + newOwners > 5) {
+        throw new BadRequestException('Cannot have more than 5 owners in a workspace');
+      }
+    }
+
+    // Check if actor is the only owner and is demoting themselves
+    if (dto.role && dto.role !== SystemRole.OWNER) {
+      const actorMember = members.find((m) => m.userId === actorId);
+      if (actorMember && actorMember.role === WorkspaceRole.OWNER) {
+        const ownerCount = await this.workspaceMemberRepository.count({
+          where: { workspaceId, role: WorkspaceRole.OWNER },
+        });
+        if (ownerCount <= 1) {
+          throw new BadRequestException('Cannot demote yourself - you are the only owner');
+        }
+      }
+    }
+
+    // Update each member
+    const affectedUserIds: string[] = [];
+    for (const member of members) {
+      const beforeState = {
+        role: member.role,
+        customRoleId: member.customRoleId,
+      };
+
+      if (dto.role) {
+        member.role = dto.role as unknown as WorkspaceRole;
+        member.customRoleId = null;
+      } else if (dto.customRoleId) {
+        member.customRoleId = dto.customRoleId;
+      }
+
+      await this.workspaceMemberRepository.save(member);
+      affectedUserIds.push(member.userId);
+
+      // Record audit event per member
+      try {
+        await this.auditService.log(
+          workspaceId,
+          actorId,
+          AuditAction.MEMBER_ROLE_CHANGED,
+          'workspace_member',
+          member.userId,
+          {
+            beforeState,
+            afterState: { role: member.role, customRoleId: member.customRoleId },
+            memberId: member.id,
+            bulk: true,
+          },
+        );
+      } catch (err) {
+        this.logger.warn(`Failed to record audit for bulk member role change: ${member.id}`);
+      }
+    }
+
+    // Batch invalidate permission cache for all affected users
+    try {
+      for (const userId of affectedUserIds) {
+        const pattern = `perm:${workspaceId}:${userId}:*`;
+        const keys = await this.redisService.scanKeys(pattern);
+        if (keys.length > 0) {
+          await this.redisService.del(...keys);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Failed to batch invalidate permission cache for bulk role update`);
+    }
   }
 
   /**

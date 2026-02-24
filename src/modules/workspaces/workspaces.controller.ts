@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Put,
   Patch,
   Delete,
   Body,
@@ -10,6 +11,7 @@ import {
   UseGuards,
   HttpCode,
   Query,
+  ParseUUIDPipe,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +29,8 @@ import { InvitationResponseDto } from './dto/invitation-response.dto';
 import { WorkspaceMemberDto } from './dto/workspace-member.dto';
 import { ChangeMemberRoleDto } from './dto/change-member-role.dto';
 import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
+import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { BulkUpdateMemberRolesDto } from './dto/bulk-update-member-roles.dto';
 import { InvitationStatus } from '../../database/entities/workspace-invitation.entity';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -261,6 +265,56 @@ export class WorkspacesController {
       req.ip || 'unknown',
       req.headers['user-agent'] || 'unknown',
     );
+  }
+
+  /**
+   * Story 20-7: Update a member's role (system or custom role)
+   * Enhanced endpoint that supports custom role assignment alongside system roles.
+   */
+  @Put(':id/members/:memberId/role')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
+  @ApiOperation({ summary: 'Update member role (system or custom)' })
+  @ApiResponse({ status: 200, description: 'Member role updated with enriched data' })
+  @ApiResponse({ status: 400, description: 'Validation error or business rule violation' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Member or custom role not found' })
+  @ApiBearerAuth('JWT-auth')
+  async updateMemberRoleWithCustom(
+    @Param('id', ParseUUIDPipe) workspaceId: string,
+    @Param('memberId', ParseUUIDPipe) memberId: string,
+    @Body() dto: UpdateMemberRoleDto,
+    @Request() req: any,
+  ): Promise<any> {
+    return this.workspacesService.updateMemberRoleWithCustom(
+      workspaceId,
+      memberId,
+      dto,
+      req.user.id,
+    );
+  }
+
+  /**
+   * Story 20-7: Bulk update roles for multiple members
+   */
+  @Post(':id/members/bulk-role')
+  @UseGuards(RoleGuard)
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @Throttle({ default: { limit: 5, ttl: 60000 } })
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Bulk update member roles' })
+  @ApiResponse({ status: 200, description: 'Member roles updated successfully' })
+  @ApiResponse({ status: 400, description: 'Validation error or business rule violation' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiBearerAuth('JWT-auth')
+  async bulkUpdateMemberRoles(
+    @Param('id', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: BulkUpdateMemberRolesDto,
+    @Request() req: any,
+  ): Promise<{ message: string }> {
+    await this.workspacesService.bulkUpdateMemberRoles(workspaceId, dto, req.user.id);
+    return { message: 'Member roles updated successfully' };
   }
 
   @Delete(':id/members/:memberId')

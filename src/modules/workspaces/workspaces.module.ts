@@ -11,6 +11,7 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
 import { WorkspaceInvitation } from '../../database/entities/workspace-invitation.entity';
 import { User } from '../../database/entities/user.entity';
 import { SecurityEvent } from '../../database/entities/security-event.entity';
+import { CustomRole } from '../../database/entities/custom-role.entity';
 import { WorkspaceOwnerGuard } from './guards/workspace-owner.guard';
 import { WorkspaceAdminGuard } from './guards/workspace-admin.guard';
 import { EmailModule } from '../email/email.module';
@@ -18,7 +19,7 @@ import { AuditModule } from '../../shared/audit/audit.module';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvitation, User, SecurityEvent]),
+    TypeOrmModule.forFeature([Workspace, WorkspaceMember, WorkspaceInvitation, User, SecurityEvent, CustomRole]),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
