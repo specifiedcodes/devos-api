@@ -88,6 +88,9 @@ export class GeoRestrictionGuard implements CanActivate {
       .catch(() => {});
 
     // Permission audit trail (fire-and-forget)
+    // Use request.path (not request.url) to avoid logging query parameters
+    // which may contain sensitive data (tokens, session IDs, etc.)
+    const sanitizedPath = request.path || request.url?.split('?')[0] || 'unknown';
     this.permissionAuditService
       .record({
         workspaceId,
@@ -97,7 +100,7 @@ export class GeoRestrictionGuard implements CanActivate {
         afterState: {
           clientIp,
           detectedCountry: result.detectedCountry,
-          endpoint: `${request.method} ${request.url}`,
+          endpoint: `${request.method} ${sanitizedPath}`,
         },
         ipAddress: clientIp,
       })

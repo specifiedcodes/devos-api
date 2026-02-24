@@ -281,11 +281,11 @@ describe('PermissionAuditService', () => {
 
   describe('getEventStats()', () => {
     it('should return stats structure', async () => {
-      mockQb.getCount.mockResolvedValueOnce(10);
+      // getEventStats now uses Promise.all with 2 getRawMany calls:
+      // 1st for events-by-type, 2nd for top-actors
       mockQb.getRawMany
         .mockResolvedValueOnce([{ eventType: 'role_created', count: '5' }])
         .mockResolvedValueOnce([{ actorId: 'actor-1', count: '3' }]);
-      mockQb.getCount.mockResolvedValueOnce(2);
 
       const result = await service.getEventStats('ws-1');
       expect(result).toHaveProperty('totalEvents');
@@ -297,23 +297,28 @@ describe('PermissionAuditService', () => {
     it('should apply date range when provided', async () => {
       const dateFrom = new Date('2024-01-01');
       const dateTo = new Date('2024-12-31');
-      mockQb.getCount.mockResolvedValue(0);
       mockQb.getRawMany.mockResolvedValue([]);
 
       await service.getEventStats('ws-1', dateFrom, dateTo);
       expect(mockQb.andWhere).toHaveBeenCalled();
     });
 
-    it('should count access denials separately', async () => {
-      mockQb.getCount.mockResolvedValueOnce(10).mockResolvedValueOnce(3);
-      mockQb.getRawMany.mockResolvedValue([]);
+    it('should derive access denials from events-by-type grouping', async () => {
+      // The access denial count is now derived from the events-by-type query
+      mockQb.getRawMany
+        .mockResolvedValueOnce([
+          { eventType: 'role_created', count: '5' },
+          { eventType: 'access_denied_ip', count: '2' },
+          { eventType: 'access_denied_geo', count: '1' },
+        ])
+        .mockResolvedValueOnce([]);
 
       const result = await service.getEventStats('ws-1');
       expect(result.accessDenials).toBe(3);
+      expect(result.totalEvents).toBe(8);
     });
 
     it('should return empty stats for empty workspace', async () => {
-      mockQb.getCount.mockResolvedValue(0);
       mockQb.getRawMany.mockResolvedValue([]);
 
       const result = await service.getEventStats('ws-1');
@@ -324,11 +329,9 @@ describe('PermissionAuditService', () => {
     });
 
     it('should parse count strings to numbers', async () => {
-      mockQb.getCount.mockResolvedValueOnce(5);
       mockQb.getRawMany
         .mockResolvedValueOnce([{ eventType: 'role_created', count: '3' }])
         .mockResolvedValueOnce([{ actorId: 'actor-1', count: '5' }]);
-      mockQb.getCount.mockResolvedValueOnce(1);
 
       const result = await service.getEventStats('ws-1');
       expect(result.eventsByType['role_created']).toBe(3);

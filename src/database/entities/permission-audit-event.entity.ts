@@ -78,10 +78,13 @@ export class PermissionAuditEvent {
 
   /**
    * User who performed the action.
+   * Nullable because the FK uses ON DELETE SET NULL - when a user is deleted,
+   * the audit record is preserved but actor_id becomes null.
    */
-  @Column({ type: 'uuid', name: 'actor_id' })
+  @Column({ type: 'uuid', name: 'actor_id', nullable: true })
+  @IsOptional()
   @IsUUID()
-  actorId!: string;
+  actorId!: string | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'actor_id' })

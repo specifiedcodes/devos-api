@@ -137,6 +137,8 @@ export class PermissionAuditService {
 
   /**
    * Get summary statistics for a workspace's audit events.
+   * Optimized: derives totalEvents and accessDenials from the events-by-type
+   * grouping query, reducing 4 DB queries down to 2.
    */
   async getEventStats(
     workspaceId: string,
@@ -148,67 +150,56 @@ export class PermissionAuditService {
     topActors: Array<{ actorId: string; count: number }>;
     accessDenials: number;
   }> {
-    const baseQb = this.auditRepo
-      .createQueryBuilder('pae')
-      .where('pae.workspace_id = :workspaceId', { workspaceId });
+    // Run events-by-type and top-actors in parallel (2 queries instead of 4)
+    const [typeCountsRaw, topActorsRaw] = await Promise.all([
+      // Events by type (used to derive totalEvents and accessDenials too)
+      this.auditRepo
+        .createQueryBuilder('pae')
+        .select('pae.event_type', 'eventType')
+        .addSelect('COUNT(*)', 'count')
+        .where('pae.workspace_id = :workspaceId', { workspaceId })
+        .andWhere(dateFrom ? 'pae.created_at >= :dateFrom' : '1=1', { dateFrom })
+        .andWhere(dateTo ? 'pae.created_at <= :dateTo' : '1=1', { dateTo })
+        .groupBy('pae.event_type')
+        .getRawMany(),
 
-    if (dateFrom) {
-      baseQb.andWhere('pae.created_at >= :dateFrom', { dateFrom });
-    }
-    if (dateTo) {
-      baseQb.andWhere('pae.created_at <= :dateTo', { dateTo });
-    }
+      // Top actors (top 10)
+      this.auditRepo
+        .createQueryBuilder('pae')
+        .select('pae.actor_id', 'actorId')
+        .addSelect('COUNT(*)', 'count')
+        .where('pae.workspace_id = :workspaceId', { workspaceId })
+        .andWhere(dateFrom ? 'pae.created_at >= :dateFrom' : '1=1', { dateFrom })
+        .andWhere(dateTo ? 'pae.created_at <= :dateTo' : '1=1', { dateTo })
+        .groupBy('pae.actor_id')
+        .orderBy('COUNT(*)', 'DESC')
+        .limit(10)
+        .getRawMany(),
+    ]);
 
-    // Total count
-    const totalEvents = await baseQb.getCount();
-
-    // Events by type
-    const typeCountsRaw = await this.auditRepo
-      .createQueryBuilder('pae')
-      .select('pae.event_type', 'eventType')
-      .addSelect('COUNT(*)', 'count')
-      .where('pae.workspace_id = :workspaceId', { workspaceId })
-      .andWhere(dateFrom ? 'pae.created_at >= :dateFrom' : '1=1', { dateFrom })
-      .andWhere(dateTo ? 'pae.created_at <= :dateTo' : '1=1', { dateTo })
-      .groupBy('pae.event_type')
-      .getRawMany();
-
+    // Derive eventsByType, totalEvents, and accessDenials from the single grouping query
     const eventsByType: Record<string, number> = {};
-    for (const row of typeCountsRaw) {
-      eventsByType[row.eventType] = parseInt(row.count, 10);
-    }
+    let totalEvents = 0;
+    let accessDenials = 0;
+    const denialTypes = new Set([
+      PermissionAuditEventType.ACCESS_DENIED_IP,
+      PermissionAuditEventType.ACCESS_DENIED_GEO,
+      PermissionAuditEventType.ACCESS_DENIED_PERMISSION,
+    ]);
 
-    // Top actors (top 10)
-    const topActorsRaw = await this.auditRepo
-      .createQueryBuilder('pae')
-      .select('pae.actor_id', 'actorId')
-      .addSelect('COUNT(*)', 'count')
-      .where('pae.workspace_id = :workspaceId', { workspaceId })
-      .andWhere(dateFrom ? 'pae.created_at >= :dateFrom' : '1=1', { dateFrom })
-      .andWhere(dateTo ? 'pae.created_at <= :dateTo' : '1=1', { dateTo })
-      .groupBy('pae.actor_id')
-      .orderBy('COUNT(*)', 'DESC')
-      .limit(10)
-      .getRawMany();
+    for (const row of typeCountsRaw) {
+      const count = parseInt(row.count, 10);
+      eventsByType[row.eventType] = count;
+      totalEvents += count;
+      if (denialTypes.has(row.eventType as PermissionAuditEventType)) {
+        accessDenials += count;
+      }
+    }
 
     const topActors = topActorsRaw.map((row) => ({
       actorId: row.actorId,
       count: parseInt(row.count, 10),
     }));
-
-    // Access denial count
-    const denialTypes = [
-      PermissionAuditEventType.ACCESS_DENIED_IP,
-      PermissionAuditEventType.ACCESS_DENIED_GEO,
-      PermissionAuditEventType.ACCESS_DENIED_PERMISSION,
-    ];
-    const accessDenials = await this.auditRepo
-      .createQueryBuilder('pae')
-      .where('pae.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('pae.event_type IN (:...denialTypes)', { denialTypes })
-      .andWhere(dateFrom ? 'pae.created_at >= :dateFrom' : '1=1', { dateFrom })
-      .andWhere(dateTo ? 'pae.created_at <= :dateTo' : '1=1', { dateTo })
-      .getCount();
 
     return { totalEvents, eventsByType, topActors, accessDenials };
   }
@@ -425,17 +416,24 @@ export class PermissionAuditService {
 
   /**
    * Escape a CSV field to prevent injection.
+   * Formula-prefix fields (=, +, -, @) are always wrapped in double quotes
+   * with a leading single quote to ensure Excel/Sheets don't interpret them
+   * as formulas even when the CSV is opened directly.
    */
   private escapeCSVField(value: string): string {
     if (!value) return '';
 
     let escaped = value;
 
-    // CSV injection protection: quote-wrap formula-prefix characters
+    // CSV injection protection: prepend single quote AND always double-quote wrap
+    // formula-prefix characters. The double-quote wrap ensures the single quote
+    // is preserved as literal content in all CSV parsers.
     if (
       this.CSV_FORMULA_PREFIXES.some((prefix) => escaped.startsWith(prefix))
     ) {
       escaped = `'${escaped}`;
+      // Always wrap in double quotes to ensure the leading quote is preserved
+      return `"${escaped.replace(/"/g, '""')}"`;
     }
 
     // Escape quotes and wrap in quotes if contains delimiter, newline, or quote

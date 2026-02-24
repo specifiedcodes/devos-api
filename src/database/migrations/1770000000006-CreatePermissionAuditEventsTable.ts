@@ -11,7 +11,7 @@ export class CreatePermissionAuditEventsTable1770000000006
         "id" UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
         "workspace_id" UUID NOT NULL REFERENCES "workspaces"("id") ON DELETE CASCADE,
         "event_type" VARCHAR(50) NOT NULL,
-        "actor_id" UUID REFERENCES "users"("id") ON DELETE SET NULL,
+        "actor_id" UUID NULL REFERENCES "users"("id") ON DELETE SET NULL,
         "target_user_id" UUID REFERENCES "users"("id") ON DELETE SET NULL,
         "target_role_id" UUID,
         "before_state" JSONB,
