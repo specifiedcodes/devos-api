@@ -12,12 +12,14 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue, Job } from 'bull';
-import { Template } from '../../../database/entities/template.entity';
+import { Template, TemplatePricingType } from '../../../database/entities/template.entity';
 import { TemplateInstallation, InstallationStatus, InstallationStep } from '../../../database/entities/template-installation.entity';
 import { Project } from '../../../database/entities/project.entity';
 import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
@@ -25,6 +27,7 @@ import { TemplateScaffoldingService, ProcessedFile } from './template-scaffoldin
 import { TemplateAuditService } from './template-audit.service';
 import { TemplatesGateway } from '../gateways/templates.gateway';
 import { InstallTemplateDto, InstallationJobDto, InstallationListQueryDto, InstallationListDto } from '../dto/install-template.dto';
+import { TemplatePurchaseService } from '../../billing/services/template-purchase.service';
 
 /**
  * Installation job data for BullMQ
@@ -74,6 +77,8 @@ export class TemplateInstallationService {
     private readonly dataSource: DataSource,
     @InjectQueue('installation')
     private readonly installationQueue: Queue,
+    // Story 19-10: Template Revenue Sharing - purchase validation
+    private readonly templatePurchaseService: TemplatePurchaseService,
   ) {}
 
   /**
@@ -113,6 +118,9 @@ export class TemplateInstallationService {
         `Project with name '${dto.projectName}' already exists in this workspace`,
       );
     }
+
+    // Story 19-10: Validate purchase for paid templates
+    await this.validatePurchaseForInstall(templateId, userId);
 
     // Validate variables against template definition
     const validation = this.scaffoldingService.validateVariables(template, dto.variables);
@@ -456,6 +464,41 @@ export class TemplateInstallationService {
 
     await this.installationRepository.remove(installation);
     this.logger.log(`Installation ${installationId} deleted by user ${userId}`);
+  }
+
+  /**
+   * Story 19-10: Validate purchase for paid template installation.
+   * Throws 402 PaymentRequired if template is paid and not purchased.
+   */
+  async validatePurchaseForInstall(
+    templateId: string,
+    userId: string,
+  ): Promise<void> {
+    const template = await this.templateRepository.findOne({
+      where: { id: templateId },
+    });
+
+    if (!template) {
+      throw new NotFoundException('Template not found');
+    }
+
+    // Free templates don't require purchase
+    if (template.pricingType === TemplatePricingType.FREE || !template.priceCents) {
+      return;
+    }
+
+    // Check if user has purchased access
+    const hasAccess = await this.templatePurchaseService.hasPurchasedAccess(
+      templateId,
+      userId,
+    );
+
+    if (!hasAccess) {
+      throw new HttpException(
+        'This template requires purchase. Please complete payment before installing.',
+        HttpStatus.PAYMENT_REQUIRED,
+      );
+    }
   }
 
   /**

@@ -2,6 +2,7 @@
  * BillingService
  *
  * Story 18-9: Agent Revenue Sharing
+ * Story 19-10: Template Revenue Sharing
  *
  * Main service that orchestrates billing operations and webhook handling.
  */
@@ -10,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import Stripe from 'stripe';
 import { StripeConnectService } from './services/stripe-connect.service';
 import { AgentPurchaseService } from './services/agent-purchase.service';
+import { TemplatePurchaseService } from './services/template-purchase.service';
 import { PayoutService } from './services/payout.service';
 
 @Injectable()
@@ -22,6 +24,7 @@ export class BillingService {
     private readonly configService: ConfigService,
     private readonly stripeConnectService: StripeConnectService,
     private readonly purchaseService: AgentPurchaseService,
+    private readonly templatePurchaseService: TemplatePurchaseService,
     private readonly payoutService: PayoutService,
   ) {
     const secretKey = this.configService.get<string>('STRIPE_SECRET_KEY');
@@ -66,10 +69,23 @@ export class BillingService {
         await this.payoutService.handlePayoutWebhook(event);
       } else if (event.type === 'payment_intent.succeeded') {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
-        await this.purchaseService.processSuccessfulPayment(paymentIntent.id);
+        // Story 19-10: Route template purchases to TemplatePurchaseService
+        const purchaseType = paymentIntent.metadata?.purchase_type;
+        if (purchaseType === 'template') {
+          await this.templatePurchaseService.processSuccessfulPayment(paymentIntent.id);
+        } else {
+          await this.purchaseService.processSuccessfulPayment(paymentIntent.id);
+        }
       } else if (event.type === 'payment_intent.payment_failed') {
         const paymentIntent = event.data.object as Stripe.PaymentIntent;
         this.logger.warn(`Payment failed for intent ${paymentIntent.id}`);
+      } else if (event.type === 'charge.refunded') {
+        // Story 19-10: Handle refund events
+        const charge = event.data.object as Stripe.Charge;
+        const purchaseType = charge.metadata?.purchase_type;
+        if (purchaseType === 'template') {
+          this.logger.log(`Template purchase refund processed via charge ${charge.id}`);
+        }
       } else {
         this.logger.debug(`Unhandled webhook event type: ${event.type}`);
       }

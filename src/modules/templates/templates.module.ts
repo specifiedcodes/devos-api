@@ -52,6 +52,8 @@ import { TemplateAnalyticsEvent } from '../../database/entities/template-analyti
 import { TemplateAnalyticsController } from './controllers/template-analytics.controller';
 import { TemplateAnalyticsService } from './services/template-analytics.service';
 import { EncryptionModule } from '../../shared/encryption/encryption.module';
+// Story 19-10: Import BillingModule for TemplatePurchaseService
+import { BillingModule } from '../billing/billing.module';
 
 @Module({
   imports: [
@@ -69,6 +71,8 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
       User,
     ]),
     EncryptionModule,
+    // Story 19-10: BillingModule for TemplatePurchaseService
+    BillingModule,
     // BullMQ queue for scaffolding jobs
     BullModule.registerQueue({
       name: 'scaffold',

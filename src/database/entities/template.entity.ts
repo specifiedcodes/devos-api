@@ -33,6 +33,11 @@ import {
 import { Workspace } from './workspace.entity';
 import { User } from './user.entity';
 
+export enum TemplatePricingType {
+  FREE = 'free',
+  PAID = 'paid',
+}
+
 export enum TemplateCategory {
   WEB_APP = 'web-app',
   API = 'api',
@@ -245,6 +250,18 @@ export class Template {
   @Column({ type: 'timestamp with time zone', name: 'last_test_run_at', nullable: true })
   @IsOptional()
   lastTestRunAt!: Date | null;
+
+  // Story 19-10: Template Revenue Sharing - Pricing Fields
+  @Column({ type: 'varchar', length: 10, name: 'pricing_type', default: TemplatePricingType.FREE })
+  @IsEnum(TemplatePricingType)
+  pricingType!: TemplatePricingType;
+
+  @Column({ type: 'int', name: 'price_cents', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(500)   // Minimum $5.00
+  @Max(49999) // Maximum $499.99
+  priceCents!: number | null;
 
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   @IsOptional()
