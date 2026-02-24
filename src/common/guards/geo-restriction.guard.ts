@@ -46,10 +46,10 @@ export class GeoRestrictionGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest();
+    // Only extract workspaceId from URL params to prevent body injection attacks
     const workspaceId =
       request.params?.workspaceId ||
-      request.params?.id ||
-      request.body?.workspaceId;
+      request.params?.id;
 
     // No workspace context - pass through (auth endpoints, health checks, etc.)
     if (!workspaceId) {

@@ -15,7 +15,7 @@ export class CreateGeoRestrictionsTable1770000000005 implements MigrationInterfa
           { name: 'countries', type: 'text', isArray: true, default: `'{}'` },
           { name: 'is_active', type: 'boolean', default: false },
           { name: 'log_only', type: 'boolean', default: false },
-          { name: 'created_by', type: 'uuid' },
+          { name: 'created_by', type: 'uuid', isNullable: true },
           { name: 'last_modified_by', type: 'uuid', isNullable: true },
           { name: 'created_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' },
           { name: 'updated_at', type: 'timestamp', default: 'CURRENT_TIMESTAMP' },

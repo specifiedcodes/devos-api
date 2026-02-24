@@ -170,16 +170,16 @@ describe('GeoRestrictionGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('should extract workspaceId from body if not in params', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({ allowed: true, detectedCountry: null });
+  it('should pass through when workspaceId is only in body (no body extraction for security)', async () => {
     const context = createMockExecutionContext({
       params: {},
       body: { workspaceId: mockWorkspaceId },
     });
 
-    await guard.canActivate(context);
+    const result = await guard.canActivate(context);
 
-    expect(geoRestrictionService.checkGeo).toHaveBeenCalledWith(mockWorkspaceId, expect.any(String));
+    expect(result).toBe(true);
+    expect(geoRestrictionService.checkGeo).not.toHaveBeenCalled();
   });
 
   it('should throw ForbiddenException with GEO_RESTRICTED code', async () => {

@@ -77,11 +77,12 @@ export class GeoRestriction {
   @IsBoolean()
   logOnly!: boolean;
 
-  @Column({ type: 'uuid', name: 'created_by' })
+  @Column({ type: 'uuid', name: 'created_by', nullable: true })
+  @IsOptional()
   @IsUUID()
-  createdBy!: string;
+  createdBy!: string | null;
 
-  @ManyToOne(() => User)
+  @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'created_by' })
   creator?: User;
 

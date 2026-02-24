@@ -52,6 +52,7 @@ export class GeoRestrictionService {
   private readonly BLOCKED_TTL = 86400; // 24 hours
   private readonly MAX_BLOCKED_ATTEMPTS = 100;
   private readonly MAX_COUNTRIES = 250;
+  private readonly VALID_COUNTRY_CODES = new Set(COUNTRY_LIST.map((c) => c.code));
 
   constructor(
     @InjectRepository(GeoRestriction)
@@ -307,16 +308,22 @@ export class GeoRestrictionService {
     try {
       const key = `${this.BLOCKED_PREFIX}${workspaceId}`;
       const rawEntries = await this.redisService.zrevrange(key, 0, safeLimitValue - 1);
-      return rawEntries.map((raw: string) => {
-        const parsed = JSON.parse(raw);
-        return {
-          ipAddress: parsed.ipAddress ?? '',
-          userId: parsed.userId ?? null,
-          detectedCountry: parsed.detectedCountry ?? null,
-          timestamp: parsed.timestamp ?? '',
-          endpoint: parsed.endpoint ?? '',
-        } as GeoBlockedAttemptDto;
-      });
+      const results: GeoBlockedAttemptDto[] = [];
+      for (const raw of rawEntries) {
+        try {
+          const parsed = JSON.parse(raw);
+          results.push({
+            ipAddress: parsed.ipAddress ?? '',
+            userId: parsed.userId ?? null,
+            detectedCountry: parsed.detectedCountry ?? null,
+            timestamp: parsed.timestamp ?? '',
+            endpoint: parsed.endpoint ?? '',
+          } as GeoBlockedAttemptDto);
+        } catch {
+          this.logger.warn(`Skipping corrupted geo-blocked entry in workspace=${workspaceId}`);
+        }
+      }
+      return results;
     } catch (error) {
       this.logger.warn(`Failed to get geo-blocked attempts for workspace=${workspaceId}`);
       return [];
@@ -348,8 +355,7 @@ export class GeoRestrictionService {
    * Validate that all provided country codes are valid ISO 3166-1 alpha-2 codes.
    */
   private validateCountryCodes(codes: string[]): void {
-    const validCodes = new Set(COUNTRY_LIST.map((c) => c.code));
-    const invalidCodes = codes.filter((code) => !validCodes.has(code));
+    const invalidCodes = codes.filter((code) => !this.VALID_COUNTRY_CODES.has(code));
     if (invalidCodes.length > 0) {
       throw new BadRequestException(
         `Invalid country codes: ${invalidCodes.join(', ')}. Must be valid ISO 3166-1 alpha-2 codes.`,
@@ -365,9 +371,10 @@ export class GeoRestrictionService {
     countries: string[];
     logOnly: boolean;
   } | null> {
+    const cacheKey = `${this.CONFIG_CACHE_PREFIX}${workspaceId}`;
+
     try {
-      const key = `${this.CONFIG_CACHE_PREFIX}${workspaceId}`;
-      const cached = await this.redisService.get(key);
+      const cached = await this.redisService.get(cacheKey);
       if (cached) {
         return JSON.parse(cached);
       }
@@ -386,12 +393,9 @@ export class GeoRestrictionService {
     };
 
     // Cache (fire-and-forget)
-    try {
-      const key = `${this.CONFIG_CACHE_PREFIX}${workspaceId}`;
-      await this.redisService.set(key, JSON.stringify(data), this.CACHE_TTL);
-    } catch {
-      // Ignore cache write failures
-    }
+    this.redisService
+      .set(cacheKey, JSON.stringify(data), this.CACHE_TTL)
+      .catch(() => {});
 
     return data;
   }

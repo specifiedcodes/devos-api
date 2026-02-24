@@ -83,7 +83,8 @@ export class GeoIpLookupService implements OnModuleInit {
       }
       return null;
     } catch (error) {
-      this.logger.warn(`GeoIP lookup failed for IP: ${ip}`);
+      const sanitizedIp = ip.replace(/[^\d.:a-fA-F]/g, '').substring(0, 45);
+      this.logger.warn(`GeoIP lookup failed for IP: ${sanitizedIp}`);
       return null;
     }
   }
