@@ -328,6 +328,23 @@ export class SlackNotificationController {
   }
 
   /**
+   * GET /api/integrations/slack/users/slack-list?workspaceId=...
+   * List available Slack users for manual mapping.
+   * NOTE: More specific route must be defined BEFORE less specific 'users' route
+   * to prevent NestJS route shadowing.
+   */
+  @Get('users/slack-list')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'List Slack workspace users' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Slack users listed' })
+  async listSlackUsers(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<SlackUserInfo[]> {
+    return this.userMappingService.listSlackUsers(workspaceId);
+  }
+
+  /**
    * GET /api/integrations/slack/users?workspaceId=...
    * Get all user mappings for a workspace.
    */
@@ -340,20 +357,5 @@ export class SlackNotificationController {
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
   ): Promise<SlackUserMapping[]> {
     return this.userMappingService.getMappings(workspaceId);
-  }
-
-  /**
-   * GET /api/integrations/slack/users/slack-list?workspaceId=...
-   * List available Slack users for manual mapping.
-   */
-  @Get('users/slack-list')
-  @UseGuards(JwtAuthGuard)
-  @ApiOperation({ summary: 'List Slack workspace users' })
-  @ApiQuery({ name: 'workspaceId', required: true, type: String })
-  @ApiResponse({ status: 200, description: 'Slack users listed' })
-  async listSlackUsers(
-    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
-  ): Promise<SlackUserInfo[]> {
-    return this.userMappingService.listSlackUsers(workspaceId);
   }
 }

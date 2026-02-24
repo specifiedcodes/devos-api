@@ -5,7 +5,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { SlackUserMappingService } from '../services/slack-user-mapping.service';
 import { SlackUserMapping } from '../../../../database/entities/slack-user-mapping.entity';
 import { SlackIntegration } from '../../../../database/entities/slack-integration.entity';
@@ -104,9 +104,9 @@ describe('SlackUserMappingService', () => {
     it('maps Slack users to DevOS users when email matches', async () => {
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
-        getOne: jest.fn()
-          .mockResolvedValueOnce({ id: devosUserId, email: 'alice@example.com' })
-          .mockResolvedValueOnce(null),
+        getMany: jest.fn().mockResolvedValue([
+          { id: devosUserId, email: 'alice@example.com' },
+        ]),
       };
       mockUserRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
 
@@ -119,7 +119,7 @@ describe('SlackUserMappingService', () => {
     it('returns unmatched Slack users when no email match found', async () => {
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(null),
+        getMany: jest.fn().mockResolvedValue([]),
       };
       mockUserRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
 
@@ -132,7 +132,7 @@ describe('SlackUserMappingService', () => {
     it('filters out bot users from Slack user list', async () => {
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(null),
+        getMany: jest.fn().mockResolvedValue([]),
       };
       mockUserRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
 
@@ -150,7 +150,7 @@ describe('SlackUserMappingService', () => {
 
       const mockQueryBuilder = {
         where: jest.fn().mockReturnThis(),
-        getOne: jest.fn().mockResolvedValue(null),
+        getMany: jest.fn().mockResolvedValue([]),
       };
       mockUserRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder);
 
@@ -213,7 +213,7 @@ describe('SlackUserMappingService', () => {
     it('validates slackUserId format', async () => {
       await expect(
         service.mapUser(workspaceId, integrationId, devosUserId, 'invalid-id'),
-      ).rejects.toThrow(ConflictException);
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('invalidates cache after mapping', async () => {

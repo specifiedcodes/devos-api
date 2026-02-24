@@ -9,6 +9,7 @@
 import {
   Injectable,
   Logger,
+  BadRequestException,
   ConflictException,
   NotFoundException,
 } from '@nestjs/common';
@@ -68,20 +69,31 @@ export class SlackUserMappingService {
     const mappedSlackIds = new Set(existingMappings.map(m => m.slackUserId));
     const mappedDevosIds = new Set(existingMappings.map(m => m.devosUserId));
 
+    // Batch email lookup: collect all unmapped Slack user emails, query DevOS users in one go
+    const unmappedSlackUsers = humanUsersWithEmail.filter(u => !mappedSlackIds.has(u.slackUserId));
+    const emails = unmappedSlackUsers
+      .map(u => u.email!.toLowerCase())
+      .filter((v, i, a) => a.indexOf(v) === i); // deduplicate
+
+    // Single batched query instead of N+1 individual queries
+    const devosUsersByEmail = new Map<string, { id: string; email: string }>();
+    if (emails.length > 0) {
+      const devosUsers = await this.userRepo
+        .createQueryBuilder('user')
+        .where('LOWER(user.email) IN (:...emails)', { emails })
+        .getMany();
+
+      for (const user of devosUsers) {
+        devosUsersByEmail.set(user.email.toLowerCase(), user);
+      }
+    }
+
     let mapped = 0;
     const unmatched: SlackUserInfo[] = [];
 
-    for (const slackUser of humanUsersWithEmail) {
-      // Skip already mapped Slack users
-      if (mappedSlackIds.has(slackUser.slackUserId)) {
-        continue;
-      }
-
-      // Find DevOS user by email (case-insensitive)
-      const devosUser = await this.userRepo
-        .createQueryBuilder('user')
-        .where('LOWER(user.email) = LOWER(:email)', { email: slackUser.email })
-        .getOne();
+    for (const slackUser of unmappedSlackUsers) {
+      // Find DevOS user from batched lookup (case-insensitive)
+      const devosUser = devosUsersByEmail.get(slackUser.email!.toLowerCase());
 
       if (!devosUser || mappedDevosIds.has(devosUser.id)) {
         unmatched.push(slackUser);
@@ -132,7 +144,7 @@ export class SlackUserMappingService {
   ): Promise<SlackUserMapping> {
     // Validate slackUserId format (Slack user IDs start with U or W)
     if (!slackUserId || !/^[UW][A-Z0-9]+$/.test(slackUserId)) {
-      throw new ConflictException('Invalid Slack user ID format');
+      throw new BadRequestException('Invalid Slack user ID format');
     }
 
     // Check if Slack user is already mapped in this workspace
