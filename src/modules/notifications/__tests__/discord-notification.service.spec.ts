@@ -313,13 +313,15 @@ describe('DiscordNotificationService', () => {
 
       await service.sendNotification('ws-1', mockNotification);
 
-      expect(repo.update).toHaveBeenCalledWith(
-        { id: 'int-1' },
+      // recordError now uses atomic QueryBuilder increment
+      const qb = repo.createQueryBuilder();
+      expect(qb.update).toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          errorCount: 1,
           lastError: 'Internal Server Error',
         }),
       );
+      expect(qb.where).toHaveBeenCalledWith('id = :id', { id: 'int-1' });
     });
 
     it('should set status to error after 3 consecutive failures', async () => {
@@ -332,12 +334,18 @@ describe('DiscordNotificationService', () => {
 
       await service.sendNotification('ws-1', mockNotification);
 
-      expect(repo.update).toHaveBeenCalledWith(
-        { id: 'int-1' },
+      // recordError now uses atomic QueryBuilder for both increment and status update
+      const qb = repo.createQueryBuilder();
+      expect(qb.update).toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          errorCount: 3,
-          status: 'error',
+          lastError: 'Server Error',
         }),
+      );
+      // Second QueryBuilder call sets status to 'error' conditionally
+      expect(qb.where).toHaveBeenCalledWith(
+        'id = :id AND error_count >= 3 AND status != :errorStatus',
+        expect.objectContaining({ id: 'int-1', errorStatus: 'error' }),
       );
     });
   });
@@ -434,10 +442,13 @@ describe('DiscordNotificationService', () => {
       const configUpdate = { name: 'Discord Alerts', rateLimitPerMinute: 20 };
       await service.updateConfig('ws-1', configUpdate);
 
-      expect(repo.update).toHaveBeenCalledWith(
-        { workspaceId: 'ws-1' },
+      // updateConfig now uses QueryBuilder instead of repo.update
+      const qb = repo.createQueryBuilder();
+      expect(qb.update).toHaveBeenCalled();
+      expect(qb.set).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'Discord Alerts', rateLimitPerMinute: 20 }),
       );
+      expect(qb.where).toHaveBeenCalledWith('workspace_id = :workspaceId', { workspaceId: 'ws-1' });
       expect(redisService.del).toHaveBeenCalledWith('discord-integration:ws-1');
     });
   });

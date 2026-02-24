@@ -223,7 +223,13 @@ export class DiscordNotificationConfigService {
     const cached = await this.redisService.get(cacheKey);
     if (cached) {
       try {
-        return JSON.parse(cached);
+        const parsed = JSON.parse(cached);
+        // Decrypt the webhook URL if it was encrypted in the cache
+        if (parsed._encrypted && parsed.webhookUrl) {
+          parsed.webhookUrl = this.encryptionService.decrypt(parsed.webhookUrl);
+          delete parsed._encrypted;
+        }
+        return parsed;
       } catch {
         // Cache corrupted, fetch from DB
       }
@@ -315,13 +321,21 @@ export class DiscordNotificationConfigService {
 
   /**
    * Cache a resolved result in Redis.
+   * Security: The webhook URL is encrypted before caching to avoid
+   * storing plaintext credentials in Redis.
    */
   private async cacheResult(
     cacheKey: string,
     result: { webhookUrl: string; channelName?: string; isEnabled: boolean },
   ): Promise<void> {
     try {
-      await this.redisService.set(cacheKey, JSON.stringify(result), CACHE_TTL);
+      // Encrypt the webhook URL before storing in Redis cache
+      const cachePayload = {
+        ...result,
+        webhookUrl: this.encryptionService.encrypt(result.webhookUrl),
+        _encrypted: true,
+      };
+      await this.redisService.set(cacheKey, JSON.stringify(cachePayload), CACHE_TTL);
     } catch (error) {
       this.logger.warn(
         `Failed to cache notification config: ${error instanceof Error ? error.message : String(error)}`,
@@ -331,13 +345,31 @@ export class DiscordNotificationConfigService {
 
   /**
    * Invalidate all cached configs for a workspace.
+   * Uses Redis SCAN+DEL pattern to clear both global and project-specific
+   * cache entries, avoiding stale cache after config changes.
    */
   private async invalidateCache(workspaceId: string): Promise<void> {
     try {
-      // Invalidate all event type caches for this workspace
+      // Invalidate global event type caches
+      const keysToDelete: string[] = [];
       for (const eventType of DISCORD_EVENT_TYPES) {
-        await this.redisService.del(`${CACHE_PREFIX}${workspaceId}:${eventType}:global`);
+        keysToDelete.push(`${CACHE_PREFIX}${workspaceId}:${eventType}:global`);
       }
+      // Batch delete global keys
+      await Promise.all(keysToDelete.map((key) => this.redisService.del(key)));
+
+      // Also delete any project-specific cache entries via pattern scan
+      // Use scanDel if available, otherwise rely on TTL expiry for project keys
+      if (typeof (this.redisService as any).scanDel === 'function') {
+        await (this.redisService as any).scanDel(`${CACHE_PREFIX}${workspaceId}:*`);
+      } else if (typeof (this.redisService as any).keys === 'function') {
+        const projectKeys = await (this.redisService as any).keys(`${CACHE_PREFIX}${workspaceId}:*`);
+        if (projectKeys && projectKeys.length > 0) {
+          await Promise.all(projectKeys.map((key: string) => this.redisService.del(key)));
+        }
+      }
+      // If neither method is available, project-specific entries will expire
+      // naturally via TTL (300s), which is an acceptable degradation.
     } catch (error) {
       this.logger.warn(
         `Failed to invalidate config cache: ${error instanceof Error ? error.message : String(error)}`,

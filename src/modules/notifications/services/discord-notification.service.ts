@@ -475,7 +475,12 @@ export class DiscordNotificationService {
     }
 
     if (Object.keys(updateData).length > 0) {
-      await this.discordIntegrationRepo.update({ workspaceId }, updateData as any);
+      await this.discordIntegrationRepo
+        .createQueryBuilder()
+        .update(DiscordIntegration)
+        .set(updateData)
+        .where('workspace_id = :workspaceId', { workspaceId })
+        .execute();
     }
 
     // Invalidate cache
@@ -599,12 +604,46 @@ export class DiscordNotificationService {
   /**
    * Resolve the target Discord webhook for a notification type.
    * Returns decrypted webhook URL and webhook ID.
+   *
+   * Resolution order (Story 21.3 AC3):
+   * 1. DiscordNotificationConfigService (per-event config table) - if available
+   * 2. Legacy JSONB eventWebhookConfig - backward compatibility fallback
+   * 3. Default webhook URL
    */
   private async resolveWebhook(
     integration: DiscordIntegration,
     type: NotificationType,
+    projectId?: string,
   ): Promise<{ webhookUrl: string; webhookId: string; channelName?: string } | null> {
-    // Check event-specific webhook config
+    // 1. Check DiscordNotificationConfigService first (Story 21.3)
+    if (this.notificationConfigService) {
+      try {
+        const configResult = await this.notificationConfigService.resolveWebhookForEvent(
+          integration.workspaceId,
+          type,
+          projectId,
+        );
+        if (configResult && configResult.isEnabled) {
+          const match = configResult.webhookUrl.match(DISCORD_WEBHOOK_URL_PATTERN);
+          return {
+            webhookUrl: configResult.webhookUrl,
+            webhookId: match ? match[2] : 'unknown',
+            channelName: configResult.channelName,
+          };
+        }
+        // If config exists but is disabled, skip this event
+        if (configResult && !configResult.isEnabled) {
+          return null;
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to resolve webhook from config service for type ${type}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        // Fall through to legacy config
+      }
+    }
+
+    // 2. Fall back to legacy JSONB eventWebhookConfig
     const eventConfig = integration.eventWebhookConfig?.[type];
     if (eventConfig?.webhookUrl) {
       try {
@@ -622,7 +661,7 @@ export class DiscordNotificationService {
       }
     }
 
-    // Fall back to default webhook
+    // 3. Fall back to default webhook
     if (!integration.defaultWebhookUrl) {
       return null;
     }
@@ -746,22 +785,37 @@ export class DiscordNotificationService {
 
   /**
    * Record an error and potentially set status to 'error'.
+   * Uses atomic QueryBuilder increment to avoid race conditions
+   * with concurrent error recording.
    */
   private async recordError(integration: DiscordIntegration, errorMsg: string): Promise<void> {
-    const newErrorCount = (integration.errorCount || 0) + 1;
-    const updateData: any = {
-      errorCount: newErrorCount,
-      lastError: errorMsg,
-      lastErrorAt: new Date(),
-    };
+    // Atomic increment of error_count + set lastError/lastErrorAt
+    await this.discordIntegrationRepo
+      .createQueryBuilder()
+      .update(DiscordIntegration)
+      .set({
+        lastError: errorMsg,
+        lastErrorAt: new Date(),
+        errorCount: () => 'error_count + 1',
+      })
+      .where('id = :id', { id: integration.id })
+      .execute();
 
     // After 3 consecutive errors, set status to 'error'
-    if (newErrorCount >= 3) {
-      updateData.status = 'error';
-      this.logger.warn(`Discord integration for workspace ${integration.workspaceId} set to error after ${newErrorCount} consecutive failures`);
-    }
+    // Use a conditional update to atomically check and set status
+    const result = await this.discordIntegrationRepo
+      .createQueryBuilder()
+      .update(DiscordIntegration)
+      .set({ status: 'error' })
+      .where('id = :id AND error_count >= 3 AND status != :errorStatus', {
+        id: integration.id,
+        errorStatus: 'error',
+      })
+      .execute();
 
-    await this.discordIntegrationRepo.update({ id: integration.id }, updateData);
+    if (result.affected && result.affected > 0) {
+      this.logger.warn(`Discord integration for workspace ${integration.workspaceId} set to error after 3+ consecutive failures`);
+    }
 
     // Invalidate cache
     await this.redisService.del(`${CACHE_PREFIX}${integration.workspaceId}`);
