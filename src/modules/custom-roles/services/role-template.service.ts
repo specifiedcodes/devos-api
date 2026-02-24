@@ -23,6 +23,7 @@ import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
 import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
 import { PermissionAuditEventType } from '../../../database/entities/permission-audit-event.entity';
 import { CreateRoleFromTemplateDto } from '../dto/create-from-template.dto';
+import { CreateCustomRoleDto } from '../dto/create-custom-role.dto';
 import { SetPermissionDto } from '../dto/set-permission.dto';
 
 /**
@@ -386,9 +387,10 @@ export class RoleTemplateService {
 
   /**
    * Returns all available role templates.
+   * Returns deep copies to prevent mutation of the internal template registry.
    */
   listTemplates(): RoleTemplate[] {
-    return [...ROLE_TEMPLATES];
+    return ROLE_TEMPLATES.map((t) => this.deepCopyTemplate(t));
   }
 
   /**
@@ -402,37 +404,17 @@ export class RoleTemplateService {
         `Role template "${templateId}" not found`,
       );
     }
-    return { ...template };
+    return this.deepCopyTemplate(template);
   }
 
   /**
    * Returns the explicit permission overrides for a template.
    * Only includes permissions that DIFFER from the base role defaults.
+   * Delegates to computeOverrides to avoid duplicated logic.
    */
   getTemplatePermissions(templateId: string): SetPermissionDto[] {
     const template = this.getTemplate(templateId);
-    const baseDefaults = BASE_ROLE_DEFAULTS[template.baseRole] || {};
-    const overrides: SetPermissionDto[] = [];
-
-    for (const [resourceType, permissions] of Object.entries(
-      template.permissions,
-    )) {
-      const baseResourceDefaults = baseDefaults[resourceType] || {};
-
-      for (const [permName, granted] of Object.entries(permissions)) {
-        // Only include if the value differs from base role default
-        const baseValue = baseResourceDefaults[permName];
-        if (baseValue === undefined || baseValue !== granted) {
-          const dto = new SetPermissionDto();
-          dto.resourceType = resourceType;
-          dto.permission = permName;
-          dto.granted = granted;
-          overrides.push(dto);
-        }
-      }
-    }
-
-    return overrides;
+    return this.computeOverrides(template.baseRole, template.permissions);
   }
 
   /**
@@ -454,19 +436,18 @@ export class RoleTemplateService {
     const roleName = dto.name || template.name;
     const uniqueName = await this.generateUniqueName(roleName, workspaceId);
 
-    // Create the custom role via CustomRoleService
-    const createDto = {
-      name: uniqueName,
-      displayName: dto.displayName || template.displayName,
-      description: dto.description || template.description,
-      color: dto.color || template.color,
-      icon: dto.icon || template.icon,
-      baseRole: template.baseRole,
-    };
+    // Create the custom role via CustomRoleService with properly typed DTO
+    const createDto = new CreateCustomRoleDto();
+    createDto.name = uniqueName;
+    createDto.displayName = dto.displayName || template.displayName;
+    createDto.description = dto.description || template.description;
+    createDto.color = dto.color || template.color;
+    createDto.icon = dto.icon || template.icon;
+    createDto.baseRole = template.baseRole;
 
     const role = await this.customRoleService.createRole(
       workspaceId,
-      createDto as any,
+      createDto,
       actorId,
     );
 
@@ -545,25 +526,29 @@ export class RoleTemplateService {
 
     const template = this.getTemplate(role.templateId);
 
-    // Delete all existing explicit permissions
-    await this.dataSource.transaction(async (manager) => {
-      await manager.delete(RolePermission, { roleId });
-    });
-
-    // Compute and re-apply template overrides
+    // Compute template overrides before starting transaction
     const overrides = this.computeOverrides(
       template.baseRole,
       template.permissions,
     );
 
-    if (overrides.length > 0) {
-      await this.permissionMatrixService.setBulkPermissions(
-        roleId,
-        workspaceId,
-        overrides,
-        actorId,
-      );
-    }
+    // Delete all existing explicit permissions and re-apply atomically
+    await this.dataSource.transaction(async (manager) => {
+      await manager.delete(RolePermission, { roleId });
+
+      // Re-apply template permissions within the same transaction
+      if (overrides.length > 0) {
+        const permissionEntities = overrides.map((override) => {
+          const perm = new RolePermission();
+          perm.roleId = roleId;
+          perm.resourceType = override.resourceType;
+          perm.permission = override.permission;
+          perm.granted = override.granted;
+          return perm;
+        });
+        await manager.save(RolePermission, permissionEntities);
+      }
+    });
 
     // Invalidate permission cache
     this.permissionCacheService
@@ -595,26 +580,33 @@ export class RoleTemplateService {
   /**
    * Generate a unique role name within a workspace.
    * If the base name exists, appends -2, -3, etc.
+   * Uses a single query to find all existing names matching the pattern.
    */
   private async generateUniqueName(
     baseName: string,
     workspaceId: string,
   ): Promise<string> {
-    const existing = await this.customRoleRepo.findOne({
-      where: { workspaceId, name: baseName },
-    });
+    // Fetch all existing role names matching baseName or baseName-N in one query
+    const existingRoles = await this.customRoleRepo
+      .createQueryBuilder('role')
+      .select('role.name')
+      .where('role.workspaceId = :workspaceId', { workspaceId })
+      .andWhere('(role.name = :baseName OR role.name LIKE :pattern)', {
+        baseName,
+        pattern: `${baseName}-%`,
+      })
+      .getMany();
 
-    if (!existing) {
+    const existingNames = new Set(existingRoles.map((r) => r.name));
+
+    if (!existingNames.has(baseName)) {
       return baseName;
     }
 
-    // Try suffixed names
+    // Find the first available suffix
     for (let i = 2; i <= 100; i++) {
       const candidateName = `${baseName}-${i}`;
-      const found = await this.customRoleRepo.findOne({
-        where: { workspaceId, name: candidateName },
-      });
-      if (!found) {
+      if (!existingNames.has(candidateName)) {
         return candidateName;
       }
     }
@@ -684,6 +676,20 @@ export class RoleTemplateService {
     }
 
     return overrides;
+  }
+
+  /**
+   * Deep-copy a template to prevent mutation of the internal registry.
+   */
+  private deepCopyTemplate(template: RoleTemplate): RoleTemplate {
+    const permissions: Record<string, Record<string, boolean>> = {};
+    for (const [resource, perms] of Object.entries(template.permissions)) {
+      permissions[resource] = { ...perms };
+    }
+    return {
+      ...template,
+      permissions,
+    };
   }
 
   /**

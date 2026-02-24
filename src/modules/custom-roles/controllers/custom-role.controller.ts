@@ -23,12 +23,13 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { CustomRoleService } from '../services/custom-role.service';
-import { RoleTemplateService } from '../services/role-template.service';
+import { RoleTemplateService, RoleTemplate } from '../services/role-template.service';
 import { CreateCustomRoleDto } from '../dto/create-custom-role.dto';
 import { UpdateCustomRoleDto } from '../dto/update-custom-role.dto';
 import { CloneCustomRoleDto } from '../dto/clone-custom-role.dto';
 import { ReorderRolesDto } from '../dto/reorder-roles.dto';
 import { CreateRoleFromTemplateDto } from '../dto/create-from-template.dto';
+import { CustomRole } from '../../../database/entities/custom-role.entity';
 
 @ApiTags('Custom Roles')
 @ApiBearerAuth('JWT-auth')
@@ -58,7 +59,7 @@ export class CustomRoleController {
   @ApiResponse({ status: 200, description: 'Template list retrieved' })
   async listTemplates(
     @Param('workspaceId', ParseUUIDPipe) _workspaceId: string,
-  ): Promise<{ templates: any[] }> {
+  ): Promise<{ templates: RoleTemplate[] }> {
     return { templates: this.roleTemplateService.listTemplates() };
   }
 
@@ -71,7 +72,7 @@ export class CustomRoleController {
   async getTemplate(
     @Param('workspaceId', ParseUUIDPipe) _workspaceId: string,
     @Param('templateId') templateId: string,
-  ): Promise<any> {
+  ): Promise<RoleTemplate> {
     return this.roleTemplateService.getTemplate(templateId);
   }
 
@@ -88,7 +89,7 @@ export class CustomRoleController {
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Body() dto: CreateRoleFromTemplateDto,
     @Req() req: any,
-  ): Promise<any> {
+  ): Promise<CustomRole> {
     return this.roleTemplateService.createRoleFromTemplate(
       workspaceId,
       dto,

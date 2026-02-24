@@ -52,6 +52,12 @@ describe('RoleTemplateService', () => {
     customRoleRepo = {
       findOne: jest.fn().mockResolvedValue(null),
       update: jest.fn().mockResolvedValue(undefined),
+      createQueryBuilder: jest.fn().mockReturnValue({
+        select: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      }),
     };
 
     permissionRepo = {};
@@ -60,6 +66,7 @@ describe('RoleTemplateService', () => {
       transaction: jest.fn().mockImplementation(async (cb: any) => {
         const manager = {
           delete: jest.fn().mockResolvedValue(undefined),
+          save: jest.fn().mockResolvedValue([]),
         };
         return cb(manager);
       }),
@@ -252,10 +259,13 @@ describe('RoleTemplateService', () => {
   });
 
   it('should generate unique name with suffix when collision exists', async () => {
-    // First call: name exists, second call: name-2 does not exist
-    customRoleRepo.findOne
-      .mockResolvedValueOnce({ name: 'qa-lead' }) // 'qa-lead' exists
-      .mockResolvedValueOnce(null); // 'qa-lead-2' does not exist
+    // Mock createQueryBuilder to return existing 'qa-lead' name
+    customRoleRepo.createQueryBuilder.mockReturnValue({
+      select: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue([{ name: 'qa-lead' }]),
+    });
 
     await service.createRoleFromTemplate(
       'workspace-1',
@@ -324,7 +334,7 @@ describe('RoleTemplateService', () => {
 
   // ---- resetRoleToTemplate ----
 
-  it('should reset role permissions to template defaults', async () => {
+  it('should reset role permissions to template defaults atomically', async () => {
     customRoleRepo.findOne.mockResolvedValueOnce({
       id: 'role-uuid-1',
       name: 'qa-lead',
@@ -335,7 +345,12 @@ describe('RoleTemplateService', () => {
     await service.resetRoleToTemplate('role-uuid-1', 'workspace-1', 'actor-1');
 
     expect(dataSource.transaction).toHaveBeenCalled();
-    expect(permissionMatrixService.setBulkPermissions).toHaveBeenCalled();
+    // Verify transaction manager was used for both delete and save (atomic operation)
+    const transactionCb = dataSource.transaction.mock.calls[0][0];
+    const mockManager = { delete: jest.fn().mockResolvedValue(undefined), save: jest.fn().mockResolvedValue([]) };
+    await transactionCb(mockManager);
+    expect(mockManager.delete).toHaveBeenCalled();
+    expect(mockManager.save).toHaveBeenCalled();
     expect(permissionCacheService.invalidateRolePermissions).toHaveBeenCalledWith('workspace-1');
   });
 
