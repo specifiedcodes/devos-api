@@ -9,6 +9,7 @@ import { ConfigService } from '@nestjs/config';
 import { UnauthorizedException, ServiceUnavailableException } from '@nestjs/common';
 import { SlackEventsController } from '../controllers/slack-events.controller';
 import { SlackOAuthService } from '../../../notifications/services/slack-oauth.service';
+import { SlackInteractionHandlerService } from '../services/slack-interaction-handler.service';
 import { SlackIntegration } from '../../../../database/entities/slack-integration.entity';
 import { RedisService } from '../../../redis/redis.service';
 
@@ -18,6 +19,7 @@ describe('SlackEventsController', () => {
   let mockIntegrationRepo: any;
   let mockRedisService: any;
   let mockConfigService: any;
+  let mockInteractionHandler: any;
 
   const validSignature = 'v0=abc123';
   const validTimestamp = String(Math.floor(Date.now() / 1000));
@@ -37,6 +39,8 @@ describe('SlackEventsController', () => {
     };
 
     mockRedisService = {
+      get: jest.fn().mockResolvedValue(null),
+      set: jest.fn().mockResolvedValue(undefined),
       del: jest.fn().mockResolvedValue(undefined),
     };
 
@@ -47,6 +51,12 @@ describe('SlackEventsController', () => {
       }),
     };
 
+    mockInteractionHandler = {
+      handleBlockActions: jest.fn().mockResolvedValue(undefined),
+      handleViewSubmission: jest.fn().mockResolvedValue(undefined),
+      handleSlashCommand: jest.fn().mockResolvedValue({ response_type: 'ephemeral', text: 'ok' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SlackEventsController],
       providers: [
@@ -54,6 +64,7 @@ describe('SlackEventsController', () => {
         { provide: getRepositoryToken(SlackIntegration), useValue: mockIntegrationRepo },
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: SlackInteractionHandlerService, useValue: mockInteractionHandler },
       ],
     }).compile();
 
@@ -161,6 +172,7 @@ describe('SlackEventsController', () => {
           { provide: getRepositoryToken(SlackIntegration), useValue: mockIntegrationRepo },
           { provide: RedisService, useValue: mockRedisService },
           { provide: ConfigService, useValue: mockConfigService },
+          { provide: SlackInteractionHandlerService, useValue: mockInteractionHandler },
         ],
       }).compile();
 
@@ -221,6 +233,7 @@ describe('SlackEventsController', () => {
           { provide: getRepositoryToken(SlackIntegration), useValue: mockIntegrationRepo },
           { provide: RedisService, useValue: mockRedisService },
           { provide: ConfigService, useValue: mockConfigService },
+          { provide: SlackInteractionHandlerService, useValue: mockInteractionHandler },
         ],
       }).compile();
 

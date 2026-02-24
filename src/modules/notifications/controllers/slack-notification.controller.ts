@@ -1,6 +1,7 @@
 /**
  * SlackNotificationController
  * Story 16.4: Slack Notification Integration (AC5)
+ * Story 21.2: Slack Interactive Components (AC7) - Notification config & interaction log endpoints
  *
  * REST API endpoints for Slack OAuth flow, configuration, and management.
  */
@@ -35,8 +36,14 @@ import { SlackNotificationService } from '../services/slack-notification.service
 import { SlackOAuthService } from '../services/slack-oauth.service';
 import { UpdateSlackConfigDto, SlackIntegrationStatusDto } from '../dto/slack-notification.dto';
 import { SlackUserMappingService, SlackUserInfo } from '../../integrations/slack/services/slack-user-mapping.service';
+import { SlackNotificationConfigService } from '../../integrations/slack/services/slack-notification-config.service';
 import { MapSlackUserDto } from '../../integrations/slack/dto/slack-user-mapping.dto';
+import { UpsertNotificationConfigDto } from '../../integrations/slack/dto/slack-interaction.dto';
 import { SlackUserMapping } from '../../../database/entities/slack-user-mapping.entity';
+import { SlackNotificationConfig } from '../../../database/entities/slack-notification-config.entity';
+import { SlackInteractionLog } from '../../../database/entities/slack-interaction-log.entity';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 
 @Controller('api/integrations/slack')
 @ApiTags('Integrations - Slack')
@@ -48,6 +55,9 @@ export class SlackNotificationController {
     private readonly slackService: SlackNotificationService,
     private readonly oauthService: SlackOAuthService,
     private readonly userMappingService: SlackUserMappingService,
+    private readonly notificationConfigService: SlackNotificationConfigService,
+    @InjectRepository(SlackInteractionLog)
+    private readonly interactionLogRepo: Repository<SlackInteractionLog>,
   ) {}
 
   /**
@@ -357,5 +367,98 @@ export class SlackNotificationController {
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
   ): Promise<SlackUserMapping[]> {
     return this.userMappingService.getMappings(workspaceId);
+  }
+
+  // ============================================================
+  // Story 21.2: Notification Config & Interaction Log Endpoints
+  // ============================================================
+
+  /**
+   * GET /api/integrations/slack/notification-configs?workspaceId=...
+   * List all notification routing configs for workspace.
+   */
+  @Get('notification-configs')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'List Slack notification routing configs' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Notification configs returned' })
+  async getNotificationConfigs(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+  ): Promise<SlackNotificationConfig[]> {
+    const integration = await this.slackService.getIntegration(workspaceId);
+    if (!integration) {
+      throw new NotFoundException('No Slack integration found for this workspace');
+    }
+    return this.notificationConfigService.getConfigs(integration.id);
+  }
+
+  /**
+   * POST /api/integrations/slack/notification-configs?workspaceId=...
+   * Create or update a notification routing config.
+   */
+  @Post('notification-configs')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Upsert Slack notification routing config' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 200, description: 'Notification config saved' })
+  async upsertNotificationConfig(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: UpsertNotificationConfigDto,
+  ): Promise<SlackNotificationConfig> {
+    const integration = await this.slackService.getIntegration(workspaceId);
+    if (!integration) {
+      throw new NotFoundException('No Slack integration found for this workspace');
+    }
+    return this.notificationConfigService.upsertConfig(dto);
+  }
+
+  /**
+   * DELETE /api/integrations/slack/notification-configs/:configId?workspaceId=...
+   * Delete a notification routing config.
+   */
+  @Delete('notification-configs/:configId')
+  @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete Slack notification routing config' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiResponse({ status: 204, description: 'Notification config deleted' })
+  async deleteNotificationConfig(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('configId', ParseUUIDPipe) configId: string,
+  ): Promise<void> {
+    const integration = await this.slackService.getIntegration(workspaceId);
+    if (!integration) {
+      throw new NotFoundException('No Slack integration found for this workspace');
+    }
+    return this.notificationConfigService.deleteConfig(configId);
+  }
+
+  /**
+   * GET /api/integrations/slack/interactions/log?workspaceId=...
+   * Get recent interaction log entries.
+   */
+  @Get('interactions/log')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get Slack interaction log' })
+  @ApiQuery({ name: 'workspaceId', required: true, type: String })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'offset', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Interaction log returned' })
+  async getInteractionLog(
+    @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+  ): Promise<{ items: SlackInteractionLog[]; total: number }> {
+    const take = Math.min(Math.max(limit || 50, 1), 100);
+    const skip = Math.max(offset || 0, 0);
+
+    const [items, total] = await this.interactionLogRepo.findAndCount({
+      where: { workspaceId },
+      order: { createdAt: 'DESC' },
+      take,
+      skip,
+    });
+
+    return { items, total };
   }
 }

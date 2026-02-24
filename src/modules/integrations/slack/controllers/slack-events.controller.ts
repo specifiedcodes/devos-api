@@ -1,9 +1,10 @@
 /**
  * SlackEventsController
  * Story 21.1: Slack OAuth Integration (AC3)
+ * Story 21.2: Slack Interactive Components (AC5) - Enhanced interaction handling + slash commands
  *
  * Handles incoming Slack Events API requests including url_verification challenge,
- * event callbacks, and interactive component payloads.
+ * event callbacks, interactive component payloads, and slash commands.
  */
 
 import {
@@ -25,6 +26,7 @@ import { ConfigService } from '@nestjs/config';
 import { SlackOAuthService } from '../../../notifications/services/slack-oauth.service';
 import { SlackIntegration } from '../../../../database/entities/slack-integration.entity';
 import { RedisService } from '../../../redis/redis.service';
+import { SlackInteractionHandlerService } from '../services/slack-interaction-handler.service';
 
 @Controller('api/integrations/slack')
 @ApiTags('Integrations - Slack Events')
@@ -38,6 +40,7 @@ export class SlackEventsController {
     private readonly integrationRepo: Repository<SlackIntegration>,
     private readonly redisService: RedisService,
     private readonly configService: ConfigService,
+    private readonly interactionHandler: SlackInteractionHandlerService,
   ) {
     this.signingSecretConfigured = !!this.configService.get<string>('SLACK_SIGNING_SECRET');
   }
@@ -113,6 +116,7 @@ export class SlackEventsController {
    * POST /api/integrations/slack/interactions
    * Handles Slack Interactive Components (button clicks, modal submissions).
    * Payload is URL-encoded with a 'payload' field containing JSON.
+   * Story 21.2: Routes to SlackInteractionHandlerService for processing.
    */
   @Post('interactions')
   @HttpCode(HttpStatus.OK)
@@ -152,9 +156,69 @@ export class SlackEventsController {
 
     this.logger.log(`Slack interaction received: ${payload.type} from team ${payload.team?.id}`);
 
-    // Acknowledge within 3 seconds (Slack timeout requirement)
-    // Future story 21-2 will handle specific interaction types
+    // Deduplication check
+    const interactionId = payload.trigger_id || payload.callback_id || `${Date.now()}`;
+    const dedupeKey = `slack-interaction:${interactionId}`;
+    const isDuplicate = await this.redisService.get(dedupeKey);
+    if (isDuplicate) {
+      return { ok: true };
+    }
+    await this.redisService.set(dedupeKey, '1', 60);
+
+    // Route to handler (async - acknowledge within 3 seconds)
+    switch (payload.type) {
+      case 'block_actions':
+        // Process async, return immediately
+        this.interactionHandler.handleBlockActions(payload).catch(err =>
+          this.logger.error('Block action handler error', err.stack),
+        );
+        break;
+
+      case 'view_submission':
+        this.interactionHandler.handleViewSubmission(payload).catch(err =>
+          this.logger.error('View submission handler error', err.stack),
+        );
+        break;
+
+      default:
+        this.logger.log(`Unhandled interaction type: ${payload.type}`);
+    }
+
     return { ok: true };
+  }
+
+  /**
+   * POST /api/integrations/slack/commands
+   * Handles Slack slash commands (/devos).
+   * Story 21.2: AC5 - New endpoint for slash commands.
+   */
+  @Post('commands')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Handle Slack slash commands' })
+  @ApiResponse({ status: 200, description: 'Command response returned' })
+  @ApiResponse({ status: 401, description: 'Invalid Slack signature' })
+  async handleSlashCommand(
+    @Headers('x-slack-signature') signature: string,
+    @Headers('x-slack-request-timestamp') timestamp: string,
+    @Body() body: any,
+    @Req() req: any,
+  ): Promise<any> {
+    if (!this.signingSecretConfigured) {
+      throw new ServiceUnavailableException('Slack signing secret not configured');
+    }
+
+    // Get raw body for signature verification
+    const rawBody = req.rawBody ? req.rawBody.toString('utf8') : JSON.stringify(body);
+
+    // Verify signature
+    if (!this.verifyRequest(signature, timestamp, rawBody)) {
+      throw new UnauthorizedException('Invalid Slack signature');
+    }
+
+    this.logger.log(`Slack command received: ${body.command} ${body.text} from team ${body.team_id}`);
+
+    // Route to handler
+    return this.interactionHandler.handleSlashCommand(body);
   }
 
   /**

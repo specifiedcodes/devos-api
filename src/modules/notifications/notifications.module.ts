@@ -61,7 +61,10 @@ import { DiscordIntegration } from '../../database/entities/discord-integration.
 
 // Story 21.1: Slack user mapping service (imported from SlackIntegrationModule)
 import { SlackUserMappingService } from '../integrations/slack/services/slack-user-mapping.service';
+import { SlackNotificationConfigService } from '../integrations/slack/services/slack-notification-config.service';
 import { SlackUserMapping } from '../../database/entities/slack-user-mapping.entity';
+import { SlackNotificationConfig } from '../../database/entities/slack-notification-config.entity';
+import { SlackInteractionLog } from '../../database/entities/slack-interaction-log.entity';
 import { User } from '../../database/entities/user.entity';
 
 // Related Modules
@@ -78,7 +81,7 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
     // This module only needs EventEmitterModule features, not forRoot()
 
     // TypeORM for subscription, project, preferences, and Slack integration queries
-    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration, SlackUserMapping, User]),
+    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration, SlackUserMapping, SlackNotificationConfig, SlackInteractionLog, User]),
 
     // Story 21.1: Encryption module for user mapping service
     EncryptionModule,
@@ -161,6 +164,9 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
     // Story 21.1: Slack user mapping service
     SlackUserMappingService,
 
+    // Story 21.2: Slack notification config service
+    SlackNotificationConfigService,
+
     // BullMQ processors
     NotificationBatchProcessor,
     SlackMessageProcessor,
@@ -176,6 +182,7 @@ import { EncryptionModule } from '../../shared/encryption/encryption.module';
     SlackNotificationService,
     SlackOAuthService,
     SlackUserMappingService,
+    SlackNotificationConfigService,
     DiscordNotificationService,
   ],
 })

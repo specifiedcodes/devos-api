@@ -8,9 +8,14 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { ConfigService } from '@nestjs/config';
 import { SlackEventsController } from '../controllers/slack-events.controller';
 import { SlackUserMappingService } from '../services/slack-user-mapping.service';
+import { SlackInteractionHandlerService } from '../services/slack-interaction-handler.service';
+import { SlackNotificationConfigService } from '../services/slack-notification-config.service';
 import { SlackOAuthService } from '../../../notifications/services/slack-oauth.service';
+import { SlackNotificationService } from '../../../notifications/services/slack-notification.service';
 import { SlackIntegration } from '../../../../database/entities/slack-integration.entity';
 import { SlackUserMapping } from '../../../../database/entities/slack-user-mapping.entity';
+import { SlackNotificationConfig } from '../../../../database/entities/slack-notification-config.entity';
+import { SlackInteractionLog } from '../../../../database/entities/slack-interaction-log.entity';
 import { User } from '../../../../database/entities/user.entity';
 import { EncryptionService } from '../../../../shared/encryption/encryption.service';
 import { RedisService } from '../../../redis/redis.service';
@@ -36,10 +41,15 @@ describe('SlackIntegrationModule', () => {
       controllers: [SlackEventsController],
       providers: [
         SlackUserMappingService,
+        SlackInteractionHandlerService,
+        SlackNotificationConfigService,
         { provide: getRepositoryToken(SlackIntegration), useValue: mockRepo },
         { provide: getRepositoryToken(SlackUserMapping), useValue: mockRepo },
+        { provide: getRepositoryToken(SlackNotificationConfig), useValue: mockRepo },
+        { provide: getRepositoryToken(SlackInteractionLog), useValue: mockRepo },
         { provide: getRepositoryToken(User), useValue: mockRepo },
         { provide: SlackOAuthService, useValue: { verifySignature: jest.fn() } },
+        { provide: SlackNotificationService, useValue: { getIntegration: jest.fn() } },
         { provide: EncryptionService, useValue: { encrypt: jest.fn(), decrypt: jest.fn() } },
         { provide: RedisService, useValue: { get: jest.fn(), set: jest.fn(), del: jest.fn() } },
         { provide: ConfigService, useValue: { get: jest.fn().mockReturnValue('test-secret') } },

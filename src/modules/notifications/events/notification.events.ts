@@ -1,6 +1,7 @@
 /**
  * Notification Event Definitions
  * Story 10.5: Notification Triggers
+ * Story 21.2: Slack Interactive Components (AC2) - Added interactive event types
  *
  * Defines all notification event types and their payloads.
  */
@@ -13,8 +14,15 @@ export type NotificationType =
   | 'story_completed'
   | 'deployment_success'
   | 'deployment_failed'
+  | 'deployment_pending_approval'   // Story 21.2
   | 'agent_error'
   | 'agent_message'
+  | 'agent_needs_input'             // Story 21.2
+  | 'agent_task_started'            // Story 21.2
+  | 'agent_task_completed'          // Story 21.2
+  | 'cost_alert_warning'            // Story 21.2
+  | 'cost_alert_exceeded'           // Story 21.2
+  | 'sprint_review_ready'           // Story 21.2
   | 'context_degraded'
   | 'context_critical';
 
@@ -138,6 +146,93 @@ export interface ContextCriticalEvent {
 }
 
 /**
+ * Deployment pending approval event payload (Story 21.2)
+ */
+export interface DeploymentPendingApprovalEvent {
+  deploymentId: string;
+  projectId: string;
+  projectName: string;
+  environment: string;
+  workspaceId: string;
+  requestedBy: string;
+  storyTitle?: string;
+}
+
+/**
+ * Agent needs input event payload (Story 21.2)
+ */
+export interface AgentNeedsInputEvent {
+  agentId: string;
+  agentName: string;
+  agentType: string;
+  projectId: string;
+  workspaceId: string;
+  question: string;
+  conversationId?: string;
+}
+
+/**
+ * Agent task started event payload (Story 21.2)
+ */
+export interface AgentTaskStartedEvent {
+  agentId: string;
+  agentName: string;
+  agentType: string;
+  projectId: string;
+  workspaceId: string;
+  storyTitle: string;
+  storyId: string;
+}
+
+/**
+ * Agent task completed event payload (Story 21.2)
+ */
+export interface AgentTaskCompletedEvent {
+  agentId: string;
+  agentName: string;
+  agentType: string;
+  projectId: string;
+  workspaceId: string;
+  storyTitle: string;
+  storyId: string;
+  filesChanged?: number;
+}
+
+/**
+ * Cost alert warning event payload (Story 21.2)
+ */
+export interface CostAlertWarningEvent {
+  workspaceId: string;
+  projectId?: string;
+  currentCost: number;
+  limit: number;
+  percentage: number;
+  currency: string;
+}
+
+/**
+ * Cost alert exceeded event payload (Story 21.2)
+ */
+export interface CostAlertExceededEvent {
+  workspaceId: string;
+  projectId?: string;
+  currentCost: number;
+  limit: number;
+  currency: string;
+}
+
+/**
+ * Sprint review ready event payload (Story 21.2)
+ */
+export interface SprintReviewReadyEvent {
+  workspaceId: string;
+  projectId: string;
+  sprintName: string;
+  completedStories: number;
+  totalStories: number;
+}
+
+/**
  * Event names used with NestJS EventEmitter
  */
 export const NotificationEventNames = {
@@ -145,7 +240,14 @@ export const NotificationEventNames = {
   STORY_COMPLETED: 'story.completed',
   DEPLOYMENT_SUCCEEDED: 'deployment.succeeded',
   DEPLOYMENT_FAILED: 'deployment.failed',
+  DEPLOYMENT_PENDING_APPROVAL: 'deployment.pending_approval',
   AGENT_ERROR: 'agent.error',
   AGENT_MESSAGE: 'agent.message',
+  AGENT_NEEDS_INPUT: 'agent.needs_input',
+  AGENT_TASK_STARTED: 'agent.task.started',
+  AGENT_TASK_COMPLETED: 'agent.task.completed',
+  COST_ALERT_WARNING: 'cost.alert.warning',
+  COST_ALERT_EXCEEDED: 'cost.alert.exceeded',
+  SPRINT_REVIEW_READY: 'sprint.review.ready',
   CONTEXT_HEALTH_CHANGED: 'context:health_changed',
 } as const;

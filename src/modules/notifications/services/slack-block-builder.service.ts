@@ -1,6 +1,7 @@
 /**
  * SlackBlockBuilderService
  * Story 16.4: Slack Notification Integration (AC8)
+ * Story 21.2: Slack Interactive Components (AC3) - Added interactive message types
  *
  * Builds Slack Block Kit messages for each notification event type.
  * Uses color-coded attachments and deep link buttons.
@@ -18,6 +19,8 @@ export interface SlackBlock {
     text?: string | { type: string; text: string };
     url?: string;
     action_id?: string;
+    style?: string;
+    value?: string;
   }>;
   block_id?: string;
 }
@@ -71,6 +74,20 @@ export class SlackBlockBuilderService {
         return this.buildContextDegraded(payload, frontendUrl);
       case 'context_critical':
         return this.buildContextCritical(payload, frontendUrl);
+      case 'deployment_pending_approval':
+        return this.buildDeploymentApproval(payload, frontendUrl);
+      case 'agent_needs_input':
+        return this.buildAgentNeedsInput(payload, frontendUrl);
+      case 'agent_task_started':
+        return this.buildAgentTaskStarted(payload, frontendUrl);
+      case 'agent_task_completed':
+        return this.buildAgentTaskCompleted(payload, frontendUrl);
+      case 'cost_alert_warning':
+        return this.buildCostAlertWarning(payload, frontendUrl);
+      case 'cost_alert_exceeded':
+        return this.buildCostAlertExceeded(payload, frontendUrl);
+      case 'sprint_review_ready':
+        return this.buildSprintReviewReady(payload, frontendUrl);
       default:
         return this.buildGenericMessage(type, payload);
     }
@@ -467,6 +484,400 @@ export class SlackBlockBuilderService {
               type: 'context',
               elements: [
                 { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  // ============================================================
+  // Story 21.2: Interactive Message Builders
+  // ============================================================
+
+  private buildDeploymentApproval(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const projectName = this.truncate(payload.projectName || 'Unknown Project', 200);
+    const environment = payload.environment || 'unknown';
+    const requestedBy = payload.requestedBy || 'Unknown';
+    const storyTitle = payload.storyTitle ? this.truncate(payload.storyTitle, 200) : undefined;
+    const deploymentId = payload.deploymentId || '';
+    const deepLink = `${frontendUrl}/projects/${payload.projectId || ''}/deployments/${deploymentId}`;
+
+    const fields: Array<{ type: string; text: string }> = [
+      { type: 'mrkdwn', text: `*Project:*\n${projectName}` },
+      { type: 'mrkdwn', text: `*Environment:*\n${environment}` },
+      { type: 'mrkdwn', text: `*Requested By:*\n${requestedBy}` },
+    ];
+    if (storyTitle) {
+      fields.push({ type: 'mrkdwn', text: `*Story:*\n${storyTitle}` });
+    }
+
+    return {
+      text: `Deployment Approval Required: ${projectName} to ${environment}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Deployment Approval Required', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.YELLOW,
+          blocks: [
+            {
+              type: 'section',
+              fields,
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              block_id: `deploy_actions_${deploymentId}`,
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'Approve' },
+                  action_id: `approve_deploy:${deploymentId}`,
+                  style: 'primary',
+                  value: deploymentId,
+                },
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'Reject' },
+                  action_id: `reject_deploy:${deploymentId}`,
+                  style: 'danger',
+                  value: deploymentId,
+                },
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View in DevOS' },
+                  url: deepLink,
+                  action_id: 'view_deployment',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  private buildAgentNeedsInput(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const agentName = this.truncate(payload.agentName || 'Unknown Agent', 200);
+    const question = this.truncate(payload.question || 'No question provided', 500);
+    const agentId = payload.agentId || '';
+    const conversationId = payload.conversationId || '';
+    const deepLink = `${frontendUrl}/projects/${payload.projectId || ''}/chat/${agentId}`;
+
+    return {
+      text: `Agent Needs Your Input: ${agentName}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Agent Needs Your Input', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.BLUE,
+          blocks: [
+            {
+              type: 'section',
+              fields: [
+                { type: 'mrkdwn', text: `*Agent:*\n${agentName}` },
+                { type: 'mrkdwn', text: `*Type:*\n${payload.agentType || 'unknown'}` },
+              ],
+            },
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: `*Question:*\n${question}` },
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              block_id: `agent_input_${agentId}`,
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'Respond' },
+                  action_id: `respond_agent:${agentId}:${conversationId}`,
+                  style: 'primary',
+                  value: `${agentId}:${conversationId}`,
+                },
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View in DevOS' },
+                  url: deepLink,
+                  action_id: 'view_agent_chat',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  private buildAgentTaskStarted(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const agentName = this.truncate(payload.agentName || 'Unknown Agent', 200);
+    const storyTitle = this.truncate(payload.storyTitle || 'Unknown Story', 200);
+    const deepLink = `${frontendUrl}/projects/${payload.projectId || ''}/stories/${payload.storyId || ''}`;
+
+    return {
+      text: `Agent Task Started: ${agentName} working on ${storyTitle}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Agent Task Started', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.BLUE,
+          blocks: [
+            {
+              type: 'section',
+              fields: [
+                { type: 'mrkdwn', text: `*Agent:*\n${agentName}` },
+                { type: 'mrkdwn', text: `*Type:*\n${payload.agentType || 'unknown'}` },
+                { type: 'mrkdwn', text: `*Story:*\n${storyTitle}` },
+              ],
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View Story' },
+                  url: deepLink,
+                  action_id: 'view_story',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  private buildAgentTaskCompleted(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const agentName = this.truncate(payload.agentName || 'Unknown Agent', 200);
+    const storyTitle = this.truncate(payload.storyTitle || 'Unknown Story', 200);
+    const filesChanged = payload.filesChanged ?? 0;
+    const deepLink = `${frontendUrl}/projects/${payload.projectId || ''}/stories/${payload.storyId || ''}`;
+
+    return {
+      text: `Agent Task Completed: ${agentName} finished ${storyTitle}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Agent Task Completed', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.GREEN,
+          blocks: [
+            {
+              type: 'section',
+              fields: [
+                { type: 'mrkdwn', text: `*Agent:*\n${agentName}` },
+                { type: 'mrkdwn', text: `*Type:*\n${payload.agentType || 'unknown'}` },
+                { type: 'mrkdwn', text: `*Story:*\n${storyTitle}` },
+                { type: 'mrkdwn', text: `*Files Changed:*\n${filesChanged}` },
+              ],
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View Story' },
+                  url: deepLink,
+                  action_id: 'view_story',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  private buildCostAlertWarning(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const currentCost = typeof payload.currentCost === 'number' ? payload.currentCost.toFixed(2) : '0.00';
+    const limit = typeof payload.limit === 'number' ? payload.limit.toFixed(2) : '0.00';
+    const percentage = typeof payload.percentage === 'number' ? payload.percentage : 0;
+    const currency = payload.currency || 'USD';
+    const deepLink = `${frontendUrl}/settings/costs`;
+
+    return {
+      text: `Cost Alert: Budget Warning - ${percentage}% of limit reached`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Cost Alert: Budget Warning', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.YELLOW,
+          blocks: [
+            {
+              type: 'section',
+              fields: [
+                { type: 'mrkdwn', text: `*Current Cost:*\n${currency} ${currentCost}` },
+                { type: 'mrkdwn', text: `*Limit:*\n${currency} ${limit}` },
+                { type: 'mrkdwn', text: `*Usage:*\n${percentage}%` },
+              ],
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View Cost Dashboard' },
+                  url: deepLink,
+                  action_id: 'view_costs',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  private buildCostAlertExceeded(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const currentCost = typeof payload.currentCost === 'number' ? payload.currentCost.toFixed(2) : '0.00';
+    const limit = typeof payload.limit === 'number' ? payload.limit.toFixed(2) : '0.00';
+    const currency = payload.currency || 'USD';
+    const deepLink = `${frontendUrl}/settings/costs`;
+
+    return {
+      text: `Cost Alert: Budget Exceeded - ${currency} ${currentCost} / ${currency} ${limit}`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Cost Alert: Budget Exceeded', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.RED,
+          blocks: [
+            {
+              type: 'section',
+              fields: [
+                { type: 'mrkdwn', text: `*Current Cost:*\n${currency} ${currentCost}` },
+                { type: 'mrkdwn', text: `*Limit:*\n${currency} ${limit}` },
+              ],
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View Cost Dashboard' },
+                  url: deepLink,
+                  action_id: 'view_costs',
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      unfurl_links: false,
+      unfurl_media: false,
+    };
+  }
+
+  private buildSprintReviewReady(payload: Record<string, any>, frontendUrl: string): SlackMessage {
+    const sprintName = this.truncate(payload.sprintName || 'Unknown Sprint', 200);
+    const completedStories = payload.completedStories ?? 0;
+    const totalStories = payload.totalStories ?? 0;
+    const deepLink = `${frontendUrl}/projects/${payload.projectId || ''}/sprints`;
+
+    return {
+      text: `Sprint Review Ready: ${sprintName} (${completedStories}/${totalStories} stories)`,
+      blocks: [
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: 'Sprint Review Ready', emoji: true },
+        },
+      ],
+      attachments: [
+        {
+          color: COLORS.TEAL,
+          blocks: [
+            {
+              type: 'section',
+              fields: [
+                { type: 'mrkdwn', text: `*Sprint:*\n${sprintName}` },
+                { type: 'mrkdwn', text: `*Completed:*\n${completedStories} of ${totalStories} stories` },
+              ],
+            },
+            {
+              type: 'context',
+              elements: [
+                { type: 'mrkdwn', text: `<!date^${Math.floor(Date.now() / 1000)}^{date_short_pretty} at {time}|${new Date().toISOString()}>` },
+              ],
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View Sprint' },
+                  url: deepLink,
+                  action_id: 'view_sprint',
+                },
               ],
             },
           ],

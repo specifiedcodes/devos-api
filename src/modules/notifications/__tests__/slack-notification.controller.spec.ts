@@ -9,12 +9,16 @@ import { SlackNotificationController } from '../controllers/slack-notification.c
 import { SlackNotificationService } from '../services/slack-notification.service';
 import { SlackOAuthService } from '../services/slack-oauth.service';
 import { SlackUserMappingService } from '../../integrations/slack/services/slack-user-mapping.service';
+import { SlackNotificationConfigService } from '../../integrations/slack/services/slack-notification-config.service';
+import { SlackInteractionLog } from '../../../database/entities/slack-interaction-log.entity';
+import { getRepositoryToken } from '@nestjs/typeorm';
 
 describe('SlackNotificationController', () => {
   let controller: SlackNotificationController;
   let slackService: any;
   let oauthService: any;
   let userMappingService: any;
+  let notificationConfigService: any;
 
   const mockIntegration = {
     id: 'int-1',
@@ -62,12 +66,23 @@ describe('SlackNotificationController', () => {
       listSlackUsers: jest.fn().mockResolvedValue([{ slackUserId: 'U001', username: 'alice', displayName: 'Alice', isBot: false }]),
     };
 
+    notificationConfigService = {
+      getConfigs: jest.fn().mockResolvedValue([]),
+      upsertConfig: jest.fn().mockResolvedValue({ id: 'config-1' }),
+      deleteConfig: jest.fn().mockResolvedValue(undefined),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [SlackNotificationController],
       providers: [
         { provide: SlackNotificationService, useValue: slackService },
         { provide: SlackOAuthService, useValue: oauthService },
         { provide: SlackUserMappingService, useValue: userMappingService },
+        { provide: SlackNotificationConfigService, useValue: notificationConfigService },
+        { provide: getRepositoryToken(SlackInteractionLog), useValue: {
+          find: jest.fn().mockResolvedValue([]),
+          count: jest.fn().mockResolvedValue(0),
+        }},
       ],
     }).compile();
 
