@@ -133,6 +133,8 @@ import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
 import { IpAllowlistEntry } from './database/entities/ip-allowlist-entry.entity';
 import { IpAllowlistConfig } from './database/entities/ip-allowlist-config.entity';
 import { IpAllowlistModule } from './modules/ip-allowlist/ip-allowlist.module';
+import { GeoRestriction } from './database/entities/geo-restriction.entity';
+import { GeoRestrictionModule } from './modules/geo-restriction/geo-restriction.module';
 
 @Module({
   imports: [
@@ -227,6 +229,7 @@ import { IpAllowlistModule } from './modules/ip-allowlist/ip-allowlist.module';
         RolePermission,
         IpAllowlistEntry,
         IpAllowlistConfig,
+        GeoRestriction,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -294,6 +297,7 @@ import { IpAllowlistModule } from './modules/ip-allowlist/ip-allowlist.module';
     BillingModule,
     CustomRolesModule,
     IpAllowlistModule,
+    GeoRestrictionModule,
   ],
   controllers: [AppController],
   providers: [
