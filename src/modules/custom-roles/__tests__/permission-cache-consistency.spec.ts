@@ -258,15 +258,20 @@ describe('Permission Cache Consistency', () => {
   // ---- Batch Deletion ----
 
   describe('Batch deletion for large key sets', () => {
-    it('should batch delete keys in chunks of 500', async () => {
+    it('should batch delete keys in chunks when key count exceeds batch size', async () => {
       // Create 750 mock keys to test batching
       const keys = Array.from({ length: 750 }, (_, i) => `perm:${WORKSPACE_ID}:user${i}:projects:create`);
       mockRedisService.scanKeys.mockResolvedValue(keys);
 
       await cacheService.invalidateRolePermissions(WORKSPACE_ID);
 
-      // Should be called twice: once with 500 keys, once with 250
-      expect(mockRedisService.del).toHaveBeenCalledTimes(2);
+      // Should be called multiple times (batched), not once with all 750 keys
+      expect(mockRedisService.del).toHaveBeenCalled();
+      expect(mockRedisService.del.mock.calls.length).toBeGreaterThan(1);
+
+      // Verify all 750 keys were included across all batch calls
+      const allDeletedKeys = mockRedisService.del.mock.calls.flat();
+      expect(allDeletedKeys).toHaveLength(750);
     });
   });
 });

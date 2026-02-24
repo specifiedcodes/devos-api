@@ -7,17 +7,27 @@
  * in the guard chain: IpAllowlistGuard -> PermissionGuard -> Handler
  */
 
-import { ForbiddenException, ExecutionContext } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IpAllowlistGuard } from '../../../common/guards/ip-allowlist.guard';
 import { PermissionGuard, RequiredPermission } from '../../../common/guards/permission.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
+import {
+  createMockContext as createMockContextBase,
+  MockContextOverrides,
+} from '../../../common/guards/__tests__/guard-test-helpers';
 
 // ---- Test Constants ----
 const WORKSPACE_ID = 'ws-11111111-1111-1111-1111-111111111111';
 const USER_ID = 'usr-22222222-2222-2222-2222-222222222222';
 const ALLOWED_IP = '10.0.0.1';
 const BLOCKED_IP = '192.168.1.100';
+
+const CONTEXT_DEFAULTS = { workspaceId: WORKSPACE_ID, userId: USER_ID, defaultIp: ALLOWED_IP };
+
+function createMockContext(overrides?: MockContextOverrides) {
+  return createMockContextBase(CONTEXT_DEFAULTS, { method: 'POST', ...overrides });
+}
 
 // ---- Mock Services ----
 
@@ -37,42 +47,6 @@ const mockAuditService = {
 const mockPermissionAuditService = {
   record: jest.fn().mockResolvedValue(undefined),
 };
-
-// ---- Helper to create mock ExecutionContext ----
-
-function createMockContext(overrides?: {
-  user?: any;
-  params?: any;
-  body?: any;
-  query?: any;
-  workspaceRole?: WorkspaceRole;
-  ip?: string;
-  url?: string;
-  path?: string;
-  method?: string;
-}): ExecutionContext {
-  const request = {
-    user: overrides?.user ?? { id: USER_ID },
-    params: overrides?.params ?? { workspaceId: WORKSPACE_ID },
-    body: overrides?.body ?? {},
-    query: overrides?.query ?? {},
-    workspaceRole: overrides?.workspaceRole,
-    ip: overrides?.ip ?? ALLOWED_IP,
-    url: overrides?.url ?? '/api/v1/workspaces/ws/projects',
-    path: overrides?.path ?? '/api/v1/workspaces/ws/projects',
-    method: overrides?.method ?? 'POST',
-    headers: { 'user-agent': 'test-agent' },
-    connection: { remoteAddress: overrides?.ip ?? ALLOWED_IP },
-  };
-
-  return {
-    getHandler: jest.fn(),
-    getClass: jest.fn(),
-    switchToHttp: jest.fn().mockReturnValue({
-      getRequest: jest.fn().mockReturnValue(request),
-    }),
-  } as any;
-}
 
 describe('IP Allowlist + Permission Guard Combined Tests', () => {
   let ipGuard: IpAllowlistGuard;
@@ -119,14 +93,17 @@ describe('IP Allowlist + Permission Guard Combined Tests', () => {
 
       const context = createMockContext({ ip: BLOCKED_IP });
 
+      let thrownError: any;
       try {
         await ipGuard.canActivate(context);
-        fail('Expected ForbiddenException');
       } catch (e: any) {
-        const response = e.getResponse();
-        expect(response.code).toBe('IP_NOT_ALLOWED');
-        expect(response.message).toContain('IP address is not allowed');
+        thrownError = e;
       }
+
+      expect(thrownError).toBeDefined();
+      const response = thrownError.getResponse();
+      expect(response.code).toBe('IP_NOT_ALLOWED');
+      expect(response.message).toContain('IP address is not allowed');
     });
   });
 

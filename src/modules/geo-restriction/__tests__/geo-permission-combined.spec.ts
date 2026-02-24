@@ -7,17 +7,27 @@
  * in the guard chain: GeoRestrictionGuard -> PermissionGuard -> Handler
  */
 
-import { ForbiddenException, ExecutionContext } from '@nestjs/common';
+import { ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { GeoRestrictionGuard } from '../../../common/guards/geo-restriction.guard';
 import { PermissionGuard, RequiredPermission } from '../../../common/guards/permission.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
+import {
+  createMockContext as createMockContextBase,
+  MockContextOverrides,
+} from '../../../common/guards/__tests__/guard-test-helpers';
 
 // ---- Test Constants ----
 const WORKSPACE_ID = 'ws-11111111-1111-1111-1111-111111111111';
 const USER_ID = 'usr-22222222-2222-2222-2222-222222222222';
 const ALLOWED_COUNTRY_IP = '203.0.113.50'; // US-based IP
 const BLOCKED_COUNTRY_IP = '198.51.100.10'; // Blocked country IP
+
+const CONTEXT_DEFAULTS = { workspaceId: WORKSPACE_ID, userId: USER_ID, defaultIp: ALLOWED_COUNTRY_IP };
+
+function createMockContext(overrides?: MockContextOverrides) {
+  return createMockContextBase(CONTEXT_DEFAULTS, overrides);
+}
 
 // ---- Mock Services ----
 
@@ -37,42 +47,6 @@ const mockAuditService = {
 const mockPermissionAuditService = {
   record: jest.fn().mockResolvedValue(undefined),
 };
-
-// ---- Helper to create mock ExecutionContext ----
-
-function createMockContext(overrides?: {
-  user?: any;
-  params?: any;
-  body?: any;
-  query?: any;
-  workspaceRole?: WorkspaceRole;
-  ip?: string;
-  url?: string;
-  path?: string;
-  method?: string;
-}): ExecutionContext {
-  const request = {
-    user: overrides?.user ?? { id: USER_ID },
-    params: overrides?.params ?? { workspaceId: WORKSPACE_ID },
-    body: overrides?.body ?? {},
-    query: overrides?.query ?? {},
-    workspaceRole: overrides?.workspaceRole,
-    ip: overrides?.ip ?? ALLOWED_COUNTRY_IP,
-    url: overrides?.url ?? '/api/v1/workspaces/ws/projects',
-    path: overrides?.path ?? '/api/v1/workspaces/ws/projects',
-    method: overrides?.method ?? 'GET',
-    headers: { 'user-agent': 'test-agent' },
-    connection: { remoteAddress: overrides?.ip ?? ALLOWED_COUNTRY_IP },
-  };
-
-  return {
-    getHandler: jest.fn(),
-    getClass: jest.fn(),
-    switchToHttp: jest.fn().mockReturnValue({
-      getRequest: jest.fn().mockReturnValue(request),
-    }),
-  } as any;
-}
 
 describe('Geo-Restriction + Permission Guard Combined Tests', () => {
   let geoGuard: GeoRestrictionGuard;
@@ -127,14 +101,17 @@ describe('Geo-Restriction + Permission Guard Combined Tests', () => {
 
       const context = createMockContext({ ip: BLOCKED_COUNTRY_IP });
 
+      let thrownError: any;
       try {
         await geoGuard.canActivate(context);
-        fail('Expected ForbiddenException');
       } catch (e: any) {
-        const response = e.getResponse();
-        expect(response.code).toBe('GEO_RESTRICTED');
-        expect(response.message).toContain('Access restricted from your location');
+        thrownError = e;
       }
+
+      expect(thrownError).toBeDefined();
+      const response = thrownError.getResponse();
+      expect(response.code).toBe('GEO_RESTRICTED');
+      expect(response.message).toContain('Access restricted from your location');
     });
   });
 
@@ -177,13 +154,16 @@ describe('Geo-Restriction + Permission Guard Combined Tests', () => {
       const geoResult = await geoGuard.canActivate(context);
       expect(geoResult).toBe(true);
 
+      let thrownPermError: any;
       try {
         await permissionGuard.canActivate(context);
-        fail('Expected ForbiddenException');
       } catch (e: any) {
-        const response = e.getResponse();
-        expect(response.required).toBe('secrets:view_plaintext');
+        thrownPermError = e;
       }
+
+      expect(thrownPermError).toBeDefined();
+      const response = thrownPermError.getResponse();
+      expect(response.required).toBe('secrets:view_plaintext');
     });
   });
 

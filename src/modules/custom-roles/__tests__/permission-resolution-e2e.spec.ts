@@ -156,7 +156,7 @@ describe('Permission Resolution E2E', () => {
       );
 
       const granted = await matrixService.checkPermission(
-        USER_ID, WORKSPACE_ID, 'secrets', 'view_plaintext',
+        USER_ID, WORKSPACE_ID, ResourceType.SECRETS, 'view_plaintext',
       );
       expect(granted).toBe(true);
     });
