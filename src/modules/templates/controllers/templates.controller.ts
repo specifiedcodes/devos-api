@@ -222,13 +222,16 @@ export class TemplatesController {
       const template = await this.templateRegistryService.findById(id);
       if (template) {
         // Story 19-9: Track detail_view event (fire-and-forget)
-        this.templateAnalyticsService.trackEvent({
-          templateId: id,
-          workspaceId: req.user?.workspaceId || 'anonymous',
-          userId: req.user?.id || null,
-          eventType: TemplateAnalyticsEventType.DETAIL_VIEW,
-          referrer: req.headers?.referer || null,
-        }).catch(() => { /* fire-and-forget */ });
+        // Only track when workspaceId is available (valid UUID FK constraint)
+        if (req.user?.workspaceId) {
+          this.templateAnalyticsService.trackEvent({
+            templateId: id,
+            workspaceId: req.user.workspaceId,
+            userId: req.user?.id || null,
+            eventType: TemplateAnalyticsEventType.DETAIL_VIEW,
+            referrer: req.headers?.referer || null,
+          }).catch(() => { /* fire-and-forget */ });
+        }
 
         return this.toResponseDto(template);
       }

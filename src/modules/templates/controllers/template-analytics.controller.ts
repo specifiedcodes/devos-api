@@ -116,7 +116,7 @@ export class TemplateAnalyticsController {
   @Get(':id/analytics/export')
   @ApiOperation({
     summary: 'Export template analytics data',
-    description: 'Returns analytics events for CSV export. Requires date range. Only template owner can export.',
+    description: 'Returns analytics events for CSV export. Requires date range. Only template owner can export. Rate limited to 1 export per hour per template.',
   })
   @ApiParam({ name: 'id', description: 'Template UUID', format: 'uuid' })
   @ApiQuery({ name: 'startDate', required: true, description: 'Start date (ISO 8601)' })
@@ -126,6 +126,7 @@ export class TemplateAnalyticsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Not authorized to export this template analytics' })
   @ApiResponse({ status: 404, description: 'Template not found' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded - 1 export per hour per template' })
   async exportAnalytics(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() query: AnalyticsExportQueryDto,
@@ -153,6 +154,9 @@ export class TemplateAnalyticsController {
     if (template.createdBy !== userId) {
       throw new ForbiddenException('Only the template owner can export analytics data');
     }
+
+    // Rate limit: 1 export per hour per template (AC6)
+    await this.analyticsService.checkExportRateLimit(id);
 
     const events = await this.analyticsService.getExportData(id, startDate, endDate);
 

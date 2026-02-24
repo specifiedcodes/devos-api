@@ -184,30 +184,40 @@ export class AdminTemplateAnalyticsService {
     const previousStart = new Date();
     previousStart.setDate(now.getDate() - days * 2);
 
-    // Get installations in current period
-    const currentQB = this.eventRepo.createQueryBuilder('e')
+    // Get installations in both current and previous periods in a single query
+    const trendQB = this.eventRepo.createQueryBuilder('e')
       .leftJoin('e.template', 't')
       .where('e.event_type = :eventType', { eventType: TemplateAnalyticsEventType.INSTALL_COMPLETED })
-      .andWhere('e.created_at >= :currentStart', { currentStart })
+      .andWhere('e.created_at >= :previousStart', { previousStart })
       .select('e.template_id', 'templateId')
       .addSelect('t.name', 'templateName')
       .addSelect('t.display_name', 'displayName')
-      .addSelect('COUNT(*)', 'recentInstallations')
+      .addSelect(`SUM(CASE WHEN e.created_at >= :currentStart THEN 1 ELSE 0 END)`, 'recentInstallations')
+      .addSelect(`SUM(CASE WHEN e.created_at < :currentStart THEN 1 ELSE 0 END)`, 'previousInstallations')
+      .setParameter('currentStart', currentStart)
       .groupBy('e.template_id')
       .addGroupBy('t.name')
       .addGroupBy('t.display_name')
       .orderBy('"recentInstallations"', 'DESC')
       .limit(limit);
 
-    const rows = await currentQB.getRawMany();
+    const rows = await trendQB.getRawMany();
 
-    return rows.map((row: { templateId: string; templateName: string; displayName: string; recentInstallations: string }) => ({
-      templateId: row.templateId,
-      templateName: row.templateName || '',
-      displayName: row.displayName || '',
-      growthPercentage: 0, // Simplified: would require previous period comparison
-      recentInstallations: parseInt(row.recentInstallations || '0', 10),
-    }));
+    return rows.map((row: { templateId: string; templateName: string; displayName: string; recentInstallations: string; previousInstallations: string }) => {
+      const recent = parseInt(row.recentInstallations || '0', 10);
+      const previous = parseInt(row.previousInstallations || '0', 10);
+      const growthPercentage = previous > 0
+        ? Math.round(((recent - previous) / previous) * 100)
+        : recent > 0 ? 100 : 0;
+
+      return {
+        templateId: row.templateId,
+        templateName: row.templateName || '',
+        displayName: row.displayName || '',
+        growthPercentage,
+        recentInstallations: recent,
+      };
+    });
   }
 
   /**

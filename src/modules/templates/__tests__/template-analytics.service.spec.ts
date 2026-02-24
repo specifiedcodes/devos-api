@@ -127,6 +127,8 @@ describe('TemplateAnalyticsService', () => {
       groupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
+      setParameters: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
       getRawOne: jest.fn(),
       getRawMany: jest.fn(),
       getCount: jest.fn(),
@@ -216,6 +218,8 @@ describe('TemplateAnalyticsService', () => {
         groupBy: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
+        setParameters: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
         getRawMany: jest.fn().mockResolvedValue([
           {
             templateId: mockTemplateId,

@@ -54,6 +54,7 @@ describe('TemplateAnalyticsController', () => {
         totalInstallations: 0,
       }),
       getExportData: jest.fn().mockResolvedValue([]),
+      checkExportRateLimit: jest.fn().mockResolvedValue(undefined),
     };
 
     registryService = {

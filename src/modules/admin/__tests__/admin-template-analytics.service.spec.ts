@@ -31,6 +31,8 @@ describe('AdminTemplateAnalyticsService', () => {
       limit: jest.fn().mockReturnThis(),
       leftJoin: jest.fn().mockReturnThis(),
       innerJoin: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
+      setParameters: jest.fn().mockReturnThis(),
       getRawOne: jest.fn().mockResolvedValue({ totalViews: '0', totalInstallations: '0' }),
       getRawMany: jest.fn().mockResolvedValue([]),
       getCount: jest.fn().mockResolvedValue(0),

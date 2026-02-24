@@ -13,6 +13,8 @@ import {
   Injectable,
   Logger,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
@@ -120,13 +122,33 @@ export class TemplateAnalyticsService {
     const installStarted = parseInt(totals?.installStarted || '0', 10);
     const installCompleted = parseInt(totals?.installCompleted || '0', 10);
 
-    // Fetch period-specific counts
-    const views7d = await this.getEventCount(templateId, ['view', 'detail_view'], 7);
-    const views30d = await this.getEventCount(templateId, ['view', 'detail_view'], 30);
-    const views90d = await this.getEventCount(templateId, ['view', 'detail_view'], 90);
-    const installations7d = await this.getEventCount(templateId, ['install_completed'], 7);
-    const installations30d = await this.getEventCount(templateId, ['install_completed'], 30);
-    const installations90d = await this.getEventCount(templateId, ['install_completed'], 90);
+    // Fetch all period-specific counts in a single query to avoid N+1 pattern
+    const now = new Date();
+    const date7d = new Date(now);
+    date7d.setDate(date7d.getDate() - 7);
+    const date30d = new Date(now);
+    date30d.setDate(date30d.getDate() - 30);
+    const date90d = new Date(now);
+    date90d.setDate(date90d.getDate() - 90);
+
+    const periodQB = this.eventRepo.createQueryBuilder('e')
+      .where('e.template_id = :templateId', { templateId })
+      .andWhere('e.created_at >= :date90d', { date90d })
+      .select(`SUM(CASE WHEN e.event_type IN ('view', 'detail_view') AND e.created_at >= :date7d THEN 1 ELSE 0 END)`, 'views7d')
+      .addSelect(`SUM(CASE WHEN e.event_type IN ('view', 'detail_view') AND e.created_at >= :date30d THEN 1 ELSE 0 END)`, 'views30d')
+      .addSelect(`SUM(CASE WHEN e.event_type IN ('view', 'detail_view') THEN 1 ELSE 0 END)`, 'views90d')
+      .addSelect(`SUM(CASE WHEN e.event_type = 'install_completed' AND e.created_at >= :date7d THEN 1 ELSE 0 END)`, 'installations7d')
+      .addSelect(`SUM(CASE WHEN e.event_type = 'install_completed' AND e.created_at >= :date30d THEN 1 ELSE 0 END)`, 'installations30d')
+      .addSelect(`SUM(CASE WHEN e.event_type = 'install_completed' THEN 1 ELSE 0 END)`, 'installations90d')
+      .setParameters({ date7d, date30d });
+
+    const periodCounts = await periodQB.getRawOne();
+    const views7d = parseInt(periodCounts?.views7d || '0', 10);
+    const views30d = parseInt(periodCounts?.views30d || '0', 10);
+    const views90d = parseInt(periodCounts?.views90d || '0', 10);
+    const installations7d = parseInt(periodCounts?.installations7d || '0', 10);
+    const installations30d = parseInt(periodCounts?.installations30d || '0', 10);
+    const installations90d = parseInt(periodCounts?.installations90d || '0', 10);
 
     // Get rating from template
     const template = await this.templateRepo.findOne({ where: { id: templateId } });
@@ -286,13 +308,34 @@ export class TemplateAnalyticsService {
       throw new BadRequestException('startDate must be before endDate');
     }
 
+    // Cap export to 50,000 rows to prevent memory exhaustion on popular templates
+    const MAX_EXPORT_ROWS = 50000;
+
     return this.eventRepo.find({
       where: {
         templateId,
         createdAt: Between(startDate, endDate),
       },
       order: { createdAt: 'ASC' },
+      take: MAX_EXPORT_ROWS,
     });
+  }
+
+  /**
+   * Check and enforce export rate limit: 1 export per hour per template (AC6).
+   * Uses Redis to track the last export timestamp.
+   */
+  async checkExportRateLimit(templateId: string): Promise<void> {
+    const rateLimitKey = `${CACHE_PREFIX}:export-rate:${templateId}`;
+    const lastExport = await this.redisService.get(rateLimitKey);
+    if (lastExport) {
+      throw new HttpException(
+        'Rate limit exceeded. Only 1 export per hour per template is allowed.',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+    // Set rate limit key with 1-hour TTL
+    await this.redisService.set(rateLimitKey, new Date().toISOString(), 3600);
   }
 
   /**
