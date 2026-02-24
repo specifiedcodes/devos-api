@@ -59,12 +59,18 @@ import { NotificationPreferences } from '../../database/entities/notification-pr
 import { SlackIntegration } from '../../database/entities/slack-integration.entity';
 import { DiscordIntegration } from '../../database/entities/discord-integration.entity';
 
+// Story 21.1: Slack user mapping service (imported from SlackIntegrationModule)
+import { SlackUserMappingService } from '../integrations/slack/services/slack-user-mapping.service';
+import { SlackUserMapping } from '../../database/entities/slack-user-mapping.entity';
+import { User } from '../../database/entities/user.entity';
+
 // Related Modules
 import { PushModule } from '../push/push.module';
 import { NotificationModule } from '../notification/notification.module';
 import { WorkspacesModule } from '../workspaces/workspaces.module';
 import { RedisModule } from '../redis/redis.module';
 import { EmailModule } from '../email/email.module';
+import { EncryptionModule } from '../../shared/encryption/encryption.module';
 
 @Module({
   imports: [
@@ -72,7 +78,10 @@ import { EmailModule } from '../email/email.module';
     // This module only needs EventEmitterModule features, not forRoot()
 
     // TypeORM for subscription, project, preferences, and Slack integration queries
-    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration]),
+    TypeOrmModule.forFeature([PushSubscription, Project, NotificationPreferences, SlackIntegration, DiscordIntegration, SlackUserMapping, User]),
+
+    // Story 21.1: Encryption module for user mapping service
+    EncryptionModule,
 
     // BullMQ queue for batch processing
     BullModule.registerQueue({
@@ -149,6 +158,9 @@ import { EmailModule } from '../email/email.module';
     DiscordNotificationService,
     DiscordEmbedBuilderService,
 
+    // Story 21.1: Slack user mapping service
+    SlackUserMappingService,
+
     // BullMQ processors
     NotificationBatchProcessor,
     SlackMessageProcessor,
@@ -163,6 +175,7 @@ import { EmailModule } from '../email/email.module';
     QuietHoursService,
     SlackNotificationService,
     SlackOAuthService,
+    SlackUserMappingService,
     DiscordNotificationService,
   ],
 })

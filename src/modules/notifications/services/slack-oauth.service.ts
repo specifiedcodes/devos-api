@@ -58,8 +58,8 @@ export class SlackOAuthService {
       OAUTH_STATE_TTL,
     );
 
-    // Build OAuth URL
-    const scopes = 'chat:write,channels:read,groups:read,incoming-webhook';
+    // Build OAuth URL - Story 21.1: Enhanced scopes for Events API, user mapping, slash commands
+    const scopes = 'chat:write,channels:read,groups:read,incoming-webhook,commands,users:read,users:read.email,app_mentions:read';
     const redirectUri = `${this.frontendUrl}/integrations/slack/callback`;
     const url = `https://slack.com/oauth/v2/authorize?client_id=${encodeURIComponent(this.clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
@@ -183,6 +183,78 @@ export class SlackOAuthService {
     await this.redisService.del(`${OAUTH_STATE_PREFIX}${state}`);
 
     return { workspaceId, teamName };
+  }
+
+  /**
+   * Verify Slack connection is healthy by calling auth.test API.
+   * Returns team info and bot identity.
+   * Story 21.1: AC4
+   */
+  async verifyConnection(
+    workspaceId: string,
+  ): Promise<{
+    ok: boolean;
+    teamId?: string;
+    teamName?: string;
+    botUserId?: string;
+    botUserName?: string;
+    error?: string;
+  }> {
+    const integration = await this.slackIntegrationRepo.findOne({ where: { workspaceId } });
+    if (!integration) {
+      return { ok: false, error: 'No Slack integration found for this workspace' };
+    }
+
+    let token: string;
+    try {
+      token = this.encryptionService.decrypt(integration.botToken);
+    } catch {
+      return { ok: false, error: 'Failed to decrypt bot token' };
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await fetch('https://slack.com/api/auth.test', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+      });
+
+      const result = await response.json() as any;
+
+      if (!result.ok) {
+        return { ok: false, error: result.error };
+      }
+
+      return {
+        ok: true,
+        teamId: result.team_id,
+        teamName: result.team,
+        botUserId: result.user_id,
+        botUserName: result.user,
+      };
+    } catch (error) {
+      this.logger.error(
+        `Slack auth.test failed for workspace ${workspaceId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { ok: false, error: 'Failed to verify Slack connection' };
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Re-initiate OAuth flow to refresh/upgrade scopes.
+   * Generates new authorization URL with updated scopes.
+   * Story 21.1: AC4
+   */
+  async refreshConnection(workspaceId: string, userId: string): Promise<string> {
+    return this.getAuthorizationUrl(workspaceId, userId);
   }
 
   /**

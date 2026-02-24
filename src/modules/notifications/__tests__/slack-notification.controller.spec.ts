@@ -8,11 +8,13 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { SlackNotificationController } from '../controllers/slack-notification.controller';
 import { SlackNotificationService } from '../services/slack-notification.service';
 import { SlackOAuthService } from '../services/slack-oauth.service';
+import { SlackUserMappingService } from '../../integrations/slack/services/slack-user-mapping.service';
 
 describe('SlackNotificationController', () => {
   let controller: SlackNotificationController;
   let slackService: any;
   let oauthService: any;
+  let userMappingService: any;
 
   const mockIntegration = {
     id: 'int-1',
@@ -48,6 +50,16 @@ describe('SlackNotificationController', () => {
     oauthService = {
       getAuthorizationUrl: jest.fn().mockResolvedValue('https://slack.com/oauth/v2/authorize?...'),
       handleCallback: jest.fn().mockResolvedValue({ workspaceId: 'ws-1', teamName: 'Test Team' }),
+      verifyConnection: jest.fn().mockResolvedValue({ ok: true, teamId: 'T12345', teamName: 'Test Team', botUserId: 'U_BOT' }),
+      refreshConnection: jest.fn().mockResolvedValue('https://slack.com/oauth/v2/authorize?updated...'),
+    };
+
+    userMappingService = {
+      autoMapByEmail: jest.fn().mockResolvedValue({ mapped: 2, unmatched: [] }),
+      mapUser: jest.fn().mockResolvedValue({ id: 'mapping-1', workspaceId: 'ws-1', devosUserId: 'user-1', slackUserId: 'U001' }),
+      unmapUser: jest.fn().mockResolvedValue(undefined),
+      getMappings: jest.fn().mockResolvedValue([]),
+      listSlackUsers: jest.fn().mockResolvedValue([{ slackUserId: 'U001', username: 'alice', displayName: 'Alice', isBot: false }]),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -55,6 +67,7 @@ describe('SlackNotificationController', () => {
       providers: [
         { provide: SlackNotificationService, useValue: slackService },
         { provide: SlackOAuthService, useValue: oauthService },
+        { provide: SlackUserMappingService, useValue: userMappingService },
       ],
     }).compile();
 
@@ -170,6 +183,87 @@ describe('SlackNotificationController', () => {
     it('should throw NotFoundException when not connected', async () => {
       slackService.getIntegration.mockResolvedValue(null);
       await expect(controller.disconnect('ws-1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // Story 21.1: Tests for new endpoints
+
+  describe('GET /verify', () => {
+    it('should return ok:true when connection is healthy', async () => {
+      const result = await controller.verifyConnection('ws-1');
+      expect(result.ok).toBe(true);
+      expect(result.teamId).toBe('T12345');
+      expect(oauthService.verifyConnection).toHaveBeenCalledWith('ws-1');
+    });
+
+    it('should return ok:false when connection is unhealthy', async () => {
+      oauthService.verifyConnection.mockResolvedValue({ ok: false, error: 'invalid_auth' });
+      const result = await controller.verifyConnection('ws-1');
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('invalid_auth');
+    });
+  });
+
+  describe('GET /refresh', () => {
+    it('should return authorization URL with updated scopes', async () => {
+      const req = { user: { sub: 'user-1' } };
+      const result = await controller.refreshConnection('ws-1', req);
+      expect(result.authUrl).toContain('https://slack.com');
+      expect(oauthService.refreshConnection).toHaveBeenCalledWith('ws-1', 'user-1');
+    });
+  });
+
+  describe('POST /users/auto-map', () => {
+    it('should map users by email and return mapped count', async () => {
+      const result = await controller.autoMapUsers('ws-1');
+      expect(result.mapped).toBe(2);
+      expect(userMappingService.autoMapByEmail).toHaveBeenCalledWith('ws-1', 'int-1');
+    });
+
+    it('should throw NotFoundException when no integration', async () => {
+      slackService.getIntegration.mockResolvedValue(null);
+      await expect(controller.autoMapUsers('ws-1')).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('POST /users/map', () => {
+    it('should create manual mapping successfully', async () => {
+      const dto = { devosUserId: 'user-1', slackUserId: 'U001' };
+      const result = await controller.mapUser('ws-1', dto);
+      expect(result.id).toBe('mapping-1');
+      expect(userMappingService.mapUser).toHaveBeenCalledWith('ws-1', 'int-1', 'user-1', 'U001');
+    });
+
+    it('should throw NotFoundException when no integration', async () => {
+      slackService.getIntegration.mockResolvedValue(null);
+      await expect(controller.mapUser('ws-1', { devosUserId: 'u1', slackUserId: 'U001' })).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('DELETE /users/:mappingId', () => {
+    it('should remove mapping and return void', async () => {
+      await controller.unmapUser('ws-1', 'mapping-1');
+      expect(userMappingService.unmapUser).toHaveBeenCalledWith('ws-1', 'mapping-1');
+    });
+  });
+
+  describe('GET /users', () => {
+    it('should return all user mappings', async () => {
+      userMappingService.getMappings.mockResolvedValue([
+        { id: '1', workspaceId: 'ws-1', devosUserId: 'u1', slackUserId: 'U001' },
+      ]);
+      const result = await controller.getUserMappings('ws-1');
+      expect(result).toHaveLength(1);
+      expect(userMappingService.getMappings).toHaveBeenCalledWith('ws-1');
+    });
+  });
+
+  describe('GET /users/slack-list', () => {
+    it('should return Slack user list', async () => {
+      const result = await controller.listSlackUsers('ws-1');
+      expect(result).toHaveLength(1);
+      expect(result[0].slackUserId).toBe('U001');
+      expect(userMappingService.listSlackUsers).toHaveBeenCalledWith('ws-1');
     });
   });
 });

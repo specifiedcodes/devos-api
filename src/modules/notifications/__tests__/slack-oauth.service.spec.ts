@@ -235,6 +235,94 @@ describe('SlackOAuthService', () => {
     });
   });
 
+  // Story 21.1: Tests for enhanced OAuth scopes and new methods
+
+  describe('getAuthorizationUrl - enhanced scopes', () => {
+    it('should include users:read, users:read.email, commands, app_mentions:read scopes', async () => {
+      const url = await service.getAuthorizationUrl('ws-1', 'user-1');
+
+      expect(url).toContain('users%3Aread');
+      expect(url).toContain('users%3Aread.email');
+      expect(url).toContain('commands');
+      expect(url).toContain('app_mentions%3Aread');
+    });
+  });
+
+  describe('verifyConnection', () => {
+    it('should return ok:true when connection is healthy', async () => {
+      repo.findOne.mockResolvedValue({
+        workspaceId: 'ws-1',
+        botToken: 'encrypted-token',
+      });
+
+      mockFetch.mockResolvedValue({
+        json: jest.fn().mockResolvedValue({
+          ok: true,
+          team_id: 'T12345',
+          team: 'Test Team',
+          user_id: 'U_BOT',
+          user: 'devos-bot',
+        }),
+      });
+
+      const result = await service.verifyConnection('ws-1');
+
+      expect(result.ok).toBe(true);
+      expect(result.teamId).toBe('T12345');
+      expect(result.teamName).toBe('Test Team');
+      expect(result.botUserId).toBe('U_BOT');
+      expect(result.botUserName).toBe('devos-bot');
+    });
+
+    it('should return ok:false with error when token is invalid', async () => {
+      repo.findOne.mockResolvedValue({
+        workspaceId: 'ws-1',
+        botToken: 'encrypted-token',
+      });
+
+      mockFetch.mockResolvedValue({
+        json: jest.fn().mockResolvedValue({ ok: false, error: 'invalid_auth' }),
+      });
+
+      const result = await service.verifyConnection('ws-1');
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toBe('invalid_auth');
+    });
+
+    it('should return ok:false when no integration exists', async () => {
+      repo.findOne.mockResolvedValue(null);
+
+      const result = await service.verifyConnection('ws-1');
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('No Slack integration');
+    });
+
+    it('should return ok:false when token decryption fails', async () => {
+      repo.findOne.mockResolvedValue({
+        workspaceId: 'ws-1',
+        botToken: 'corrupted-token',
+      });
+      encryptionService.decrypt.mockImplementation(() => { throw new Error('Decryption failed'); });
+
+      const result = await service.verifyConnection('ws-1');
+
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('decrypt');
+    });
+  });
+
+  describe('refreshConnection', () => {
+    it('should return authorization URL with updated scopes', async () => {
+      const url = await service.refreshConnection('ws-1', 'user-1');
+
+      expect(url).toContain('https://slack.com/oauth/v2/authorize');
+      expect(url).toContain('users%3Aread');
+      expect(url).toContain('commands');
+    });
+  });
+
   describe('verifySignature', () => {
     const signingSecret = 'test-signing-secret';
     const timestamp = String(Math.floor(Date.now() / 1000));

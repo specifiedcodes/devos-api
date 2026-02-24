@@ -24,6 +24,7 @@ async function bootstrap() {
 
   const app = await NestFactory.create(AppModule, {
     logger: loggingService,
+    rawBody: true, // Story 21.1: Enable raw body access for Slack signature verification
   });
 
   // Enable cookie parsing for JWT token management

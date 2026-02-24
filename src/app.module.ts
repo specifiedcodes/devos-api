@@ -103,6 +103,7 @@ import { FileStorageModule } from './modules/file-storage/file-storage.module';
 import { ProjectFilesModule } from './modules/project-files/project-files.module';
 import { ProjectFile } from './database/entities/project-file.entity';
 import { SlackIntegration } from './database/entities/slack-integration.entity';
+import { SlackUserMapping } from './database/entities/slack-user-mapping.entity';
 import { DiscordIntegration } from './database/entities/discord-integration.entity';
 import { SamlConfiguration } from './database/entities/saml-configuration.entity';
 import { OidcConfiguration } from './database/entities/oidc-configuration.entity';
@@ -140,6 +141,7 @@ import { PermissionAuditModule } from './modules/permission-audit/permission-aud
 import { ApiToken } from './database/entities/api-token.entity';
 import { PermissionWebhook } from './database/entities/permission-webhook.entity';
 import { PermissionAnalyticsModule } from './modules/permission-analytics/permission-analytics.module';
+import { SlackIntegrationModule } from './modules/integrations/slack/slack-integration.module';
 
 @Module({
   imports: [
@@ -210,6 +212,7 @@ import { PermissionAnalyticsModule } from './modules/permission-analytics/permis
         ModelPerformance,
         ProjectFile,
         SlackIntegration,
+        SlackUserMapping,
         DiscordIntegration,
         SamlConfiguration,
         OidcConfiguration,
@@ -308,6 +311,7 @@ import { PermissionAnalyticsModule } from './modules/permission-analytics/permis
     GeoRestrictionModule,
     PermissionAuditModule,
     PermissionAnalyticsModule,
+    SlackIntegrationModule,
   ],
   controllers: [AppController],
   providers: [
