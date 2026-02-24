@@ -205,11 +205,15 @@ export class LinearOAuthService {
       throw new NotFoundException('No Linear integration found');
     }
 
-    // Try to delete webhook (best effort)
+    // Try to delete webhook from Linear (best effort)
     try {
       if (integration.webhookSecret && integration.webhookSecretIv) {
-        // Webhook deletion is best-effort
         this.logger.log('Attempting to delete Linear webhook');
+        // Note: We don't store the webhook ID, so we can't delete it from Linear.
+        // A future improvement would be to store the webhookId on the integration
+        // entity so it can be cleaned up on disconnect. For now, the webhook will
+        // become orphaned in Linear but signature verification will fail since
+        // the secret is removed with the integration record.
       }
     } catch {
       this.logger.warn('Failed to delete Linear webhook during disconnect');

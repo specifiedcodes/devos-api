@@ -104,7 +104,7 @@ export class LinearIntegrationController {
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Body() dto: CompleteLinearSetupDto,
   ): Promise<LinearIntegration> {
-    return this.oauthService.completeSetup(workspaceId, dto.teamId, dto);
+    return this.oauthService.completeSetup(workspaceId, dto.integrationId, dto);
   }
 
   /**

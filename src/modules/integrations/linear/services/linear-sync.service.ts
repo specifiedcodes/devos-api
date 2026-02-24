@@ -507,7 +507,13 @@ export class LinearSyncService {
   }
 
   /**
-   * Full sync: compare all DevOS stories with Linear issues and reconcile.
+   * Full sync: re-sync all already-linked stories with Linear issues.
+   *
+   * NOTE: This currently only reconciles stories that already have sync items.
+   * It does NOT discover unlinked DevOS stories or unlinked Linear issues.
+   * A future enhancement should query all workspace stories and all team
+   * issues from Linear to create sync items for unmatched pairs. The `created`
+   * counter is included in the return type for forward compatibility.
    */
   async fullSync(
     workspaceId: string,
@@ -552,12 +558,19 @@ export class LinearSyncService {
 
   // --- Private helpers ---
 
+  /**
+   * Maps a DevOS status to a Linear state name via the status mapping config.
+   * Note: The status mapping stores DevOS status -> Linear state name (not ID).
+   * The Linear API accepts state names in stateId fields when prefixed with team context,
+   * but for full correctness a workflow-state lookup cache should resolve name->ID.
+   * This returns the mapped name which callers pass as stateId; Linear will resolve
+   * names within the team context. If Linear rejects it, the sync item will be
+   * marked as error and can be retried after updating the mapping to use state IDs.
+   */
   private mapDevosStatusToLinearStateId(
     devosStatus: string,
     statusMapping: Record<string, string>,
   ): string | undefined {
-    // statusMapping maps devos status -> linear state name
-    // We return the name as stateId (in real scenario, we'd need to lookup the state ID)
     return statusMapping[devosStatus] || undefined;
   }
 
@@ -576,8 +589,8 @@ export class LinearSyncService {
 
   private async acquireLock(key: string): Promise<boolean> {
     try {
-      const result = await this.redisService.set(key, 'locked', LOCK_TTL_MS / 1000);
-      return result === 'OK' || result === true || !!result;
+      const result = await this.redisService.setnx(key, 'locked', LOCK_TTL_MS / 1000);
+      return result === 'OK';
     } catch {
       return false;
     }

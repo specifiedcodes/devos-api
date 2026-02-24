@@ -62,6 +62,7 @@ describe('LinearSyncService', () => {
 
   const mockRedisService = {
     set: jest.fn().mockResolvedValue('OK'),
+    setnx: jest.fn().mockResolvedValue('OK'),
     del: jest.fn().mockResolvedValue(1),
   };
 
@@ -156,7 +157,7 @@ describe('LinearSyncService', () => {
 
       await service.syncStoryToLinear('ws-1', 'story-1');
 
-      expect(mockRedisService.set).toHaveBeenCalledWith(
+      expect(mockRedisService.setnx).toHaveBeenCalledWith(
         'linear-sync-lock:story-1',
         'locked',
         expect.any(Number),
@@ -166,7 +167,7 @@ describe('LinearSyncService', () => {
 
     it('queues retry when lock acquisition fails', async () => {
       mockIntegrationRepo.findOne.mockResolvedValueOnce(baseIntegration);
-      mockRedisService.set.mockResolvedValueOnce(null); // Lock not acquired
+      mockRedisService.setnx.mockResolvedValueOnce(null); // Lock not acquired
 
       await expect(
         service.syncStoryToLinear('ws-1', 'story-1'),

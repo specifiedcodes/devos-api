@@ -105,9 +105,10 @@ describe('LinearIntegrationController', () => {
   describe('POST /complete-setup', () => {
     it('completes integration with team and mapping', async () => {
       const result = await controller.completeSetup('ws-1', {
+        integrationId: 'int-1',
         teamId: 't1',
         statusMapping: { backlog: 'Backlog' },
-      });
+      } as any);
 
       expect(result.isActive).toBe(true);
       expect(mockOAuthService.completeSetup).toHaveBeenCalled();

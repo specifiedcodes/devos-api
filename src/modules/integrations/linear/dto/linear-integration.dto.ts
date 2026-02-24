@@ -9,6 +9,10 @@ import { IsString, IsNotEmpty, IsOptional, IsObject, IsIn, IsUUID } from 'class-
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CompleteLinearSetupDto {
+  @ApiProperty({ description: 'Integration ID from OAuth callback' })
+  @IsUUID()
+  integrationId!: string;
+
   @ApiProperty({ description: 'Linear team ID to sync with' })
   @IsString()
   @IsNotEmpty()

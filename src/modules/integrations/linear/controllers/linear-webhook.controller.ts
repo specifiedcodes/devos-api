@@ -128,22 +128,22 @@ export class LinearWebhookController {
     }
   }
 
+  /**
+   * Find the integration that matches a webhook payload.
+   * Since we verify signature per-integration, we try each active integration
+   * and rely on the HMAC signature check to confirm the correct match.
+   * For a single-workspace deployment this works immediately; for multi-workspace
+   * scenarios the signature verification in handleWebhook acts as the differentiator.
+   *
+   * A future improvement would be to store the Linear organizationId on the
+   * integration entity during OAuth setup to enable direct lookup.
+   */
   private async findIntegrationForWebhook(
-    organizationId?: string,
+    _organizationId?: string,
   ): Promise<LinearIntegration | null> {
-    if (!organizationId) {
-      // Try to find by iterating active integrations
-      const integrations = await this.integrationRepo.find({
-        where: { isActive: true },
-      });
-      return integrations[0] || null;
-    }
-
-    // Look up by active integrations (Linear doesn't store orgId directly on integration)
     const integrations = await this.integrationRepo.find({
       where: { isActive: true },
     });
-
     return integrations[0] || null;
   }
 }

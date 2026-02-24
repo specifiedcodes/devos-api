@@ -80,11 +80,6 @@ export class LinearApiClientService {
           body: JSON.stringify({ query: graphqlQuery, variables }),
         });
 
-        // Track rate limit after successful request
-        if (integrationId) {
-          await this.trackRateLimit(integrationId);
-        }
-
         if (response.status === 401) {
           this.logger.warn('Linear API returned 401 - token may be expired');
           throw new UnauthorizedException('Linear access token is invalid or expired');
@@ -97,6 +92,11 @@ export class LinearApiClientService {
 
         if (response.status >= 500) {
           throw new LinearApiError(`Linear API server error: ${response.status}`, response.status);
+        }
+
+        // Track rate limit only after confirming a successful (non-error) response
+        if (integrationId) {
+          await this.trackRateLimit(integrationId);
         }
 
         const data = await response.json();
