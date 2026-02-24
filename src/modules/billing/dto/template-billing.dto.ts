@@ -6,7 +6,7 @@
  * DTOs for template purchase, earnings, and payout API endpoints.
  */
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsInt, Min, Max, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsUUID, IsNotEmpty, IsIn } from 'class-validator';
 
 // ============ Template Purchase DTOs ============
 
@@ -19,12 +19,14 @@ export class CreateTemplatePurchaseIntentDto {
 export class ConfirmTemplatePurchaseDto {
   @ApiProperty({ description: 'Stripe payment intent ID' })
   @IsString()
+  @IsNotEmpty({ message: 'Payment intent ID cannot be empty' })
   paymentIntentId!: string;
 }
 
 export class TemplateRefundDto {
   @ApiProperty({ description: 'Reason for the refund' })
   @IsString()
+  @IsNotEmpty({ message: 'Refund reason cannot be empty' })
   reason!: string;
 }
 
@@ -59,6 +61,7 @@ export class TemplateTransactionQueryDto {
   @ApiPropertyOptional({ description: 'Filter by transaction type (sale, payout, refund)' })
   @IsOptional()
   @IsString()
+  @IsIn(['sale', 'payout', 'refund'], { message: 'type must be one of: sale, payout, refund' })
   type?: string;
 }
 

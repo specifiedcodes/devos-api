@@ -120,7 +120,7 @@ export class TemplateInstallationService {
     }
 
     // Story 19-10: Validate purchase for paid templates
-    await this.validatePurchaseForInstall(templateId, userId);
+    await this.validatePurchaseForInstall(templateId, userId, template);
 
     // Validate variables against template definition
     const validation = this.scaffoldingService.validateVariables(template, dto.variables);
@@ -469,12 +469,14 @@ export class TemplateInstallationService {
   /**
    * Story 19-10: Validate purchase for paid template installation.
    * Throws 402 PaymentRequired if template is paid and not purchased.
+   * Accepts an optional pre-fetched template to avoid duplicate DB query.
    */
   async validatePurchaseForInstall(
     templateId: string,
     userId: string,
+    existingTemplate?: Template,
   ): Promise<void> {
-    const template = await this.templateRepository.findOne({
+    const template = existingTemplate ?? await this.templateRepository.findOne({
       where: { id: templateId },
     });
 

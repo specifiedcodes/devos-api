@@ -109,6 +109,12 @@ describe('TemplateBillingController', () => {
       expect(result.purchaseId).toBe('purchase-123');
       expect(result.status).toBe('succeeded');
     });
+
+    it('should throw UnauthorizedException when not authenticated', async () => {
+      await expect(
+        controller.confirmPurchase({ paymentIntentId: 'pi_test' }, createMockRequest()),
+      ).rejects.toThrow(UnauthorizedException);
+    });
   });
 
   describe('getUserTemplatePurchases', () => {

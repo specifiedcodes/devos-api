@@ -48,6 +48,28 @@ export class TemplateBillingController {
 
   // ============ Template Purchases ============
 
+  // Static route MUST come before parameterized route to avoid `:templateId` matching 'confirm'
+  @Post('purchase/confirm')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm template payment and complete purchase' })
+  @ApiResponse({ status: 200, description: 'Purchase confirmed' })
+  async confirmPurchase(
+    @Body() dto: ConfirmTemplatePurchaseDto,
+    @Req() req: Record<string, any>,
+  ): Promise<{ purchaseId: string; status: string }> {
+    const userId = req.user?.sub;
+    if (!userId) {
+      throw new UnauthorizedException('User not authenticated');
+    }
+
+    const result = await this.purchaseService.processSuccessfulPayment(dto.paymentIntentId);
+
+    return {
+      purchaseId: result.purchaseId,
+      status: result.status,
+    };
+  }
+
   @Post('purchase/:templateId')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Create payment intent for template purchase' })
@@ -72,22 +94,6 @@ export class TemplateBillingController {
     }
 
     return this.purchaseService.createPaymentIntent(templateId, userId, dto.workspaceId);
-  }
-
-  @Post('purchase/confirm')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirm template payment and complete purchase' })
-  @ApiResponse({ status: 200, description: 'Purchase confirmed' })
-  async confirmPurchase(
-    @Body() dto: ConfirmTemplatePurchaseDto,
-    @Req() req: Record<string, any>,
-  ): Promise<{ purchaseId: string; status: string }> {
-    const result = await this.purchaseService.processSuccessfulPayment(dto.paymentIntentId);
-
-    return {
-      purchaseId: result.purchaseId,
-      status: result.status,
-    };
   }
 
   @Get('purchases')
