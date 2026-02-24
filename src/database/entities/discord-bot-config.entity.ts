@@ -78,8 +78,8 @@ export class DiscordBotConfig {
   @Column({ type: 'timestamptz', nullable: true, name: 'last_command_at' })
   lastCommandAt?: Date | null;
 
-  @Column({ type: 'uuid', name: 'configured_by' })
-  configuredBy!: string;
+  @Column({ type: 'uuid', nullable: true, name: 'configured_by' })
+  configuredBy!: string | null; // Nullable: SET NULL on user deletion per migration FK constraint
 
   @CreateDateColumn({ type: 'timestamptz', name: 'created_at' })
   createdAt!: Date;

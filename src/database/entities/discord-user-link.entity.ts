@@ -43,8 +43,8 @@ export class DiscordUserLink {
   @JoinColumn({ name: 'discord_integration_id' })
   discordIntegration?: DiscordIntegration;
 
-  @Column({ type: 'uuid', name: 'devos_user_id' })
-  devosUserId!: string;
+  @Column({ type: 'uuid', nullable: true, name: 'devos_user_id' })
+  devosUserId!: string | null; // Nullable for pending links before DevOS user is mapped
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'devos_user_id' })

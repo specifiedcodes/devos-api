@@ -89,7 +89,7 @@ export class DiscordUserLinkService {
       const link = this.linkRepo.create({
         workspaceId,
         discordIntegrationId: integration.id,
-        devosUserId: '00000000-0000-0000-0000-000000000000', // Placeholder until link completes
+        devosUserId: null, // Null until link completes (FK-safe for pending links)
         discordUserId,
         discordUsername,
         discordDisplayName,

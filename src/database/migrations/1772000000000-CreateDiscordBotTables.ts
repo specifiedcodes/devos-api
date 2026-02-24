@@ -79,7 +79,7 @@ export class CreateDiscordBotTables1772000000000 implements MigrationInterface {
         "id" uuid NOT NULL DEFAULT uuid_generate_v4(),
         "workspace_id" uuid NOT NULL,
         "discord_integration_id" uuid NOT NULL,
-        "devos_user_id" uuid NOT NULL,
+        "devos_user_id" uuid,
         "discord_user_id" varchar(50) NOT NULL,
         "discord_username" varchar(255),
         "discord_display_name" varchar(255),
@@ -109,12 +109,12 @@ export class CreateDiscordBotTables1772000000000 implements MigrationInterface {
       ON DELETE CASCADE ON UPDATE NO ACTION
     `);
 
-    // FK: devos_user_id -> users.id (CASCADE)
+    // FK: devos_user_id -> users.id (SET NULL, nullable for pending links)
     await queryRunner.query(`
       ALTER TABLE "discord_user_links"
       ADD CONSTRAINT "FK_discord_user_links_user"
       FOREIGN KEY ("devos_user_id") REFERENCES "users"("id")
-      ON DELETE CASCADE ON UPDATE NO ACTION
+      ON DELETE SET NULL ON UPDATE NO ACTION
     `);
 
     // Indexes for discord_user_links

@@ -54,7 +54,7 @@ describe('DiscordUserLinkService', () => {
     id: mockLinkId,
     workspaceId: mockWorkspaceId,
     discordIntegrationId: mockIntegrationId,
-    devosUserId: '00000000-0000-0000-0000-000000000000',
+    devosUserId: null, // Null for pending links (FK-safe)
     discordUserId: mockDiscordUserId,
     discordUsername: 'testuser',
     status: 'pending',

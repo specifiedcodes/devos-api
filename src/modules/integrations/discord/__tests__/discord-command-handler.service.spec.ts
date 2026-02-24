@@ -70,6 +70,7 @@ describe('DiscordCommandHandlerService', () => {
             zrangebyscore: jest.fn().mockResolvedValue([]),
             zadd: jest.fn().mockResolvedValue(1),
             expire: jest.fn().mockResolvedValue(true),
+            get: jest.fn().mockResolvedValue(null), // For permission check cache
           },
         },
         {
@@ -123,9 +124,11 @@ describe('DiscordCommandHandlerService', () => {
     });
 
     it('enforces rate limiting (guild-level)', async () => {
-      // Simulate guild rate limited
+      // Simulate guild rate limited: with add-then-check pattern,
+      // we add the entry first, then check count. > limit means exceeded.
+      // 11 entries after adding = exceeds guild limit of 10
       redisService.zrangebyscore.mockResolvedValueOnce(
-        Array(10).fill('timestamp'), // 10 entries = at limit
+        Array(11).fill('timestamp'), // 11 entries > 10 limit
       );
 
       const result = await service.handleSlashCommand(
@@ -140,10 +143,11 @@ describe('DiscordCommandHandlerService', () => {
     });
 
     it('enforces rate limiting (user-level)', async () => {
-      // Guild not rate limited
+      // Guild not rate limited (1 entry after add, within limit)
+      // User rate limited: 6 entries after add > 5 limit
       redisService.zrangebyscore
-        .mockResolvedValueOnce([]) // guild: not limited
-        .mockResolvedValueOnce(Array(5).fill('timestamp')); // user: at limit
+        .mockResolvedValueOnce(['1']) // guild: 1 entry, not limited
+        .mockResolvedValueOnce(Array(6).fill('timestamp')); // user: 6 entries > 5 limit
 
       const result = await service.handleSlashCommand(
         mockGuildId,

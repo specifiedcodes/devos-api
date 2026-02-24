@@ -70,6 +70,11 @@ describe('DiscordBotController', () => {
     user: { sub: mockUserId },
   };
 
+  // Mock Express request for @Req() in handleInteraction
+  const mockExpressRequest = {
+    rawBody: undefined,
+  } as any;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [DiscordBotController],
@@ -124,6 +129,7 @@ describe('DiscordBotController', () => {
         controller.handleInteraction(
           { type: 2, guild_id: mockGuildId },
           {},
+          mockExpressRequest,
         ),
       ).rejects.toThrow(UnauthorizedException);
     });
@@ -132,6 +138,7 @@ describe('DiscordBotController', () => {
       const result = await controller.handleInteraction(
         { type: 1 },
         { 'x-signature-ed25519': 'sig', 'x-signature-timestamp': '123' },
+        mockExpressRequest,
       );
 
       expect(result).toEqual({ type: 1 });
@@ -141,6 +148,7 @@ describe('DiscordBotController', () => {
       const body = {
         type: 2,
         guild_id: mockGuildId,
+        channel_id: 'channel-123',
         member: { user: { id: '123', username: 'testuser' } },
         data: {
           name: 'devos',
@@ -151,6 +159,7 @@ describe('DiscordBotController', () => {
       const result = await controller.handleInteraction(
         body,
         { 'x-signature-ed25519': 'sig', 'x-signature-timestamp': '123' },
+        mockExpressRequest,
       );
 
       expect(commandHandlerService.handleSlashCommand).toHaveBeenCalledWith(
@@ -158,6 +167,7 @@ describe('DiscordBotController', () => {
         '123',
         'status',
         expect.objectContaining({ username: 'testuser' }),
+        'channel-123',
       );
     });
   });

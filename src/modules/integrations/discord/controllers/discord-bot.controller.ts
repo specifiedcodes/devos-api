@@ -21,14 +21,15 @@ import {
   Headers,
   UseGuards,
   Request,
+  Req,
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
   Logger,
-  RawBodyRequest,
   BadRequestException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { Request as ExpressRequest } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -78,6 +79,7 @@ export class DiscordBotController {
   async handleInteraction(
     @Body() body: Record<string, any>,
     @Headers() headers: Record<string, string>,
+    @Req() req: ExpressRequest,
   ): Promise<Record<string, any>> {
     const signature = headers['x-signature-ed25519'];
     const timestamp = headers['x-signature-timestamp'];
@@ -86,24 +88,19 @@ export class DiscordBotController {
       throw new UnauthorizedException('Missing signature headers');
     }
 
-    // For PING interactions (type 1), respond with PONG
-    if (body.type === 1) {
-      // Verify signature if we can determine the guild
-      // For initial PING from Discord during endpoint setup, just respond
-      return { type: 1 };
-    }
+    // Use the actual raw body for signature verification instead of re-serialized JSON.
+    // Re-serializing via JSON.stringify may change key ordering/formatting, which
+    // would cause Ed25519 verification to fail since the signature covers exact bytes.
+    const rawBody = (req as any).rawBody
+      ? (req as any).rawBody.toString('utf8')
+      : JSON.stringify(body);
 
-    // For APPLICATION_COMMAND interactions (type 2)
-    if (body.type === 2) {
-      const guildId = body.guild_id;
-      if (!guildId) {
-        throw new BadRequestException('Missing guild_id in interaction');
-      }
-
-      // Get bot config to find the public key for verification
+    // Verify signature for all interaction types (including PING).
+    // Discord requires Ed25519 verification on every interaction.
+    const guildId = body.guild_id;
+    if (guildId) {
       const botConfig = await this.botGatewayService.getBotConfig(guildId);
       if (botConfig?.publicKey) {
-        const rawBody = JSON.stringify(body);
         const isValid = this.botGatewayService.verifyInteractionSignature(
           rawBody,
           signature,
@@ -115,9 +112,25 @@ export class DiscordBotController {
           throw new UnauthorizedException('Invalid interaction signature');
         }
       }
+    } else {
+      // PING without guild_id (initial setup) -- log warning but allow
+      this.logger.warn('Interaction received without guild_id; signature verification skipped');
+    }
+
+    // For PING interactions (type 1), respond with PONG
+    if (body.type === 1) {
+      return { type: 1 };
+    }
+
+    // For APPLICATION_COMMAND interactions (type 2)
+    if (body.type === 2) {
+      if (!guildId) {
+        throw new BadRequestException('Missing guild_id in interaction');
+      }
 
       // Extract command data
       const discordUserId = body.member?.user?.id || body.user?.id || '';
+      const channelId = body.channel_id || '';
       const commandData = body.data;
       const commandName = commandData?.options?.[0]?.name || commandData?.name || '';
       const subOptions = commandData?.options?.[0]?.options || [];
@@ -139,6 +152,7 @@ export class DiscordBotController {
         discordUserId,
         commandName,
         options,
+        channelId,
       );
     }
 
@@ -320,18 +334,15 @@ export class DiscordBotController {
     @Query('limit') limitParam?: string,
     @Query('offset') offsetParam?: string,
   ): Promise<{ items: DiscordInteractionLog[]; total: number }> {
+    // NaN is handled by the `|| defaultValue` fallback (NaN || 20 === 20)
     const limit = Math.min(Math.max(Number(limitParam) || 20, 1), 100);
     const offset = Math.max(Number(offsetParam) || 0, 0);
-
-    // NaN guard
-    const safeLimit = Number.isNaN(limit) ? 20 : limit;
-    const safeOffset = Number.isNaN(offset) ? 0 : offset;
 
     const [items, total] = await this.logRepo.findAndCount({
       where: { workspaceId },
       order: { createdAt: 'DESC' },
-      take: safeLimit,
-      skip: safeOffset,
+      take: limit,
+      skip: offset,
     });
 
     return { items, total };
