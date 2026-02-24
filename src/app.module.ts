@@ -130,6 +130,9 @@ import { AgentSubscription } from './database/entities/agent-subscription.entity
 import { CustomRole } from './database/entities/custom-role.entity';
 import { RolePermission } from './database/entities/role-permission.entity';
 import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
+import { IpAllowlistEntry } from './database/entities/ip-allowlist-entry.entity';
+import { IpAllowlistConfig } from './database/entities/ip-allowlist-config.entity';
+import { IpAllowlistModule } from './modules/ip-allowlist/ip-allowlist.module';
 
 @Module({
   imports: [
@@ -222,6 +225,8 @@ import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
         AgentSubscription,
         CustomRole,
         RolePermission,
+        IpAllowlistEntry,
+        IpAllowlistConfig,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -288,6 +293,7 @@ import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
     MarketplaceModule,
     BillingModule,
     CustomRolesModule,
+    IpAllowlistModule,
   ],
   controllers: [AppController],
   providers: [

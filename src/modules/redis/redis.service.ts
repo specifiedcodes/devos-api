@@ -540,6 +540,27 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   /**
+   * Get members of a sorted set in reverse order (highest score first).
+   * Story 20.4 - IP Allowlisting blocked attempts retrieval
+   * @param key - Redis sorted set key
+   * @param start - Start rank (inclusive, 0-based)
+   * @param stop - Stop rank (inclusive)
+   * @returns Array of members in reverse score order
+   */
+  async zrevrange(key: string, start: number, stop: number): Promise<string[]> {
+    if (!this.isConnected) {
+      this.logger.warn('Redis not connected, cannot zrevrange');
+      return [];
+    }
+    try {
+      return await this.client.zrevrange(key, start, stop);
+    } catch (error) {
+      this.logger.error(`Failed to zrevrange from ${key}`, error);
+      return [];
+    }
+  }
+
+  /**
    * Execute Redis INFO command (Story 14.1 - Prometheus metrics)
    * Returns raw Redis INFO string for metrics collection
    * @returns Redis INFO response string or null on failure
