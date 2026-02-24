@@ -43,10 +43,13 @@ export class PermissionGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest();
     const userId = request.user?.id;
+    // Extract workspaceId from params or body. Intentionally NOT falling back to
+    // params.id to avoid treating non-workspace entity IDs (e.g., user ID, project ID)
+    // as workspace context, which could cause permission checks against wrong workspaces.
     const workspaceId =
       request.params?.workspaceId ||
-      request.params?.id ||
-      request.body?.workspaceId;
+      request.body?.workspaceId ||
+      request.query?.workspaceId;
 
     if (!userId || !workspaceId) {
       throw new ForbiddenException('Missing user or workspace context');
@@ -61,6 +64,10 @@ export class PermissionGuard implements CanActivate {
     );
 
     if (!granted) {
+      // Use request.path (not request.url) to avoid logging query parameters
+      // which may contain sensitive data (tokens, session IDs, etc.)
+      const sanitizedPath = request.path || request.url?.split('?')[0] || 'unknown';
+
       // Log permission denial (fire-and-forget)
       this.auditService
         .log(
@@ -72,10 +79,9 @@ export class PermissionGuard implements CanActivate {
           {
             reason: 'insufficient_permission',
             required: `${requiredPermission.resource}:${requiredPermission.action}`,
-            endpoint: request.url,
+            endpoint: sanitizedPath,
             method: request.method,
             ipAddress: request.ip,
-            userAgent: request.headers['user-agent'],
           },
         )
         .catch(() => {});
@@ -83,7 +89,7 @@ export class PermissionGuard implements CanActivate {
       this.logger.warn(
         `Permission denied: user=${userId} workspace=${workspaceId} ` +
         `required=${requiredPermission.resource}:${requiredPermission.action} ` +
-        `endpoint=${request.method} ${request.url}`,
+        `endpoint=${request.method} ${sanitizedPath}`,
       );
 
       throw new ForbiddenException({

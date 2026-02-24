@@ -22,6 +22,7 @@ export class PermissionCacheService {
   private readonly logger = new Logger(PermissionCacheService.name);
   private readonly CACHE_PREFIX = 'perm:';
   private readonly CACHE_TTL = 300; // 5 minutes
+  private readonly DEL_BATCH_SIZE = 500; // Max keys per DEL command to avoid Redis blocking
 
   constructor(
     private readonly redisService: RedisService,
@@ -65,12 +66,12 @@ export class PermissionCacheService {
       action,
     );
 
-    // 3. Store result in cache (fire-and-forget)
-    try {
-      await this.redisService.set(cacheKey, granted ? '1' : '0', this.CACHE_TTL);
-    } catch (error) {
-      this.logger.warn(`Redis cache write failed for ${cacheKey}`);
-    }
+    // 3. Store result in cache (true fire-and-forget: don't await the write)
+    this.redisService
+      .set(cacheKey, granted ? '1' : '0', this.CACHE_TTL)
+      .catch((error) => {
+        this.logger.warn(`Redis cache write failed for ${cacheKey}`);
+      });
 
     return granted;
   }
@@ -92,7 +93,7 @@ export class PermissionCacheService {
       const pattern = `${this.CACHE_PREFIX}${workspaceId}:${userId}:*`;
       const keys = await this.redisService.scanKeys(pattern);
       if (keys.length > 0) {
-        await this.redisService.del(...keys);
+        await this.batchDel(keys);
         this.logger.log(
           `Invalidated ${keys.length} permission cache entries for user=${userId} workspace=${workspaceId}`,
         );
@@ -120,7 +121,7 @@ export class PermissionCacheService {
       const pattern = `${this.CACHE_PREFIX}${workspaceId}:*`;
       const keys = await this.redisService.scanKeys(pattern);
       if (keys.length > 0) {
-        await this.redisService.del(...keys);
+        await this.batchDel(keys);
         this.logger.log(
           `Invalidated ${keys.length} permission cache entries for workspace=${workspaceId}`,
         );
@@ -141,7 +142,7 @@ export class PermissionCacheService {
       const pattern = `${this.CACHE_PREFIX}*`;
       const keys = await this.redisService.scanKeys(pattern);
       if (keys.length > 0) {
-        await this.redisService.del(...keys);
+        await this.batchDel(keys);
         this.logger.log(`Invalidated all ${keys.length} permission cache entries`);
       }
     } catch (error) {
@@ -150,7 +151,19 @@ export class PermissionCacheService {
   }
 
   /**
+   * Delete keys in batches to avoid Redis blocking on large DEL commands
+   * and Node.js argument limits on spread operations.
+   */
+  private async batchDel(keys: string[]): Promise<void> {
+    for (let i = 0; i < keys.length; i += this.DEL_BATCH_SIZE) {
+      const batch = keys.slice(i, i + this.DEL_BATCH_SIZE);
+      await this.redisService.del(...batch);
+    }
+  }
+
+  /**
    * Build a Redis cache key for a permission check.
+   * Sanitizes components to prevent cache key injection via colons or glob characters.
    */
   buildCacheKey(
     workspaceId: string,
@@ -158,6 +171,14 @@ export class PermissionCacheService {
     resource: string,
     action: string,
   ): string {
-    return `${this.CACHE_PREFIX}${workspaceId}:${userId}:${resource}:${action}`;
+    return `${this.CACHE_PREFIX}${this.sanitizeKeyComponent(workspaceId)}:${this.sanitizeKeyComponent(userId)}:${this.sanitizeKeyComponent(resource)}:${this.sanitizeKeyComponent(action)}`;
+  }
+
+  /**
+   * Sanitize a cache key component by replacing colons and Redis glob characters
+   * to prevent cache key collisions and over-broad SCAN pattern matches.
+   */
+  private sanitizeKeyComponent(value: string): string {
+    return value.replace(/[:\*\?\[\]]/g, '_');
   }
 }

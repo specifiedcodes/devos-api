@@ -21,7 +21,7 @@ describe('PermissionCacheService', () => {
   beforeEach(async () => {
     redisService = {
       get: jest.fn(),
-      set: jest.fn(),
+      set: jest.fn().mockResolvedValue(undefined),
       scanKeys: jest.fn(),
       del: jest.fn(),
     };

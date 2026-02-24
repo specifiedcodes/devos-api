@@ -26,7 +26,9 @@ describe('PermissionGuard', () => {
     user?: any;
     params?: any;
     body?: any;
+    query?: any;
     url?: string;
+    path?: string;
     method?: string;
     ip?: string;
     headers?: any;
@@ -35,7 +37,9 @@ describe('PermissionGuard', () => {
       user: overrides?.user ?? { id: mockUserId },
       params: overrides?.params ?? { workspaceId: mockWorkspaceId },
       body: overrides?.body ?? {},
+      query: overrides?.query ?? {},
       url: overrides?.url ?? '/api/v1/workspaces/ws/projects',
+      path: overrides?.path ?? '/api/v1/workspaces/ws/projects',
       method: overrides?.method ?? 'POST',
       ip: overrides?.ip ?? '127.0.0.1',
       headers: overrides?.headers ?? { 'user-agent': 'test-agent' },
@@ -122,10 +126,10 @@ describe('PermissionGuard', () => {
       await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
     });
 
-    it('should extract workspaceId from params.id fallback', async () => {
+    it('should extract workspaceId from query.workspaceId fallback', async () => {
       reflector.getAllAndOverride.mockReturnValue(permission);
       permissionCacheService.checkPermission!.mockResolvedValue(true);
-      const context = createMockContext({ params: { id: mockWorkspaceId } });
+      const context = createMockContext({ params: {}, body: {}, query: { workspaceId: mockWorkspaceId } });
 
       const result = await guard.canActivate(context);
 
