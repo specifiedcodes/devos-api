@@ -21,7 +21,6 @@ import {
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
-import { ResourceType } from '../../../database/entities/role-permission.entity';
 import { PermissionMatrixService } from '../services/permission-matrix.service';
 import { SetPermissionDto } from '../dto/set-permission.dto';
 import {
@@ -160,7 +159,7 @@ export class PermissionMatrixController {
     await this.permissionMatrixService.bulkResourceAction(
       roleId,
       workspaceId,
-      dto.resourceType as ResourceType,
+      dto.resourceType,
       dto.action,
       req.user.id,
     );

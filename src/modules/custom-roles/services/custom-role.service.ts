@@ -333,7 +333,7 @@ export class CustomRoleService {
     await this.validateRoleName(dto.name, workspaceId);
 
     // Use transaction to prevent TOCTOU race on role count
-    const saved = await this.dataSource.transaction(async (manager) => {
+    const { savedClone: saved, permissionsCopiedCount } = await this.dataSource.transaction(async (manager) => {
       const currentCount = await manager.count(CustomRole, {
         where: { workspaceId },
       });
@@ -385,7 +385,7 @@ export class CustomRoleService {
         await manager.save(clonedPermissions);
       }
 
-      return savedClone;
+      return { savedClone, permissionsCopiedCount: sourcePermissions.length };
     });
 
     // Audit log (fire-and-forget, outside transaction)
@@ -395,7 +395,8 @@ export class CustomRoleService {
         sourceRoleId,
         sourceRoleName: sourceRole.name,
         clonedRoleName: saved.name,
-        permissionsCopied: true,
+        permissionsCopied: permissionsCopiedCount > 0,
+        permissionsCopiedCount,
       })
       .catch(() => {});
 

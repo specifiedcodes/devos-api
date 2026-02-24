@@ -183,6 +183,10 @@ export class PermissionMatrixService {
     permissions: SetPermissionDto[],
     actorId: string,
   ): Promise<RolePermission[]> {
+    if (!permissions || permissions.length === 0) {
+      throw new BadRequestException('At least one permission is required for bulk update');
+    }
+
     const role = await this.loadAndValidateRole(roleId, workspaceId);
 
     // Validate all permissions before applying any
@@ -268,24 +272,33 @@ export class PermissionMatrixService {
     const granted = action === 'allow_all';
 
     await this.dataSource.transaction(async (manager) => {
-      for (const permName of permissionNames) {
-        let existing = await manager.findOne(RolePermission, {
-          where: { roleId, resourceType, permission: permName },
-        });
+      // Batch load all existing permissions for this resource type to avoid N+1 queries
+      const existingPermissions = await manager.find(RolePermission, {
+        where: { roleId, resourceType },
+      });
+      const existingMap = new Map<string, RolePermission>();
+      for (const perm of existingPermissions) {
+        existingMap.set(perm.permission, perm);
+      }
 
+      const toSave: RolePermission[] = [];
+      for (const permName of permissionNames) {
+        const existing = existingMap.get(permName);
         if (existing) {
           existing.granted = granted;
-          await manager.save(existing);
+          toSave.push(existing);
         } else {
-          const newPerm = manager.create(RolePermission, {
-            roleId,
-            resourceType,
-            permission: permName,
-            granted,
-          });
-          await manager.save(newPerm);
+          toSave.push(
+            manager.create(RolePermission, {
+              roleId,
+              resourceType,
+              permission: permName,
+              granted,
+            }),
+          );
         }
       }
+      await manager.save(toSave);
     });
 
     // Audit log (fire-and-forget)
@@ -546,16 +559,22 @@ export class PermissionMatrixService {
 
   /**
    * Get available resource types and their permissions.
+   * Returns a deep copy to prevent mutation of the original RESOURCE_PERMISSIONS.
    */
   getResourceDefinitions(): Record<string, string[]> {
-    return { ...RESOURCE_PERMISSIONS };
+    const result: Record<string, string[]> = {};
+    for (const [key, value] of Object.entries(RESOURCE_PERMISSIONS)) {
+      result[key] = [...value];
+    }
+    return result;
   }
 
   /**
    * Get base role defaults for display in UI.
+   * Returns a deep copy to prevent mutation of the original BASE_ROLE_DEFAULTS.
    */
   getBaseRoleDefaults(): Record<string, Record<string, Record<string, boolean>>> {
-    return { ...BASE_ROLE_DEFAULTS };
+    return JSON.parse(JSON.stringify(BASE_ROLE_DEFAULTS));
   }
 
   /**

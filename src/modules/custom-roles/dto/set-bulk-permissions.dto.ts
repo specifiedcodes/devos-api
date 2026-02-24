@@ -1,4 +1,4 @@
-import { IsArray, ValidateNested, IsOptional, IsString, IsEnum, IsNotEmpty } from 'class-validator';
+import { IsArray, ValidateNested, IsOptional, IsString, IsEnum, IsNotEmpty, IsIn } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { SetPermissionDto } from './set-permission.dto';
@@ -15,13 +15,13 @@ export class SetBulkPermissionsDto {
 export class ResourceBulkActionDto {
   @ApiProperty({ description: 'Resource type', enum: ResourceType })
   @IsNotEmpty()
-  @IsString()
   @IsEnum(ResourceType)
-  resourceType!: string;
+  resourceType!: ResourceType;
 
   @ApiProperty({ description: 'Action to perform: allow_all or deny_all', enum: ['allow_all', 'deny_all'] })
   @IsNotEmpty()
   @IsString()
+  @IsIn(['allow_all', 'deny_all'], { message: 'action must be either allow_all or deny_all' })
   action!: 'allow_all' | 'deny_all';
 }
 

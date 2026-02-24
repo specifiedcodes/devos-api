@@ -470,8 +470,12 @@ describe('PermissionMatrixService', () => {
     it('should throw NotFoundException for non-existent role', async () => {
       customRoleRepo.findOne.mockResolvedValue(null);
 
+      const permissions = [
+        { resourceType: ResourceType.PROJECTS, permission: 'create', granted: true },
+      ];
+
       await expect(
-        service.setBulkPermissions(mockRoleId, mockWorkspaceId, [], mockActorId),
+        service.setBulkPermissions(mockRoleId, mockWorkspaceId, permissions, mockActorId),
       ).rejects.toThrow(NotFoundException);
     });
 
@@ -497,14 +501,10 @@ describe('PermissionMatrixService', () => {
       );
     });
 
-    it('should handle empty permissions array', async () => {
-      customRoleRepo.findOne.mockResolvedValue(createMockRole() as CustomRole);
-
-      const result = await service.setBulkPermissions(
-        mockRoleId, mockWorkspaceId, [], mockActorId,
-      );
-
-      expect(result).toHaveLength(0);
+    it('should reject empty permissions array', async () => {
+      await expect(
+        service.setBulkPermissions(mockRoleId, mockWorkspaceId, [], mockActorId),
+      ).rejects.toThrow(BadRequestException);
     });
 
     it('should update existing permissions in bulk', async () => {
@@ -539,22 +539,24 @@ describe('PermissionMatrixService', () => {
 
     it('should set all permissions for a resource to true (allow_all)', async () => {
       customRoleRepo.findOne.mockResolvedValue(createMockRole() as CustomRole);
-      mockTransactionManager.findOne.mockResolvedValue(null);
+      mockTransactionManager.find.mockResolvedValue([]); // no existing permissions
 
       await service.bulkResourceAction(
         mockRoleId, mockWorkspaceId, ResourceType.PROJECTS, 'allow_all', mockActorId,
       );
 
       expect(dataSource.transaction).toHaveBeenCalled();
-      // 5 permissions for projects
+      // 5 permissions for projects created as new entries
       expect(mockTransactionManager.create).toHaveBeenCalledTimes(
         RESOURCE_PERMISSIONS[ResourceType.PROJECTS].length,
       );
+      // Batch save called once
+      expect(mockTransactionManager.save).toHaveBeenCalled();
     });
 
     it('should set all permissions for a resource to false (deny_all)', async () => {
       customRoleRepo.findOne.mockResolvedValue(createMockRole() as CustomRole);
-      mockTransactionManager.findOne.mockResolvedValue(null);
+      mockTransactionManager.find.mockResolvedValue([]); // no existing permissions
 
       await service.bulkResourceAction(
         mockRoleId, mockWorkspaceId, ResourceType.AGENTS, 'deny_all', mockActorId,
@@ -585,7 +587,7 @@ describe('PermissionMatrixService', () => {
 
     it('should log audit event for bulk resource action', async () => {
       customRoleRepo.findOne.mockResolvedValue(createMockRole() as CustomRole);
-      mockTransactionManager.findOne.mockResolvedValue(null);
+      mockTransactionManager.find.mockResolvedValue([]); // no existing permissions
 
       await service.bulkResourceAction(
         mockRoleId, mockWorkspaceId, ResourceType.PROJECTS, 'allow_all', mockActorId,
@@ -606,13 +608,14 @@ describe('PermissionMatrixService', () => {
 
     it('should update existing permissions during bulk resource action', async () => {
       customRoleRepo.findOne.mockResolvedValue(createMockRole() as CustomRole);
-      const existing = createMockPermission({ granted: false });
-      mockTransactionManager.findOne.mockResolvedValue(existing);
+      const existing = createMockPermission({ granted: false, permission: 'create' });
+      mockTransactionManager.find.mockResolvedValue([existing]); // one existing permission
 
       await service.bulkResourceAction(
         mockRoleId, mockWorkspaceId, ResourceType.PROJECTS, 'allow_all', mockActorId,
       );
 
+      // Batch save called with all permissions (1 existing updated + 4 new)
       expect(mockTransactionManager.save).toHaveBeenCalled();
     });
   });
