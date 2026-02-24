@@ -5,7 +5,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { ApiTokenService } from '../services/api-token.service';
@@ -17,6 +17,7 @@ describe('ApiTokenService', () => {
   let service: ApiTokenService;
   let tokenRepo: jest.Mocked<Repository<ApiToken>>;
   let redisService: jest.Mocked<RedisService>;
+  let mockDataSource: { transaction: jest.Mock };
 
   const mockWorkspaceId = '11111111-1111-1111-1111-111111111111';
   const mockActorId = '22222222-2222-2222-2222-222222222222';
@@ -31,6 +32,18 @@ describe('ApiTokenService', () => {
   };
 
   beforeEach(async () => {
+    // Mock DataSource.transaction to execute callback with a mock manager
+    mockDataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: (manager: any) => Promise<any>) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(0),
+          create: jest.fn().mockImplementation((_entity: any, dto: any) => ({ ...dto, id: mockTokenId })),
+          save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...entity, id: mockTokenId, createdAt: new Date(), updatedAt: new Date() })),
+        };
+        return cb(manager);
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ApiTokenService,
@@ -45,6 +58,10 @@ describe('ApiTokenService', () => {
             update: jest.fn().mockResolvedValue({ affected: 1 }),
             createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
           },
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
         },
         {
           provide: RedisService,
@@ -75,13 +92,28 @@ describe('ApiTokenService', () => {
       const dto = { name: 'Test Token', scopes: [ApiTokenScope.PERMISSIONS_CHECK] };
       const result = await service.createToken(mockWorkspaceId, dto, mockActorId);
 
-      const savedEntity = tokenRepo.save.mock.calls[0][0];
+      // The transaction callback receives a manager; check the saved entity via transaction
+      const transactionCb = mockDataSource.transaction.mock.calls[0][0];
+      const mockManager = {
+        count: jest.fn().mockResolvedValue(0),
+        create: jest.fn().mockImplementation((_entity: any, dto: any) => dto),
+        save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...entity, id: mockTokenId })),
+      };
+      await transactionCb(mockManager);
+      const savedEntity = mockManager.create.mock.results[0].value;
       expect(savedEntity.tokenHash).not.toBe(result.rawToken);
       expect(savedEntity.tokenHash).toMatch(/^\$2[aby]\$/);
     });
 
     it('enforces workspace limit of 25', async () => {
-      tokenRepo.count.mockResolvedValue(25);
+      mockDataSource.transaction.mockImplementation(async (cb: (manager: any) => Promise<any>) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(25),
+          create: jest.fn(),
+          save: jest.fn(),
+        };
+        return cb(manager);
+      });
       const dto = { name: 'Test Token', scopes: [ApiTokenScope.PERMISSIONS_CHECK] };
 
       await expect(service.createToken(mockWorkspaceId, dto, mockActorId))
@@ -96,15 +128,26 @@ describe('ApiTokenService', () => {
     });
 
     it('handles optional expiry', async () => {
+      let capturedEntity: any = null;
+      mockDataSource.transaction.mockImplementation(async (cb: (manager: any) => Promise<any>) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(0),
+          create: jest.fn().mockImplementation((_entity: any, dto: any) => {
+            capturedEntity = dto;
+            return dto;
+          }),
+          save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...entity, id: mockTokenId, createdAt: new Date(), updatedAt: new Date() })),
+        };
+        return cb(manager);
+      });
       const dto = {
         name: 'Test Token',
         scopes: [ApiTokenScope.PERMISSIONS_CHECK],
         expiresAt: '2027-01-01T00:00:00Z',
       };
-      const result = await service.createToken(mockWorkspaceId, dto, mockActorId);
+      await service.createToken(mockWorkspaceId, dto, mockActorId);
 
-      const savedEntity = tokenRepo.save.mock.calls[0][0];
-      expect(savedEntity.expiresAt).toEqual(new Date('2027-01-01T00:00:00Z'));
+      expect(capturedEntity.expiresAt).toEqual(new Date('2027-01-01T00:00:00Z'));
     });
   });
 

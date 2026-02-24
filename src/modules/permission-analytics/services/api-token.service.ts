@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThanOrEqual } from 'typeorm';
+import { Repository, LessThanOrEqual, DataSource } from 'typeorm';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import * as crypto from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -36,6 +36,7 @@ export class ApiTokenService {
     @InjectRepository(ApiToken)
     private readonly tokenRepo: Repository<ApiToken>,
     private readonly redisService: RedisService,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -47,15 +48,7 @@ export class ApiTokenService {
     dto: CreateApiTokenDto,
     actorId: string,
   ): Promise<{ token: ApiToken; rawToken: string }> {
-    // Check workspace token limit
-    const existingCount = await this.tokenRepo.count({ where: { workspaceId } });
-    if (existingCount >= MAX_TOKENS_PER_WORKSPACE) {
-      throw new BadRequestException(
-        `Workspace token limit reached (maximum ${MAX_TOKENS_PER_WORKSPACE})`,
-      );
-    }
-
-    // Validate scopes
+    // Validate scopes before entering transaction
     const validScopes = Object.values(ApiTokenScope);
     for (const scope of dto.scopes) {
       if (!validScopes.includes(scope as ApiTokenScope)) {
@@ -71,18 +64,28 @@ export class ApiTokenService {
     // Hash the token with bcrypt
     const tokenHash = await bcrypt.hash(rawToken, BCRYPT_COST);
 
-    const token = this.tokenRepo.create({
-      workspaceId,
-      name: dto.name,
-      tokenHash,
-      tokenPrefix,
-      scopes: dto.scopes,
-      isActive: true,
-      expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
-      createdBy: actorId,
-    });
+    // Wrap count+save in a transaction to prevent TOCTOU race on workspace token limit
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const existingCount = await manager.count(ApiToken, { where: { workspaceId } });
+      if (existingCount >= MAX_TOKENS_PER_WORKSPACE) {
+        throw new BadRequestException(
+          `Workspace token limit reached (maximum ${MAX_TOKENS_PER_WORKSPACE})`,
+        );
+      }
 
-    const saved = await this.tokenRepo.save(token);
+      const token = manager.create(ApiToken, {
+        workspaceId,
+        name: dto.name,
+        tokenHash,
+        tokenPrefix,
+        scopes: dto.scopes,
+        isActive: true,
+        expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : null,
+        createdBy: actorId,
+      });
+
+      return manager.save(token);
+    });
 
     this.logger.log(
       `Created API token "${dto.name}" (prefix: ${tokenPrefix}) for workspace ${workspaceId}`,
@@ -145,9 +148,12 @@ export class ApiTokenService {
       return null;
     }
 
-    // Check Redis cache for recently validated tokens
+    // Check Redis cache for recently validated tokens.
+    // Use SHA256 of the full raw token as cache key to avoid prefix collisions
+    // (multiple tokens can share the same 8-char prefix).
     const tokenPrefix = rawToken.slice(0, 8);
-    const cacheKey = `${VALIDATION_CACHE_PREFIX}${tokenPrefix}`;
+    const tokenCacheHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const cacheKey = `${VALIDATION_CACHE_PREFIX}${tokenCacheHash}`;
 
     try {
       const cached = await this.redisService.get(cacheKey);

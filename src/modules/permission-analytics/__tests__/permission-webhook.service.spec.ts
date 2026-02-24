@@ -5,7 +5,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { PermissionWebhookService } from '../services/permission-webhook.service';
 import { PermissionWebhook } from '../../../database/entities/permission-webhook.entity';
@@ -18,6 +18,7 @@ global.fetch = mockFetch as any;
 describe('PermissionWebhookService', () => {
   let service: PermissionWebhookService;
   let webhookRepo: jest.Mocked<Repository<PermissionWebhook>>;
+  let mockDataSource: { transaction: jest.Mock };
 
   const mockWorkspaceId = '11111111-1111-1111-1111-111111111111';
   const mockActorId = '22222222-2222-2222-2222-222222222222';
@@ -25,6 +26,18 @@ describe('PermissionWebhookService', () => {
 
   beforeEach(async () => {
     mockFetch.mockReset();
+
+    // Mock DataSource.transaction to execute callback with a mock manager
+    mockDataSource = {
+      transaction: jest.fn().mockImplementation(async (cb: (manager: any) => Promise<any>) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(0),
+          create: jest.fn().mockImplementation((_entity: any, dto: any) => ({ ...dto, id: mockWebhookId })),
+          save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...entity, id: mockWebhookId, createdAt: new Date(), updatedAt: new Date() })),
+        };
+        return cb(manager);
+      }),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -40,6 +53,10 @@ describe('PermissionWebhookService', () => {
             update: jest.fn().mockResolvedValue({ affected: 1 }),
             remove: jest.fn().mockResolvedValue(undefined),
           },
+        },
+        {
+          provide: DataSource,
+          useValue: mockDataSource,
         },
       ],
     }).compile();
@@ -74,7 +91,14 @@ describe('PermissionWebhookService', () => {
     });
 
     it('enforces workspace limit of 10', async () => {
-      webhookRepo.count.mockResolvedValue(10);
+      mockDataSource.transaction.mockImplementation(async (cb: (manager: any) => Promise<any>) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(10),
+          create: jest.fn(),
+          save: jest.fn(),
+        };
+        return cb(manager);
+      });
       const dto = {
         url: 'https://example.com/webhook',
         eventTypes: [WebhookEventType.PERMISSION_CHANGED],

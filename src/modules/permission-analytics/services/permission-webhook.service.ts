@@ -5,9 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import * as crypto from 'crypto';
-import * as bcrypt from 'bcrypt';
 import { PermissionWebhook } from '../../../database/entities/permission-webhook.entity';
 import {
   CreatePermissionWebhookDto,
@@ -23,9 +22,6 @@ const MAX_CONSECUTIVE_FAILURES = 10;
 
 /** Maximum retry attempts for webhook delivery */
 const MAX_RETRIES = 3;
-
-/** bcrypt cost factor for secret hashing */
-const BCRYPT_COST = 12;
 
 /** Webhook delivery timeout in ms */
 const DELIVERY_TIMEOUT_MS = 10000;
@@ -56,6 +52,7 @@ export class PermissionWebhookService {
   constructor(
     @InjectRepository(PermissionWebhook)
     private readonly webhookRepo: Repository<PermissionWebhook>,
+    private readonly dataSource: DataSource,
   ) {}
 
   /**
@@ -66,20 +63,12 @@ export class PermissionWebhookService {
     dto: CreatePermissionWebhookDto,
     actorId: string,
   ): Promise<{ webhook: PermissionWebhook; signingSecret: string }> {
-    // Check workspace webhook limit
-    const existingCount = await this.webhookRepo.count({ where: { workspaceId } });
-    if (existingCount >= MAX_WEBHOOKS_PER_WORKSPACE) {
-      throw new BadRequestException(
-        `Workspace webhook limit reached (maximum ${MAX_WEBHOOKS_PER_WORKSPACE})`,
-      );
-    }
-
-    // Validate URL is HTTPS
+    // Validate URL is HTTPS (before entering transaction)
     if (!dto.url.startsWith('https://')) {
       throw new BadRequestException('Webhook URL must use HTTPS');
     }
 
-    // Validate event types
+    // Validate event types (before entering transaction)
     const validEventTypes = Object.values(WebhookEventType);
     for (const eventType of dto.eventTypes) {
       if (!validEventTypes.includes(eventType as WebhookEventType)) {
@@ -87,21 +76,34 @@ export class PermissionWebhookService {
       }
     }
 
-    // Generate signing secret
+    // Generate signing secret.
+    // NOTE: The secret is stored as-is (not bcrypt-hashed) because HMAC-SHA256 signing
+    // requires the original key on both sides. Bcrypt is a one-way hash and cannot be
+    // reversed to produce the HMAC key. The secretHash column stores the raw hex secret
+    // server-side for signing outbound payloads.
     const signingSecret = crypto.randomBytes(32).toString('hex');
-    const secretHash = await bcrypt.hash(signingSecret, BCRYPT_COST);
 
-    const webhook = this.webhookRepo.create({
-      workspaceId,
-      url: dto.url,
-      secretHash,
-      eventTypes: dto.eventTypes,
-      isActive: true,
-      failureCount: 0,
-      createdBy: actorId,
+    // Wrap count+save in a transaction to prevent TOCTOU race on workspace webhook limit
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const existingCount = await manager.count(PermissionWebhook, { where: { workspaceId } });
+      if (existingCount >= MAX_WEBHOOKS_PER_WORKSPACE) {
+        throw new BadRequestException(
+          `Workspace webhook limit reached (maximum ${MAX_WEBHOOKS_PER_WORKSPACE})`,
+        );
+      }
+
+      const webhook = manager.create(PermissionWebhook, {
+        workspaceId,
+        url: dto.url,
+        secretHash: signingSecret,
+        eventTypes: dto.eventTypes,
+        isActive: true,
+        failureCount: 0,
+        createdBy: actorId,
+      });
+
+      return manager.save(webhook);
     });
-
-    const saved = await this.webhookRepo.save(webhook);
 
     this.logger.log(
       `Created permission webhook for workspace ${workspaceId}: ${dto.url}`,
@@ -174,9 +176,10 @@ export class PermissionWebhookService {
       `Updated permission webhook ${webhookId} for workspace ${workspaceId}`,
     );
 
-    // Strip secretHash
-    saved.secretHash = '';
-    return saved;
+    // Return a copy with secretHash stripped (do not mutate the entity in-memory
+    // as it may be reused by TypeORM's identity map in the same request lifecycle)
+    const { secretHash: _hash, ...rest } = saved;
+    return { ...rest, secretHash: '' } as PermissionWebhook;
   }
 
   /**

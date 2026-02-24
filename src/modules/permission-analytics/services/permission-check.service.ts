@@ -74,8 +74,9 @@ export class PermissionCheckService {
       ? member.customRole.displayName
       : member.role;
 
-    // Batch check permissions concurrently
-    let cacheHit = true;
+    // Batch check permissions concurrently via cache-enabled service.
+    // PermissionCacheService always consults Redis first, falling back to DB.
+    // cacheHit reflects whether the cache layer was used (always true when cache is available).
     const results: PermissionCheckResultItem[] = await Promise.all(
       params.checks.map(async (check) => {
         const granted = await this.permissionCacheService.checkPermission(
@@ -96,7 +97,7 @@ export class PermissionCheckService {
       results,
       userRole: roleName,
       checkedAt: new Date().toISOString(),
-      cacheHit,
+      cacheHit: true, // Cache layer is always consulted; individual miss/hit not exposed by PermissionCacheService
     };
   }
 
