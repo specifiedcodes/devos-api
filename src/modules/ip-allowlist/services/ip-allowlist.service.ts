@@ -12,6 +12,8 @@ import { IpAllowlistEntry } from '../../../database/entities/ip-allowlist-entry.
 import { IpAllowlistConfig } from '../../../database/entities/ip-allowlist-config.entity';
 import { RedisService } from '../../redis/redis.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../../database/entities/permission-audit-event.entity';
 import { CreateIpEntryDto } from '../dto/create-ip-entry.dto';
 import { UpdateIpEntryDto } from '../dto/update-ip-entry.dto';
 import { IpEntryResponseDto, IpConfigResponseDto, IpTestResponseDto, BlockedAttemptDto } from '../dto/ip-entry-response.dto';
@@ -59,6 +61,7 @@ export class IpAllowlistService {
     private readonly redisService: RedisService,
     private readonly auditService: AuditService,
     private readonly dataSource: DataSource,
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   // ==================== CONFIG OPERATIONS ====================
@@ -155,6 +158,22 @@ export class IpAllowlistService {
           gracePeriodEndsAt: config.gracePeriodEndsAt?.toISOString() ?? null,
         },
       )
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: isEnabled
+          ? PermissionAuditEventType.IP_ALLOWLIST_ENABLED
+          : PermissionAuditEventType.IP_ALLOWLIST_DISABLED,
+        actorId: userId,
+        beforeState: { isEnabled: wasEnabled },
+        afterState: {
+          isEnabled,
+          gracePeriodEndsAt: config.gracePeriodEndsAt?.toISOString() ?? null,
+        },
+      })
       .catch(() => {});
 
     return this.getConfig(workspaceId);
@@ -259,6 +278,17 @@ export class IpAllowlistService {
       })
       .catch(() => {});
 
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.IP_ALLOWLIST_ENTRY_ADDED,
+        actorId: userId,
+        beforeState: null,
+        afterState: { ipAddress: saved.ipAddress, description: saved.description },
+      })
+      .catch(() => {});
+
     return IpEntryResponseDto.fromEntity(saved);
   }
 
@@ -310,6 +340,17 @@ export class IpAllowlistService {
       })
       .catch(() => {});
 
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.IP_ALLOWLIST_ENTRY_UPDATED,
+        actorId: userId,
+        beforeState,
+        afterState: { ipAddress: saved.ipAddress, description: saved.description, isActive: saved.isActive },
+      })
+      .catch(() => {});
+
     return IpEntryResponseDto.fromEntity(saved);
   }
 
@@ -331,6 +372,17 @@ export class IpAllowlistService {
       .log(workspaceId, userId, AuditAction.DELETE, 'ip_allowlist_entry', entryId, {
         ipAddress: entry.ipAddress,
         description: entry.description,
+      })
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.IP_ALLOWLIST_ENTRY_REMOVED,
+        actorId: userId,
+        beforeState: { ipAddress: entry.ipAddress, description: entry.description },
+        afterState: null,
       })
       .catch(() => {});
   }

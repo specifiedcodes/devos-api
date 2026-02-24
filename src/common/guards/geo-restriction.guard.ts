@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { GeoRestrictionService } from '../../modules/geo-restriction/services/geo-restriction.service';
+import { PermissionAuditService } from '../../modules/permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../database/entities/permission-audit-event.entity';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { extractClientIp } from '../utils/extract-client-ip';
 
@@ -33,6 +35,7 @@ export class GeoRestrictionGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly geoRestrictionService: GeoRestrictionService,
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -82,6 +85,22 @@ export class GeoRestrictionGuard implements CanActivate {
     // Geo not allowed - record and deny
     this.geoRestrictionService
       .recordBlockedAttempt(workspaceId, clientIp, userId, result.detectedCountry, `${request.method} ${request.url}`)
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.ACCESS_DENIED_GEO,
+        actorId: userId || 'unknown',
+        beforeState: null,
+        afterState: {
+          clientIp,
+          detectedCountry: result.detectedCountry,
+          endpoint: `${request.method} ${request.url}`,
+        },
+        ipAddress: clientIp,
+      })
       .catch(() => {});
 
     this.logger.warn(

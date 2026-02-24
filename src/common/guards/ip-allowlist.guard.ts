@@ -7,6 +7,8 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IpAllowlistService } from '../../modules/ip-allowlist/services/ip-allowlist.service';
+import { PermissionAuditService } from '../../modules/permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../database/entities/permission-audit-event.entity';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { extractClientIp } from '../utils/extract-client-ip';
 
@@ -33,6 +35,7 @@ export class IpAllowlistGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
     private readonly ipAllowlistService: IpAllowlistService,
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -78,6 +81,21 @@ export class IpAllowlistGuard implements CanActivate {
     // IP not allowed - record and deny
     this.ipAllowlistService
       .recordBlockedAttempt(workspaceId, clientIp, userId, `${request.method} ${request.url}`)
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.ACCESS_DENIED_IP,
+        actorId: userId || 'unknown',
+        beforeState: null,
+        afterState: {
+          clientIp,
+          endpoint: `${request.method} ${request.url}`,
+        },
+        ipAddress: clientIp,
+      })
       .catch(() => {});
 
     this.logger.warn(

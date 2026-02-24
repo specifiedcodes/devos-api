@@ -11,6 +11,8 @@ import { Reflector } from '@nestjs/core';
 import { PERMISSION_KEY } from '../decorators/permission.decorator';
 import { PermissionCacheService } from '../../modules/custom-roles/services/permission-cache.service';
 import { AuditService, AuditAction } from '../../shared/audit/audit.service';
+import { PermissionAuditService } from '../../modules/permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../database/entities/permission-audit-event.entity';
 
 export interface RequiredPermission {
   resource: string;
@@ -27,6 +29,8 @@ export class PermissionGuard implements CanActivate {
     private readonly permissionCacheService: PermissionCacheService,
     @Inject(forwardRef(() => AuditService))
     private readonly auditService: AuditService,
+    @Inject(forwardRef(() => PermissionAuditService))
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -84,6 +88,22 @@ export class PermissionGuard implements CanActivate {
             ipAddress: request.ip,
           },
         )
+        .catch(() => {});
+
+      // Permission audit trail (fire-and-forget)
+      this.permissionAuditService
+        .record({
+          workspaceId,
+          eventType: PermissionAuditEventType.ACCESS_DENIED_PERMISSION,
+          actorId: userId,
+          beforeState: null,
+          afterState: {
+            required: `${requiredPermission.resource}:${requiredPermission.action}`,
+            endpoint: sanitizedPath,
+            method: request.method,
+          },
+          ipAddress: request.ip,
+        })
         .catch(() => {});
 
       this.logger.warn(

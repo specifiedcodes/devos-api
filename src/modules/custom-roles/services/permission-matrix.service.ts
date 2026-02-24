@@ -20,6 +20,8 @@ import {
   WorkspaceRole,
 } from '../../../database/entities/workspace-member.entity';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../../database/entities/permission-audit-event.entity';
 import { SetPermissionDto } from '../dto/set-permission.dto';
 import {
   PermissionMatrixResponseDto,
@@ -44,6 +46,7 @@ export class PermissionMatrixService {
     private readonly dataSource: DataSource,
     @Inject(forwardRef(() => PermissionCacheService))
     private readonly permissionCacheService: PermissionCacheService,
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   /**
@@ -171,6 +174,20 @@ export class PermissionMatrixService {
       )
       .catch(() => {});
 
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: dto.granted
+          ? PermissionAuditEventType.PERMISSION_GRANTED
+          : PermissionAuditEventType.PERMISSION_REVOKED,
+        actorId,
+        targetRoleId: roleId,
+        beforeState: beforeState ? { ...beforeState, resourceType: dto.resourceType, permission: dto.permission } : null,
+        afterState: { resourceType: dto.resourceType, permission: dto.permission, granted: dto.granted },
+      })
+      .catch(() => {});
+
     // Invalidate permission cache for the workspace (fire-and-forget)
     this.permissionCacheService
       .invalidateRolePermissions(workspaceId)
@@ -252,6 +269,25 @@ export class PermissionMatrixService {
           })),
         },
       )
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.PERMISSION_BULK_UPDATED,
+        actorId,
+        targetRoleId: roleId,
+        beforeState: null,
+        afterState: {
+          permissionCount: permissions.length,
+          permissions: permissions.map((p) => ({
+            resourceType: p.resourceType,
+            permission: p.permission,
+            granted: p.granted,
+          })),
+        },
+      })
       .catch(() => {});
 
     // Invalidate permission cache for the workspace (fire-and-forget)

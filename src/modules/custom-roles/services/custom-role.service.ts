@@ -21,6 +21,8 @@ import {
 } from '../../../database/entities/workspace-member.entity';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
 import { PermissionCacheService } from './permission-cache.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../../database/entities/permission-audit-event.entity';
 import { CreateCustomRoleDto } from '../dto/create-custom-role.dto';
 import { UpdateCustomRoleDto } from '../dto/update-custom-role.dto';
 import { CloneCustomRoleDto } from '../dto/clone-custom-role.dto';
@@ -82,6 +84,7 @@ export class CustomRoleService {
     private readonly dataSource: DataSource,
     @Inject(forwardRef(() => PermissionCacheService))
     private readonly permissionCacheService: PermissionCacheService,
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   /**
@@ -186,6 +189,24 @@ export class CustomRoleService {
       })
       .catch(() => {});
 
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.ROLE_CREATED,
+        actorId,
+        targetRoleId: saved.id,
+        beforeState: null,
+        afterState: {
+          name: saved.name,
+          displayName: saved.displayName,
+          baseRole: saved.baseRole,
+          color: saved.color,
+          icon: saved.icon,
+        },
+      })
+      .catch(() => {});
+
     this.logger.log(
       `Created custom role "${saved.name}" (${saved.id}) in workspace ${workspaceId}`,
     );
@@ -257,6 +278,32 @@ export class CustomRoleService {
       })
       .catch(() => {});
 
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.ROLE_UPDATED,
+        actorId,
+        targetRoleId: saved.id,
+        beforeState: {
+          name: beforeState.name,
+          displayName: beforeState.displayName,
+          color: beforeState.color,
+          icon: beforeState.icon,
+          baseRole: beforeState.baseRole,
+          isActive: beforeState.isActive,
+        },
+        afterState: {
+          name: saved.name,
+          displayName: saved.displayName,
+          color: saved.color,
+          icon: saved.icon,
+          baseRole: saved.baseRole,
+          isActive: saved.isActive,
+        },
+      })
+      .catch(() => {});
+
     // Invalidate permission cache if baseRole changed (permissions effectively change)
     if (dto.baseRole !== undefined && beforeState.baseRole !== saved.baseRole) {
       this.permissionCacheService
@@ -317,6 +364,24 @@ export class CustomRoleService {
           displayName: role.displayName,
         },
       )
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.ROLE_DELETED,
+        actorId,
+        targetRoleId: roleId,
+        beforeState: {
+          name: role.name,
+          displayName: role.displayName,
+          baseRole: role.baseRole,
+          color: role.color,
+          icon: role.icon,
+        },
+        afterState: null,
+      })
       .catch(() => {});
 
     // Invalidate permission cache for the workspace (fire-and-forget)
@@ -414,6 +479,25 @@ export class CustomRoleService {
         clonedRoleName: saved.name,
         permissionsCopied: permissionsCopiedCount > 0,
         permissionsCopiedCount,
+      })
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.ROLE_CLONED,
+        actorId,
+        targetRoleId: saved.id,
+        beforeState: null,
+        afterState: {
+          name: saved.name,
+          displayName: saved.displayName,
+          baseRole: saved.baseRole,
+          sourceRoleId,
+          sourceRoleName: sourceRole.name,
+          permissionsCopiedCount,
+        },
       })
       .catch(() => {});
 

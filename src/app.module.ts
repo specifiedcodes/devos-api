@@ -135,6 +135,8 @@ import { IpAllowlistConfig } from './database/entities/ip-allowlist-config.entit
 import { IpAllowlistModule } from './modules/ip-allowlist/ip-allowlist.module';
 import { GeoRestriction } from './database/entities/geo-restriction.entity';
 import { GeoRestrictionModule } from './modules/geo-restriction/geo-restriction.module';
+import { PermissionAuditEvent } from './database/entities/permission-audit-event.entity';
+import { PermissionAuditModule } from './modules/permission-audit/permission-audit.module';
 
 @Module({
   imports: [
@@ -230,6 +232,7 @@ import { GeoRestrictionModule } from './modules/geo-restriction/geo-restriction.
         IpAllowlistEntry,
         IpAllowlistConfig,
         GeoRestriction,
+        PermissionAuditEvent,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -298,6 +301,7 @@ import { GeoRestrictionModule } from './modules/geo-restriction/geo-restriction.
     CustomRolesModule,
     IpAllowlistModule,
     GeoRestrictionModule,
+    PermissionAuditModule,
   ],
   controllers: [AppController],
   providers: [

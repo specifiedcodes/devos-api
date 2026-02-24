@@ -8,6 +8,8 @@ import { Repository } from 'typeorm';
 import { GeoRestriction, GeoRestrictionMode } from '../../../database/entities/geo-restriction.entity';
 import { RedisService } from '../../redis/redis.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
+import { PermissionAuditEventType } from '../../../database/entities/permission-audit-event.entity';
 import { GeoIpLookupService } from './geoip-lookup.service';
 import { UpdateGeoRestrictionDto } from '../dto/update-geo-restriction.dto';
 import {
@@ -60,6 +62,7 @@ export class GeoRestrictionService {
     private readonly redisService: RedisService,
     private readonly auditService: AuditService,
     private readonly geoIpLookupService: GeoIpLookupService,
+    private readonly permissionAuditService: PermissionAuditService,
   ) {}
 
   // ==================== CONFIG OPERATIONS ====================
@@ -140,6 +143,22 @@ export class GeoRestrictionService {
         action: 'geo_restriction_updated',
         before: beforeState,
         after: {
+          mode: saved.mode,
+          countries: saved.countries,
+          isActive: saved.isActive,
+          logOnly: saved.logOnly,
+        },
+      })
+      .catch(() => {});
+
+    // Permission audit trail (fire-and-forget)
+    this.permissionAuditService
+      .record({
+        workspaceId,
+        eventType: PermissionAuditEventType.GEO_RESTRICTION_UPDATED,
+        actorId: userId,
+        beforeState,
+        afterState: {
           mode: saved.mode,
           countries: saved.countries,
           isActive: saved.isActive,

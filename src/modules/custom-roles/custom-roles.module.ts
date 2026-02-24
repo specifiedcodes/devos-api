@@ -8,9 +8,13 @@ import { PermissionMatrixService } from './services/permission-matrix.service';
 import { PermissionCacheService } from './services/permission-cache.service';
 import { CustomRoleController } from './controllers/custom-role.controller';
 import { PermissionMatrixController } from './controllers/permission-matrix.controller';
+import { PermissionAuditModule } from '../permission-audit/permission-audit.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([CustomRole, RolePermission, WorkspaceMember])],
+  imports: [
+    TypeOrmModule.forFeature([CustomRole, RolePermission, WorkspaceMember]),
+    PermissionAuditModule,
+  ],
   controllers: [CustomRoleController, PermissionMatrixController],
   providers: [CustomRoleService, PermissionMatrixService, PermissionCacheService],
   exports: [CustomRoleService, PermissionMatrixService, PermissionCacheService],
