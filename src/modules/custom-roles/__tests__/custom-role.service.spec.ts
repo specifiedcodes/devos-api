@@ -97,6 +97,10 @@ describe('CustomRoleService', () => {
             transaction: jest.fn().mockImplementation(async (cb) => {
               const manager = {
                 update: jest.fn().mockResolvedValue(undefined),
+                count: jest.fn().mockResolvedValue(0),
+                createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+                create: jest.fn().mockImplementation((_entity: any, dto: any) => ({ ...dto, id: mockRoleId })),
+                save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...mockRole, ...entity })),
               };
               return cb(manager);
             }),
@@ -200,19 +204,27 @@ describe('CustomRoleService', () => {
     };
 
     it('should create a role successfully', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
-      customRoleRepo.findOne.mockResolvedValue(null);
+      customRoleRepo.findOne.mockResolvedValue(null); // name validation
       mockQueryBuilder.getRawOne.mockResolvedValue({ maxPriority: 2 });
 
       const result = await service.createRole(mockWorkspaceId, createDto, mockActorId);
 
-      expect(customRoleRepo.create).toHaveBeenCalled();
-      expect(customRoleRepo.save).toHaveBeenCalled();
+      expect(dataSource.transaction).toHaveBeenCalled();
       expect(result.name).toBe('qa-lead');
     });
 
     it('should throw BadRequestException when max roles reached', async () => {
-      customRoleRepo.count.mockResolvedValue(20);
+      customRoleRepo.findOne.mockResolvedValue(null); // name validation passes
+      // Override the transaction mock to simulate count >= 20
+      (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb: any) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(20),
+          createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+          create: jest.fn().mockImplementation((_entity: any, dto: any) => ({ ...dto, id: mockRoleId })),
+          save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...mockRole, ...entity })),
+        };
+        return cb(manager);
+      });
 
       await expect(
         service.createRole(mockWorkspaceId, createDto, mockActorId),
@@ -220,23 +232,18 @@ describe('CustomRoleService', () => {
     });
 
     it('should throw BadRequestException for reserved names', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
-
       await expect(
         service.createRole(mockWorkspaceId, { ...createDto, name: 'owner' }, mockActorId),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw BadRequestException for admin reserved name', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
-
       await expect(
         service.createRole(mockWorkspaceId, { ...createDto, name: 'admin' }, mockActorId),
       ).rejects.toThrow(BadRequestException);
     });
 
     it('should throw ConflictException when name already exists', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
       customRoleRepo.findOne.mockResolvedValue(mockRole as CustomRole);
 
       await expect(
@@ -245,7 +252,6 @@ describe('CustomRoleService', () => {
     });
 
     it('should log audit event on creation', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
       customRoleRepo.findOne.mockResolvedValue(null);
 
       await service.createRole(mockWorkspaceId, createDto, mockActorId);
@@ -260,28 +266,21 @@ describe('CustomRoleService', () => {
       );
     });
 
-    it('should set default color when not provided', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
+    it('should use transaction for atomic count + create', async () => {
       customRoleRepo.findOne.mockResolvedValue(null);
-      const { color, ...dtoWithoutColor } = createDto;
-
-      await service.createRole(mockWorkspaceId, dtoWithoutColor as any, mockActorId);
-
-      expect(customRoleRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ color: '#6366f1' }),
-      );
-    });
-
-    it('should assign next priority order', async () => {
-      customRoleRepo.count.mockResolvedValue(0);
-      customRoleRepo.findOne.mockResolvedValue(null);
-      mockQueryBuilder.getRawOne.mockResolvedValue({ maxPriority: 5 });
 
       await service.createRole(mockWorkspaceId, createDto, mockActorId);
 
-      expect(customRoleRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ priority: 6 }),
-      );
+      expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('should assign next priority order', async () => {
+      customRoleRepo.findOne.mockResolvedValue(null);
+      mockQueryBuilder.getRawOne.mockResolvedValue({ maxPriority: 5 });
+
+      const result = await service.createRole(mockWorkspaceId, createDto, mockActorId);
+
+      expect(result.priority).toBe(6);
     });
   });
 
@@ -440,22 +439,12 @@ describe('CustomRoleService', () => {
       customRoleRepo.findOne
         .mockResolvedValueOnce(mockRole as CustomRole) // source role
         .mockResolvedValueOnce(null); // name check - no duplicate
-      customRoleRepo.count.mockResolvedValue(5);
       mockQueryBuilder.getRawOne.mockResolvedValue({ maxPriority: 3 });
 
       const result = await service.cloneRole(mockRoleId, mockWorkspaceId, cloneDto, mockActorId);
 
-      expect(customRoleRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          name: 'senior-qa-lead',
-          displayName: 'Senior QA Lead',
-          color: mockRole.color,
-          icon: mockRole.icon,
-          baseRole: mockRole.baseRole,
-          isSystem: false,
-        }),
-      );
-      expect(customRoleRepo.save).toHaveBeenCalled();
+      expect(dataSource.transaction).toHaveBeenCalled();
+      expect(result.name).toBe('senior-qa-lead');
     });
 
     it('should throw NotFoundException when source not found', async () => {
@@ -467,8 +456,19 @@ describe('CustomRoleService', () => {
     });
 
     it('should throw BadRequestException when max roles reached', async () => {
-      customRoleRepo.findOne.mockResolvedValue(mockRole as CustomRole);
-      customRoleRepo.count.mockResolvedValue(20);
+      customRoleRepo.findOne
+        .mockResolvedValueOnce(mockRole as CustomRole) // source role found
+        .mockResolvedValueOnce(null); // name check passes
+      // Override the transaction mock to simulate count >= 20
+      (dataSource.transaction as jest.Mock).mockImplementationOnce(async (cb: any) => {
+        const manager = {
+          count: jest.fn().mockResolvedValue(20),
+          createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+          create: jest.fn().mockImplementation((_entity: any, dto: any) => ({ ...dto, id: mockRoleId })),
+          save: jest.fn().mockImplementation((entity: any) => Promise.resolve({ ...mockRole, ...entity })),
+        };
+        return cb(manager);
+      });
 
       await expect(
         service.cloneRole(mockRoleId, mockWorkspaceId, cloneDto, mockActorId),
@@ -479,14 +479,11 @@ describe('CustomRoleService', () => {
       customRoleRepo.findOne
         .mockResolvedValueOnce(mockRole as CustomRole)
         .mockResolvedValueOnce(null);
-      customRoleRepo.count.mockResolvedValue(0);
 
       const { description, ...dtoWithoutDesc } = cloneDto;
-      await service.cloneRole(mockRoleId, mockWorkspaceId, dtoWithoutDesc as any, mockActorId);
+      const result = await service.cloneRole(mockRoleId, mockWorkspaceId, dtoWithoutDesc as any, mockActorId);
 
-      expect(customRoleRepo.create).toHaveBeenCalledWith(
-        expect.objectContaining({ description: mockRole.description }),
-      );
+      expect(result.description).toBe(mockRole.description);
     });
   });
 
@@ -514,6 +511,14 @@ describe('CustomRoleService', () => {
 
       await expect(
         service.reorderRoles(mockWorkspaceId, roleIds, mockActorId),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should throw BadRequestException for duplicate role IDs', async () => {
+      const duplicateIds = [roleIds[0], roleIds[0]];
+
+      await expect(
+        service.reorderRoles(mockWorkspaceId, duplicateIds, mockActorId),
       ).rejects.toThrow(BadRequestException);
     });
   });

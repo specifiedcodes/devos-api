@@ -131,43 +131,47 @@ export class CustomRoleService {
     dto: CreateCustomRoleDto,
     actorId: string,
   ): Promise<CustomRole> {
-    // Validate max roles limit
-    const currentCount = await this.countCustomRoles(workspaceId);
-    if (currentCount >= MAX_CUSTOM_ROLES_PER_WORKSPACE) {
-      throw new BadRequestException(
-        `Maximum of ${MAX_CUSTOM_ROLES_PER_WORKSPACE} custom roles per workspace reached`,
-      );
-    }
-
-    // Validate role name
+    // Validate role name (can be checked outside transaction since unique constraint is the real guard)
     await this.validateRoleName(dto.name, workspaceId);
 
-    // Determine next priority order
-    const maxPriority = await this.customRoleRepo
-      .createQueryBuilder('role')
-      .select('MAX(role.priority)', 'maxPriority')
-      .where('role.workspaceId = :workspaceId', { workspaceId })
-      .getRawOne();
+    // Use transaction to prevent TOCTOU race on role count
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const currentCount = await manager.count(CustomRole, {
+        where: { workspaceId },
+      });
+      if (currentCount >= MAX_CUSTOM_ROLES_PER_WORKSPACE) {
+        throw new BadRequestException(
+          `Maximum of ${MAX_CUSTOM_ROLES_PER_WORKSPACE} custom roles per workspace reached`,
+        );
+      }
 
-    const nextPriority = (maxPriority?.maxPriority ?? -1) + 1;
+      // Determine next priority order
+      const maxPriority = await manager
+        .createQueryBuilder(CustomRole, 'role')
+        .select('MAX(role.priority)', 'maxPriority')
+        .where('role.workspaceId = :workspaceId', { workspaceId })
+        .getRawOne();
 
-    const role = this.customRoleRepo.create({
-      workspaceId,
-      name: dto.name,
-      displayName: dto.displayName,
-      description: dto.description || null,
-      color: dto.color || '#6366f1',
-      icon: dto.icon || 'shield',
-      baseRole: dto.baseRole || null,
-      isSystem: false,
-      isActive: true,
-      priority: nextPriority,
-      createdBy: actorId,
+      const nextPriority = (maxPriority?.maxPriority ?? -1) + 1;
+
+      const role = manager.create(CustomRole, {
+        workspaceId,
+        name: dto.name,
+        displayName: dto.displayName,
+        description: dto.description || null,
+        color: dto.color || '#6366f1',
+        icon: dto.icon || 'shield',
+        baseRole: dto.baseRole || null,
+        isSystem: false,
+        isActive: true,
+        priority: nextPriority,
+        createdBy: actorId,
+      });
+
+      return manager.save(role);
     });
 
-    const saved = await this.customRoleRepo.save(role);
-
-    // Audit log
+    // Audit log (fire-and-forget, outside transaction)
     this.auditService
       .log(workspaceId, actorId, AuditAction.CREATE, 'custom_role', saved.id, {
         roleName: saved.name,
@@ -324,43 +328,47 @@ export class CustomRoleService {
       throw new NotFoundException(`Source role not found`);
     }
 
-    // Validate max roles limit
-    const currentCount = await this.countCustomRoles(workspaceId);
-    if (currentCount >= MAX_CUSTOM_ROLES_PER_WORKSPACE) {
-      throw new BadRequestException(
-        `Maximum of ${MAX_CUSTOM_ROLES_PER_WORKSPACE} custom roles per workspace reached`,
-      );
-    }
-
-    // Validate new name
+    // Validate new name (can be checked outside transaction since unique constraint is the real guard)
     await this.validateRoleName(dto.name, workspaceId);
 
-    // Determine next priority order
-    const maxPriority = await this.customRoleRepo
-      .createQueryBuilder('role')
-      .select('MAX(role.priority)', 'maxPriority')
-      .where('role.workspaceId = :workspaceId', { workspaceId })
-      .getRawOne();
+    // Use transaction to prevent TOCTOU race on role count
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const currentCount = await manager.count(CustomRole, {
+        where: { workspaceId },
+      });
+      if (currentCount >= MAX_CUSTOM_ROLES_PER_WORKSPACE) {
+        throw new BadRequestException(
+          `Maximum of ${MAX_CUSTOM_ROLES_PER_WORKSPACE} custom roles per workspace reached`,
+        );
+      }
 
-    const nextPriority = (maxPriority?.maxPriority ?? -1) + 1;
+      // Determine next priority order
+      const maxPriority = await manager
+        .createQueryBuilder(CustomRole, 'role')
+        .select('MAX(role.priority)', 'maxPriority')
+        .where('role.workspaceId = :workspaceId', { workspaceId })
+        .getRawOne();
 
-    const cloned = this.customRoleRepo.create({
-      workspaceId,
-      name: dto.name,
-      displayName: dto.displayName,
-      description: dto.description || sourceRole.description,
-      color: sourceRole.color,
-      icon: sourceRole.icon,
-      baseRole: sourceRole.baseRole,
-      isSystem: false,
-      isActive: true,
-      priority: nextPriority,
-      createdBy: actorId,
+      const nextPriority = (maxPriority?.maxPriority ?? -1) + 1;
+
+      const cloned = manager.create(CustomRole, {
+        workspaceId,
+        name: dto.name,
+        displayName: dto.displayName,
+        description: dto.description || sourceRole.description,
+        color: sourceRole.color,
+        icon: sourceRole.icon,
+        baseRole: sourceRole.baseRole,
+        isSystem: false,
+        isActive: true,
+        priority: nextPriority,
+        createdBy: actorId,
+      });
+
+      return manager.save(cloned);
     });
 
-    const saved = await this.customRoleRepo.save(cloned);
-
-    // Audit log
+    // Audit log (fire-and-forget, outside transaction)
     this.auditService
       .log(workspaceId, actorId, AuditAction.CREATE, 'custom_role', saved.id, {
         action: 'clone',
@@ -385,7 +393,12 @@ export class CustomRoleService {
     roleIds: string[],
     actorId: string,
   ): Promise<void> {
-    // Validate all role IDs belong to the workspace
+    // Validate all role IDs belong to the workspace and no duplicates
+    const uniqueRoleIds = new Set(roleIds);
+    if (uniqueRoleIds.size !== roleIds.length) {
+      throw new BadRequestException('Duplicate role IDs are not allowed');
+    }
+
     const roles = await this.customRoleRepo.find({
       where: { workspaceId },
     });
@@ -399,11 +412,13 @@ export class CustomRoleService {
       }
     }
 
-    // Update priorities in transaction
+    // Update priorities in transaction using Promise.all for parallel execution
     await this.dataSource.transaction(async (manager) => {
-      for (let i = 0; i < roleIds.length; i++) {
-        await manager.update(CustomRole, roleIds[i], { priority: i });
-      }
+      await Promise.all(
+        roleIds.map((id, i) =>
+          manager.update(CustomRole, id, { priority: i }),
+        ),
+      );
     });
 
     // Audit log

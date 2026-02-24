@@ -39,8 +39,11 @@ export class CustomRoleController {
 
   @Get('icons')
   @ApiOperation({ summary: 'Get available icon names for role creation' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Icon list retrieved' })
-  async getAvailableIcons(): Promise<{ icons: string[] }> {
+  async getAvailableIcons(
+    @Param('workspaceId', ParseUUIDPipe) _workspaceId: string,
+  ): Promise<{ icons: string[] }> {
     return { icons: this.customRoleService.getAvailableIcons() };
   }
 

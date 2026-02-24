@@ -89,7 +89,7 @@ describe('CustomRoleController', () => {
 
   describe('getAvailableIcons', () => {
     it('should return available icons', async () => {
-      const result = await controller.getAvailableIcons();
+      const result = await controller.getAvailableIcons(mockWorkspaceId);
 
       expect(result.icons).toEqual(['shield', 'crown']);
       expect(service.getAvailableIcons).toHaveBeenCalled();

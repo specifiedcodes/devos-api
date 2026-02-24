@@ -100,9 +100,10 @@ export class CustomRole {
   @Column({ type: 'int', name: 'priority_order', default: 0 })
   priority!: number;
 
-  @Column({ type: 'uuid', name: 'created_by' })
+  @Column({ type: 'uuid', name: 'created_by', nullable: true })
+  @IsOptional()
   @IsUUID()
-  createdBy!: string;
+  createdBy!: string | null;
 
   @ManyToOne(() => User, { onDelete: 'SET NULL' })
   @JoinColumn({ name: 'created_by' })

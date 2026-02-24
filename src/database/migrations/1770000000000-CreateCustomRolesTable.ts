@@ -71,7 +71,7 @@ export class CreateCustomRolesTable1770000000000 implements MigrationInterface {
           {
             name: 'created_by',
             type: 'uuid',
-            isNullable: false,
+            isNullable: true,
           },
           {
             name: 'created_at',
