@@ -104,7 +104,7 @@ export class JiraIntegrationController {
     @Query('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Body() dto: CompleteJiraSetupDto,
   ): Promise<JiraIntegration> {
-    return this.oauthService.completeSetup(workspaceId, workspaceId, dto);
+    return this.oauthService.completeSetup(workspaceId, dto.integrationId, dto);
   }
 
   /**

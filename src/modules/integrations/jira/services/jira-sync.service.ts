@@ -597,9 +597,35 @@ export class JiraSyncService {
 
     const lines = text.split('\n');
     const content: Array<Record<string, unknown>> = [];
+    let inCodeBlock = false;
+    let codeBlockLines: string[] = [];
+    let codeBlockLang: string | undefined;
 
     for (const line of lines) {
-      if (line.startsWith('# ')) {
+      if (line.startsWith('```') && !inCodeBlock) {
+        // Opening code fence
+        inCodeBlock = true;
+        codeBlockLines = [];
+        codeBlockLang = line.slice(3).trim() || undefined;
+      } else if (line.startsWith('```') && inCodeBlock) {
+        // Closing code fence
+        inCodeBlock = false;
+        const attrs: Record<string, unknown> = {};
+        if (codeBlockLang) {
+          attrs.language = codeBlockLang;
+        }
+        content.push({
+          type: 'codeBlock',
+          ...(Object.keys(attrs).length > 0 ? { attrs } : {}),
+          content: codeBlockLines.length > 0
+            ? [{ type: 'text', text: codeBlockLines.join('\n') }]
+            : [],
+        });
+        codeBlockLines = [];
+        codeBlockLang = undefined;
+      } else if (inCodeBlock) {
+        codeBlockLines.push(line);
+      } else if (line.startsWith('# ')) {
         content.push({
           type: 'heading',
           attrs: { level: 1 },
@@ -632,17 +658,25 @@ export class JiraSyncService {
             },
           ],
         });
-      } else if (line.startsWith('```')) {
-        content.push({
-          type: 'codeBlock',
-          content: [{ type: 'text', text: line.slice(3) }],
-        });
       } else {
         content.push({
           type: 'paragraph',
           content: [{ type: 'text', text: line }],
         });
       }
+    }
+
+    // Handle unclosed code block
+    if (inCodeBlock && codeBlockLines.length > 0) {
+      const attrs: Record<string, unknown> = {};
+      if (codeBlockLang) {
+        attrs.language = codeBlockLang;
+      }
+      content.push({
+        type: 'codeBlock',
+        ...(Object.keys(attrs).length > 0 ? { attrs } : {}),
+        content: [{ type: 'text', text: codeBlockLines.join('\n') }],
+      });
     }
 
     return {

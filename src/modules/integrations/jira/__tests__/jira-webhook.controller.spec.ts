@@ -155,17 +155,18 @@ describe('JiraWebhookController', () => {
       );
     });
 
-    it('falls back to first active integration when project key does not match', async () => {
+    it('silently ignores webhook when project key does not match any integration', async () => {
       mockIntegrationRepo.findOne.mockResolvedValue(null);
-      mockIntegrationRepo.find.mockResolvedValue([mockIntegration]);
 
-      await controller.handleWebhook('wh-id', {
+      const result = await controller.handleWebhook('wh-id', {
         webhookEvent: 'jira:issue_updated',
         timestamp: Date.now(),
         issue: { id: '10001', key: 'OTHER-1', self: '', fields: { summary: 'Test', status: { id: '1', name: 'Open', statusCategory: { key: 'new', name: 'To Do' } }, issuetype: { id: '1', name: 'Story', subtask: false } } },
       }, {} as any);
 
-      expect(mockIntegrationRepo.find).toHaveBeenCalledWith({ where: { isActive: true } });
+      // Should not fall back to any integration - silently ignore
+      expect(result).toEqual({ success: true });
+      expect(mockSyncQueue.add).not.toHaveBeenCalled();
     });
 
     it('handles missing issue in payload gracefully', async () => {

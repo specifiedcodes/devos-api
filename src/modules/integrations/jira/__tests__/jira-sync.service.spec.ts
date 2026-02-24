@@ -452,11 +452,18 @@ describe('JiraSyncService', () => {
     });
 
     it('handles markdown headings, lists, code blocks', () => {
-      const result = service.convertToAdf('# Heading\n- Item\n```code');
+      const result = service.convertToAdf('# Heading\n- Item\n```js\nconst x = 1;\n```');
       const content = result.content as Array<Record<string, unknown>>;
       expect(content[0].type).toBe('heading');
       expect(content[1].type).toBe('bulletList');
       expect(content[2].type).toBe('codeBlock');
+      // Verify code block has language attr and content
+      const codeBlock = content[2] as Record<string, unknown>;
+      expect((codeBlock.attrs as Record<string, unknown>)?.language).toBe('js');
+      expect((codeBlock.content as Array<Record<string, unknown>>)[0]).toEqual({
+        type: 'text',
+        text: 'const x = 1;',
+      });
     });
   });
 

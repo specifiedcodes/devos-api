@@ -5,6 +5,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
   JiraApiClientService,
@@ -62,11 +63,22 @@ describe('JiraApiClientService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
+    const mockConfigService = {
+      get: jest.fn().mockImplementation((key: string) => {
+        const config: Record<string, string> = {
+          JIRA_CLIENT_ID: 'test-client-id',
+          JIRA_CLIENT_SECRET: 'test-client-secret',
+        };
+        return config[key];
+      }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         JiraApiClientService,
         { provide: EncryptionService, useValue: mockEncryptionService },
         { provide: RedisService, useValue: mockRedisService },
+        { provide: ConfigService, useValue: mockConfigService },
         { provide: getRepositoryToken(JiraIntegration), useValue: mockIntegrationRepo },
       ],
     }).compile();
@@ -394,14 +406,14 @@ describe('JiraApiClientService', () => {
       expect(result).toEqual(issue);
     });
 
-    it('returns null for not found', async () => {
-      mockFetch.mockResolvedValueOnce({ status: 404, ok: false, headers: new Map() });
-      mockFetch.mockResolvedValueOnce({ status: 404, ok: false, headers: new Map() });
+    it('returns null for not found (404)', async () => {
       mockFetch.mockResolvedValueOnce({ status: 404, ok: false, headers: new Map() });
 
       const result = await service.getIssue(mockIntegration as JiraIntegration, 'PROJ-999');
       expect(result).toBeNull();
-    }, 15000);
+      // Should not retry on 404
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe('never logs tokens', () => {

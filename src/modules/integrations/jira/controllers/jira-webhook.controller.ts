@@ -129,13 +129,10 @@ export class JiraWebhookController {
       const integration = await this.integrationRepo.findOne({
         where: { jiraProjectKey: projectKey, isActive: true },
       });
-      if (integration) return integration;
+      return integration || null;
     }
 
-    // Fallback: try first active integration
-    const integrations = await this.integrationRepo.find({
-      where: { isActive: true },
-    });
-    return integrations[0] || null;
+    // No issue key in payload - cannot identify the integration
+    return null;
   }
 }

@@ -7,6 +7,7 @@
  */
 
 import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { EncryptionService } from '../../../../shared/encryption/encryption.service';
@@ -51,6 +52,7 @@ export class JiraApiClientService {
   constructor(
     private readonly encryptionService: EncryptionService,
     private readonly redisService: RedisService,
+    private readonly configService: ConfigService,
     @InjectRepository(JiraIntegration)
     private readonly integrationRepo: Repository<JiraIntegration>,
   ) {}
@@ -93,7 +95,7 @@ export class JiraApiClientService {
           },
         };
 
-        if (body && (method === 'POST' || method === 'PUT')) {
+        if (body && (method === 'POST' || method === 'PUT' || method === 'DELETE')) {
           fetchOptions.body = JSON.stringify(body);
         }
 
@@ -135,6 +137,10 @@ export class JiraApiClientService {
           throw new RateLimitError('Jira API rate limit exceeded', retryAfter);
         }
 
+        if (response.status === 404) {
+          throw new JiraApiError('Jira resource not found', 404);
+        }
+
         if (response.status >= 500) {
           throw new JiraApiError(`Jira API server error: ${response.status}`, response.status);
         }
@@ -153,8 +159,8 @@ export class JiraApiClientService {
           throw error;
         }
 
-        // Don't retry 403 errors
-        if (error instanceof JiraApiError && error.statusCode === 403) {
+        // Don't retry 403 or 404 errors
+        if (error instanceof JiraApiError && (error.statusCode === 403 || error.statusCode === 404)) {
           throw error;
         }
 
@@ -363,8 +369,12 @@ export class JiraApiClientService {
         'GET',
         `/issue/${encodeURIComponent(issueIdOrKey)}?expand=changelog`,
       );
-    } catch {
-      return null;
+    } catch (error) {
+      // Only return null for 404 (not found) - re-throw auth, rate limit, and other errors
+      if (error instanceof JiraApiError && error.statusCode === 404) {
+        return null;
+      }
+      throw error;
     }
   }
 
@@ -426,10 +436,12 @@ export class JiraApiClientService {
     integration: JiraIntegration,
     webhookId: string,
   ): Promise<void> {
+    // Jira REST API v3 webhook deletion requires the webhook IDs in the request body
     await this.request<void>(
       integration,
       'DELETE',
       `/webhook`,
+      { webhookIds: [parseInt(webhookId, 10)] },
     );
   }
 
@@ -489,8 +501,8 @@ export class JiraApiClientService {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           grant_type: 'refresh_token',
-          client_id: process.env.JIRA_CLIENT_ID || '',
-          client_secret: process.env.JIRA_CLIENT_SECRET || '',
+          client_id: this.configService.get<string>('JIRA_CLIENT_ID') || '',
+          client_secret: this.configService.get<string>('JIRA_CLIENT_SECRET') || '',
           refresh_token: decryptedRefreshToken,
         }),
       });

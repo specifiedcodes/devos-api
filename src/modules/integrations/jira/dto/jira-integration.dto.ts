@@ -9,6 +9,10 @@ import { IsString, IsNotEmpty, IsOptional, IsObject, IsIn, IsUUID, Matches } fro
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CompleteJiraSetupDto {
+  @ApiProperty({ description: 'Integration ID from OAuth callback' })
+  @IsUUID()
+  integrationId!: string;
+
   @ApiProperty({ description: 'Atlassian Cloud ID' })
   @IsString()
   @IsNotEmpty()

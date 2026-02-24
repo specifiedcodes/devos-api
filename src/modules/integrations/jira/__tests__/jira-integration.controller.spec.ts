@@ -92,13 +92,13 @@ describe('JiraIntegrationController', () => {
   });
 
   describe('completeSetup', () => {
-    it('calls oauthService.completeSetup with workspace and dto', async () => {
-      const dto = { cloudId: 'c1', siteUrl: 'https://test.atlassian.net', projectKey: 'PROJ' };
+    it('calls oauthService.completeSetup with workspace, integrationId from dto, and dto', async () => {
+      const dto = { integrationId: 'int-1', cloudId: 'c1', siteUrl: 'https://test.atlassian.net', projectKey: 'PROJ' };
       mockOAuthService.completeSetup.mockResolvedValue({ id: 'int-1' });
 
       await controller.completeSetup('ws-1', dto as any);
 
-      expect(mockOAuthService.completeSetup).toHaveBeenCalledWith('ws-1', 'ws-1', dto);
+      expect(mockOAuthService.completeSetup).toHaveBeenCalledWith('ws-1', 'int-1', dto);
     });
   });
 
