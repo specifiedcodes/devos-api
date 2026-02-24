@@ -20,6 +20,8 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { Permission } from '../../common/decorators/permission.decorator';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { ProjectsService } from './projects.service';
 import { CreateProjectDto } from './dto/create-project.dto';
@@ -34,7 +36,7 @@ import {
 } from './dto/update-ai-config.dto';
 
 @Controller('api/v1/workspaces/:workspaceId/projects')
-@UseGuards(JwtAuthGuard, RoleGuard)
+@UseGuards(JwtAuthGuard, RoleGuard, PermissionGuard)
 @ApiBearerAuth('JWT-auth')
 @ApiTags('Projects')
 export class ProjectsController {
@@ -51,6 +53,7 @@ export class ProjectsController {
    * as a projectId parameter.
    */
   @Get('available-models/list')
+  @Permission('projects', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get available AI providers and models' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -74,6 +77,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user doesn't have Developer+ role
    */
   @Post()
+  @Permission('projects', 'create')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Create a new project in workspace' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -114,6 +118,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user is not a member of the workspace
    */
   @Get()
+  @Permission('projects', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get all projects in workspace' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -150,6 +155,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user is not a member of the workspace
    */
   @Get(':projectId')
+  @Permission('projects', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get a single project by ID' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -193,6 +199,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user doesn't have Developer+ role
    */
   @Patch(':projectId')
+  @Permission('projects', 'update')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update a project' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -231,6 +238,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user doesn't have Developer+ role
    */
   @Delete(':projectId')
+  @Permission('projects', 'delete')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @HttpCode(204)
   @ApiOperation({ summary: 'Delete a project (soft delete)' })
@@ -260,6 +268,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user is not a workspace member
    */
   @Get(':projectId/preferences')
+  @Permission('projects', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get project preferences' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -290,6 +299,7 @@ export class ProjectsController {
    * @throws ForbiddenException if user doesn't have Developer+ role
    */
   @Patch(':projectId/preferences')
+  @Permission('projects', 'manage_settings')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update project preferences' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -325,6 +335,7 @@ export class ProjectsController {
    * @returns Current AI provider and model configuration
    */
   @Get(':projectId/ai-config')
+  @Permission('projects', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get AI configuration for a project' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -354,6 +365,7 @@ export class ProjectsController {
    * @throws BadRequestException if model is invalid for provider
    */
   @Put(':projectId/ai-config')
+  @Permission('projects', 'manage_settings')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update AI configuration for a project' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })

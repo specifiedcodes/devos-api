@@ -17,6 +17,7 @@ import { CustomRoleService, AVAILABLE_ICONS } from '../services/custom-role.serv
 import { CustomRole, BaseRole } from '../../../database/entities/custom-role.entity';
 import { WorkspaceMember, WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { PermissionCacheService } from '../services/permission-cache.service';
 
 describe('CustomRoleService', () => {
   let service: CustomRoleService;
@@ -108,6 +109,14 @@ describe('CustomRoleService', () => {
               };
               return cb(manager);
             }),
+          },
+        },
+        {
+          provide: PermissionCacheService,
+          useValue: {
+            invalidateRolePermissions: jest.fn().mockResolvedValue(undefined),
+            invalidateUserPermissions: jest.fn().mockResolvedValue(undefined),
+            invalidateAll: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

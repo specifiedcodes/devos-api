@@ -19,6 +19,8 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { Permission } from '../../common/decorators/permission.decorator';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { StoriesService } from './stories.service';
 import {
@@ -32,7 +34,7 @@ import {
 } from './dto/story.dto';
 
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/stories')
-@UseGuards(JwtAuthGuard, RoleGuard)
+@UseGuards(JwtAuthGuard, RoleGuard, PermissionGuard)
 @ApiBearerAuth('JWT-auth')
 @ApiTags('Stories')
 export class StoriesController {
@@ -42,6 +44,7 @@ export class StoriesController {
    * List stories for a project with optional filters
    */
   @Get()
+  @Permission('stories', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'List stories for a project' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -65,6 +68,7 @@ export class StoriesController {
    * Get a single story by ID
    */
   @Get(':storyId')
+  @Permission('stories', 'read')
   @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Get a single story' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -89,6 +93,7 @@ export class StoriesController {
    * Create a new story
    */
   @Post()
+  @Permission('stories', 'create')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Create a new story' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -113,6 +118,7 @@ export class StoriesController {
    * Update a story's fields
    */
   @Patch(':storyId')
+  @Permission('stories', 'update')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update a story' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -134,6 +140,7 @@ export class StoriesController {
    * Update a story's status
    */
   @Patch(':storyId/status')
+  @Permission('stories', 'change_status')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Update story status' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -155,6 +162,7 @@ export class StoriesController {
    * Assign or unassign an agent to a story
    */
   @Patch(':storyId/assign')
+  @Permission('stories', 'assign')
   @RequireRole(WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Assign agent to story' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
@@ -176,6 +184,7 @@ export class StoriesController {
    * Delete a story
    */
   @Delete(':storyId')
+  @Permission('stories', 'delete')
   @RequireRole(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
   @ApiOperation({ summary: 'Delete a story' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })

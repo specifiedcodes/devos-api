@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard } from '../../../common/guards/role.guard';
+import { PermissionGuard } from '../../../common/guards/permission.guard';
+import { Permission } from '../../../common/decorators/permission.decorator';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 import { Roles } from '../../../common/decorators/roles.decorator';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
@@ -26,7 +28,7 @@ import { Request } from 'express';
 @ApiTags('BYOK')
 @ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/byok-keys')
-@UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard)
+@UseGuards(JwtAuthGuard, WorkspaceAccessGuard, RoleGuard, PermissionGuard)
 export class BYOKKeyController {
   constructor(
     private readonly byokKeyService: BYOKKeyService,
@@ -39,6 +41,7 @@ export class BYOKKeyController {
    * Only owners and admins can add BYOK keys
    */
   @Post()
+  @Permission('secrets', 'create')
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   async createKey(
     @Param('workspaceId') workspaceId: string,
@@ -63,6 +66,7 @@ export class BYOKKeyController {
    * All workspace members can view keys (but not decrypt them)
    */
   @Get()
+  @Permission('secrets', 'view_masked')
   async getWorkspaceKeys(@Param('workspaceId') workspaceId: string) {
     return this.byokKeyService.getWorkspaceKeys(workspaceId);
   }
@@ -79,6 +83,7 @@ export class BYOKKeyController {
    * - totalTokens for token usage display
    */
   @Get(':keyId/usage')
+  @Permission('secrets', 'view_masked')
   async getKeyUsage(
     @Param('workspaceId') workspaceId: string,
     @Param('keyId') keyId: string,
@@ -122,6 +127,7 @@ export class BYOKKeyController {
    * Get a specific BYOK key by ID
    */
   @Get(':keyId')
+  @Permission('secrets', 'view_masked')
   async getKeyById(
     @Param('workspaceId') workspaceId: string,
     @Param('keyId') keyId: string,
@@ -134,6 +140,7 @@ export class BYOKKeyController {
    * Only owners and admins can delete BYOK keys
    */
   @Delete(':keyId')
+  @Permission('secrets', 'delete')
   @Roles(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteKey(

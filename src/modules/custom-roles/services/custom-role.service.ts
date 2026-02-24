@@ -5,6 +5,8 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, Not } from 'typeorm';
@@ -18,6 +20,7 @@ import {
   WorkspaceRole,
 } from '../../../database/entities/workspace-member.entity';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { PermissionCacheService } from './permission-cache.service';
 import { CreateCustomRoleDto } from '../dto/create-custom-role.dto';
 import { UpdateCustomRoleDto } from '../dto/update-custom-role.dto';
 import { CloneCustomRoleDto } from '../dto/clone-custom-role.dto';
@@ -77,6 +80,8 @@ export class CustomRoleService {
     private readonly workspaceMemberRepo: Repository<WorkspaceMember>,
     private readonly auditService: AuditService,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => PermissionCacheService))
+    private readonly permissionCacheService: PermissionCacheService,
   ) {}
 
   /**
@@ -252,6 +257,13 @@ export class CustomRoleService {
       })
       .catch(() => {});
 
+    // Invalidate permission cache if baseRole changed (permissions effectively change)
+    if (dto.baseRole !== undefined && beforeState.baseRole !== saved.baseRole) {
+      this.permissionCacheService
+        .invalidateRolePermissions(workspaceId)
+        .catch(() => {});
+    }
+
     this.logger.log(
       `Updated custom role "${saved.name}" (${saved.id}) in workspace ${workspaceId}`,
     );
@@ -305,6 +317,11 @@ export class CustomRoleService {
           displayName: role.displayName,
         },
       )
+      .catch(() => {});
+
+    // Invalidate permission cache for the workspace (fire-and-forget)
+    this.permissionCacheService
+      .invalidateRolePermissions(workspaceId)
       .catch(() => {});
 
     this.logger.log(

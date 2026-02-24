@@ -3,6 +3,8 @@ import {
   Logger,
   BadRequestException,
   NotFoundException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, DataSource, In } from 'typeorm';
@@ -25,6 +27,7 @@ import {
   ResourcePermissionsDto,
   EffectivePermissionsResponseDto,
 } from '../dto/permission-matrix-response.dto';
+import { PermissionCacheService } from './permission-cache.service';
 
 @Injectable()
 export class PermissionMatrixService {
@@ -39,6 +42,8 @@ export class PermissionMatrixService {
     private readonly workspaceMemberRepo: Repository<WorkspaceMember>,
     private readonly auditService: AuditService,
     private readonly dataSource: DataSource,
+    @Inject(forwardRef(() => PermissionCacheService))
+    private readonly permissionCacheService: PermissionCacheService,
   ) {}
 
   /**
@@ -166,6 +171,11 @@ export class PermissionMatrixService {
       )
       .catch(() => {});
 
+    // Invalidate permission cache for the workspace (fire-and-forget)
+    this.permissionCacheService
+      .invalidateRolePermissions(workspaceId)
+      .catch(() => {});
+
     this.logger.log(
       `Set permission ${dto.resourceType}:${dto.permission}=${dto.granted} for role "${role.name}" (${roleId})`,
     );
@@ -244,6 +254,11 @@ export class PermissionMatrixService {
       )
       .catch(() => {});
 
+    // Invalidate permission cache for the workspace (fire-and-forget)
+    this.permissionCacheService
+      .invalidateRolePermissions(workspaceId)
+      .catch(() => {});
+
     this.logger.log(
       `Set ${permissions.length} bulk permissions for role "${role.name}" (${roleId})`,
     );
@@ -319,6 +334,11 @@ export class PermissionMatrixService {
       )
       .catch(() => {});
 
+    // Invalidate permission cache for the workspace (fire-and-forget)
+    this.permissionCacheService
+      .invalidateRolePermissions(workspaceId)
+      .catch(() => {});
+
     this.logger.log(
       `Applied ${action} for resource "${resourceType}" on role "${role.name}" (${roleId})`,
     );
@@ -364,6 +384,11 @@ export class PermissionMatrixService {
           resourceType: resourceType || 'all',
         },
       )
+      .catch(() => {});
+
+    // Invalidate permission cache for the workspace (fire-and-forget)
+    this.permissionCacheService
+      .invalidateRolePermissions(workspaceId)
       .catch(() => {});
 
     this.logger.log(

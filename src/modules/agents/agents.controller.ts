@@ -21,6 +21,8 @@ import {
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
+import { Permission } from '../../common/decorators/permission.decorator';
 import { AgentsService } from './agents.service';
 import { AgentQueueService } from '../agent-queue/services/agent-queue.service';
 import { AgentJobType } from '../agent-queue/entities/agent-job.entity';
@@ -42,7 +44,7 @@ import { FailureRecoveryService } from './failure-recovery.service';
 @ApiTags('Agents')
 @ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/agents')
-@UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
+@UseGuards(JwtAuthGuard, WorkspaceAccessGuard, PermissionGuard)
 export class AgentsController {
   constructor(
     private readonly agentsService: AgentsService,
@@ -56,6 +58,7 @@ export class AgentsController {
    * IMPORTANT: This route MUST be before :agentId routes to avoid route conflict
    */
   @Get('health')
+  @Permission('agents', 'view')
   @ApiOperation({ summary: 'Health check for all agents in a workspace' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'Agent health status for the workspace' })
@@ -71,6 +74,7 @@ export class AgentsController {
    * Create a new agent
    */
   @Post()
+  @Permission('agents', 'create_custom')
   @ApiOperation({ summary: 'Create a new agent in a workspace' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 201, description: 'Agent created successfully' })
@@ -103,6 +107,7 @@ export class AgentsController {
    * Get agent by ID
    */
   @Get(':agentId')
+  @Permission('agents', 'view')
   @ApiOperation({ summary: 'Get agent by ID' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'agentId', description: 'Agent ID', type: 'string', format: 'uuid' })
@@ -120,6 +125,7 @@ export class AgentsController {
    * List agents
    */
   @Get()
+  @Permission('agents', 'view')
   @ApiOperation({ summary: 'List agents in a workspace with optional filters' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiResponse({ status: 200, description: 'List of agents' })
@@ -142,6 +148,7 @@ export class AgentsController {
    * Update agent
    */
   @Patch(':agentId')
+  @Permission('agents', 'configure')
   @ApiOperation({ summary: 'Update agent configuration' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'agentId', description: 'Agent ID', type: 'string', format: 'uuid' })
@@ -179,6 +186,7 @@ export class AgentsController {
    * Pause agent
    */
   @Post(':agentId/pause')
+  @Permission('agents', 'pause_cancel')
   @ApiOperation({ summary: 'Pause a running agent' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'agentId', description: 'Agent ID', type: 'string', format: 'uuid' })
@@ -276,6 +284,7 @@ export class AgentsController {
    * Terminate agent
    */
   @Post(':agentId/terminate')
+  @Permission('agents', 'pause_cancel')
   @ApiOperation({ summary: 'Terminate an agent' })
   @ApiParam({ name: 'workspaceId', description: 'Workspace ID', type: 'string', format: 'uuid' })
   @ApiParam({ name: 'agentId', description: 'Agent ID', type: 'string', format: 'uuid' })
