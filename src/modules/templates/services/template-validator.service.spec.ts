@@ -207,7 +207,7 @@ describe('TemplateValidatorService', () => {
 
       const errors = (service as any).validateVariables(definition);
 
-      expect(errors.some((e) => e.keyword === 'minMax')).toBe(true);
+      expect(errors.some((e: any) => e.keyword === 'minMax')).toBe(true);
     });
   });
 
@@ -225,7 +225,7 @@ describe('TemplateValidatorService', () => {
 
       const errors = (service as any).validateFiles(definition);
 
-      expect(errors.some((e) => e.message.includes('Repository') || e.path.includes('repository'))).toBe(true);
+      expect(errors.some((e: any) => e.message.includes('Repository') || e.path.includes('repository'))).toBe(true);
     });
 
     it('should require archive_url for archive source type', () => {
@@ -240,7 +240,7 @@ describe('TemplateValidatorService', () => {
 
       const errors = (service as any).validateFiles(definition);
 
-      expect(errors.some((e) => e.message.includes('Archive') || e.path.includes('archive'))).toBe(true);
+      expect(errors.some((e: any) => e.message.includes('Archive') || e.path.includes('archive'))).toBe(true);
     });
 
     it('should require inline_files for inline source type', () => {
@@ -255,7 +255,7 @@ describe('TemplateValidatorService', () => {
 
       const errors = (service as any).validateFiles(definition);
 
-      expect(errors.some((e) => e.message.includes('inline') || e.path.includes('inline'))).toBe(true);
+      expect(errors.some((e: any) => e.message.includes('inline') || e.path.includes('inline'))).toBe(true);
     });
   });
 
@@ -264,7 +264,7 @@ describe('TemplateValidatorService', () => {
       const schema = service.getSchemaForVersion('v1');
 
       expect(schema).toBeDefined();
-      expect(schema.type).toBe('object');
+      expect((schema as any).type).toBe('object');
     });
 
     it('should throw for unsupported version', () => {

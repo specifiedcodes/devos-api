@@ -28,7 +28,7 @@ export class SearchAgentsQueryDto {
   @IsNotEmpty()
   @MaxLength(200)
   @Transform(({ value }) => sanitizeSearchQuery(value))
-  q: string;
+  q!: string;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

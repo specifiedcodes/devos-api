@@ -42,7 +42,7 @@ describe('TemplateReviewService', () => {
     id: mockUserId,
     email: 'test@example.com',
     name: 'Test User',
-  } as User;
+  } as unknown as User;
 
   const mockReview = {
     id: mockReviewId,
@@ -249,7 +249,7 @@ describe('TemplateReviewService', () => {
     it('should increment helpful count', async () => {
       jest.spyOn(reviewRepository, 'increment').mockResolvedValue({ affected: 1, generatedMaps: [], raw: [] });
 
-      await service.markHelpful(mockReviewId);
+      await service.markHelpful(mockReviewId, mockUserId);
 
       expect(reviewRepository.increment).toHaveBeenCalledWith(
         { id: mockReviewId },

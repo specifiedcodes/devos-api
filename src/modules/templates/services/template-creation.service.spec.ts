@@ -159,7 +159,7 @@ describe('TemplateCreationService - Pure Functions', () => {
         { path: 'README.md', content: '# {{project_name}}' },
       ];
 
-      const variables = [{ name: 'project_name', type: 'string', required: true }];
+      const variables: Array<{ name: string; type: string; required: boolean; default?: string }> = [{ name: 'project_name', type: 'string', required: true }];
       const postInstall = ['npm install'];
 
       // Build definition following the same logic as the service

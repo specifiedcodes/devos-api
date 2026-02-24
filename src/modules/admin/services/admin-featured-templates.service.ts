@@ -310,7 +310,7 @@ export class AdminFeaturedTemplatesService {
       workspaceId: template.workspaceId,
       eventType: 'template_test_status_updated' as any,
       templateId: template.id,
-      actorId: actorId || null,
+      actorId: actorId ?? undefined,
       details: {
         previousStatus,
         newStatus: template.testStatus,

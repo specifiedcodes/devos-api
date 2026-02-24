@@ -409,7 +409,7 @@ export class AgentConflictService {
   // ---- Private Helpers ----
 
   private extractToolsFromDefinition(definition: AgentDefinition): string[] {
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return [];
 
     const spec = def.spec as Record<string, unknown> | undefined;
@@ -423,7 +423,7 @@ export class AgentConflictService {
   }
 
   private extractPermissionsFromDefinition(definition: AgentDefinition): string[] {
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return [];
 
     const spec = def.spec as Record<string, unknown> | undefined;
@@ -436,7 +436,7 @@ export class AgentConflictService {
   private extractTriggersFromDefinition(
     definition: AgentDefinition,
   ): Array<{ type: string; event: string }> {
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return [];
 
     const spec = def.spec as Record<string, unknown> | undefined;

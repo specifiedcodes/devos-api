@@ -300,7 +300,7 @@ export class AgentDependencyService {
     const dependencies: AgentDependency[] = [];
 
     // Parse from definition YAML/JSON structure
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return dependencies;
 
     const spec = def.spec as Record<string, unknown> | undefined;
@@ -437,7 +437,7 @@ export class AgentDependencyService {
   }
 
   private extractToolsFromDefinition(definition: AgentDefinition): string[] {
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return [];
 
     const spec = def.spec as Record<string, unknown> | undefined;

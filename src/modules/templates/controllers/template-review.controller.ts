@@ -23,7 +23,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceMemberGuard } from '../../workspace/guards/workspace-member.guard';
 import { CurrentUser } from '../../auth/decorators/current-user.decorator';
 import { WorkspaceId } from '../../workspace/decorators/workspace-id.decorator';
-import { User } from '../../database/entities/user.entity';
+import { User } from '../../../database/entities/user.entity';
 import { TemplateReviewService } from '../services/template-review.service';
 import { TemplateAnalyticsService } from '../services/template-analytics.service';
 import { TemplateAnalyticsEventType } from '../../../database/entities/template-analytics-event.entity';
@@ -31,7 +31,7 @@ import { CreateTemplateReviewDto } from '../dto/create-template-review.dto';
 import { UpdateTemplateReviewDto } from '../dto/update-template-review.dto';
 import { TemplateReviewQueryDto } from '../dto/template-review-query.dto';
 import { Roles } from '../../auth/decorators/roles.decorator';
-import { Role } from '../../database/entities/workspace-member.entity';
+import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 
 @ApiTags('Template Reviews')
 @ApiBearerAuth('JWT-auth')
@@ -144,7 +144,7 @@ export class TemplateReviewController {
   @ApiResponse({ status: 200, description: 'Review flagged' })
   @ApiResponse({ status: 403, description: 'Admin access required' })
   @ApiResponse({ status: 404, description: 'Review not found' })
-  @Roles(Role.ADMIN)
+  @Roles(WorkspaceRole.ADMIN)
   async flagReview(
     @CurrentUser() user: User,
     @Param('reviewId', ParseUUIDPipe) reviewId: string,

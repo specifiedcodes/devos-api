@@ -536,7 +536,7 @@ export class EmailNotificationService {
       );
     }
 
-    await this.emailConfigRepo.update({ id: config.id }, updateData);
+    await this.emailConfigRepo.update({ id: config.id }, updateData as any);
 
     // Invalidate cache
     await this.redisService.del(`${CACHE_PREFIX}${config.workspaceId}`);

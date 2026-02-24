@@ -11,7 +11,7 @@ import { TemplateInstallationService, InstallationJobData } from '../services/te
 import { Template } from '../../../database/entities/template.entity';
 import { TemplateInstallation, InstallationStatus, InstallationStep } from '../../../database/entities/template-installation.entity';
 import { Project } from '../../../database/entities/project.entity';
-import { WorkspaceMember } from '../../../database/entities/workspace-member.entity';
+import { WorkspaceMember, WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { TemplateScaffoldingService } from '../services/template-scaffolding.service';
 import { TemplateAuditService } from '../services/template-audit.service';
 import { TemplatesGateway } from '../gateways/templates.gateway';
@@ -40,6 +40,9 @@ describe('TemplateInstallationService', () => {
       { name: 'database', type: 'select', options: ['postgres', 'mysql'], default: 'postgres' },
     ],
     definition: {
+      stack: { frontend: 'React' },
+      variables: [],
+      files: { source_type: 'inline' },
       post_install: ['npm install'],
     },
   };
@@ -47,7 +50,7 @@ describe('TemplateInstallationService', () => {
   const mockWorkspaceMember: Partial<WorkspaceMember> = {
     userId: mockUserId,
     workspaceId: mockWorkspaceId,
-    role: 'member',
+    role: WorkspaceRole.DEVELOPER,
   };
 
   beforeEach(async () => {
@@ -299,7 +302,7 @@ describe('TemplateInstallationService', () => {
       });
       installationQueue.getJob.mockResolvedValue({
         remove: jest.fn(),
-      });
+      } as any);
       // Mock the atomic update with affected count
       installationRepository.update.mockResolvedValue({ affected: 1 });
 

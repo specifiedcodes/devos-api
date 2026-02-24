@@ -655,7 +655,7 @@ describe('ScimUserService', () => {
         ssoProfileData: { firstName: 'John', lastName: 'Doe', displayName: 'John Doe', jobTitle: 'Engineer' },
         suspendedAt: null,
         scimExternalId: 'ext-1',
-      } as User;
+      } as unknown as User;
       const member = { userId, workspaceId, role: WorkspaceRole.DEVELOPER } as WorkspaceMember;
 
       const result = service.toScimUserResource(user, member, workspaceId, 'https://devos.com');

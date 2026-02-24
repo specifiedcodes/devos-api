@@ -92,7 +92,7 @@ describe('SsoAuditController', () => {
       mockWorkspaceMemberRepository.findOne.mockResolvedValue({
         workspaceId,
         userId,
-        role: WorkspaceRole.MEMBER,
+        role: WorkspaceRole.VIEWER,
       });
 
       await expect(controller.listEvents(workspaceId, {}, adminReq)).rejects.toThrow(ForbiddenException);
@@ -337,19 +337,19 @@ describe('SsoAuditController', () => {
 
   describe('Authorization', () => {
     it('should reject non-admin for alert rules', async () => {
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ role: WorkspaceRole.MEMBER });
+      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ role: WorkspaceRole.VIEWER });
 
       await expect(controller.listAlertRules(workspaceId, adminReq)).rejects.toThrow(ForbiddenException);
     });
 
     it('should reject non-admin for webhooks', async () => {
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ role: WorkspaceRole.MEMBER });
+      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ role: WorkspaceRole.VIEWER });
 
       await expect(controller.listWebhooks(workspaceId, adminReq)).rejects.toThrow(ForbiddenException);
     });
 
     it('should reject non-admin for compliance report', async () => {
-      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ role: WorkspaceRole.MEMBER });
+      mockWorkspaceMemberRepository.findOne.mockResolvedValue({ role: WorkspaceRole.VIEWER });
 
       await expect(controller.getComplianceReport(workspaceId, {}, adminReq)).rejects.toThrow(ForbiddenException);
     });

@@ -111,7 +111,7 @@ export class SpendCapController {
     if (dto.hardCapThreshold !== undefined) update.hardCapThreshold = dto.hardCapThreshold;
     if (dto.downgradeRules !== undefined) update.downgradeRules = dto.downgradeRules;
 
-    await this.workspaceSettingsRepo.update({ workspaceId }, update);
+    await this.workspaceSettingsRepo.update({ workspaceId }, update as any);
 
     // Invalidate cache
     await this.spendCapService.invalidateCache(workspaceId);
@@ -162,7 +162,7 @@ export class SpendCapController {
       update.monthlyLimitUsd = dto.increaseBudgetTo;
     }
 
-    await this.workspaceSettingsRepo.update({ workspaceId }, update);
+    await this.workspaceSettingsRepo.update({ workspaceId }, update as any);
 
     // Invalidate cache
     await this.spendCapService.invalidateCache(workspaceId);

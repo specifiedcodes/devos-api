@@ -13,6 +13,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue, Job } from 'bull';
 import { Template } from '../../../database/entities/template.entity';
 import { TemplateEngineService, SourceFile, ProcessedFile } from './template-engine.service';
+export type { ProcessedFile } from './template-engine.service';
 import { VariableResolverService, VariableDefinition, ValidationResult } from './variable-resolver.service';
 
 /**
@@ -46,6 +47,8 @@ export interface ScaffoldJobData {
   repoDescription?: string;
   skipPostInstall?: boolean;
   dryRun?: boolean;
+  currentStep?: string;
+  totalFiles?: number;
 }
 
 /**
@@ -224,7 +227,7 @@ export class TemplateScaffoldingService {
     template: Template,
     variables: Record<string, unknown>,
   ): VariableValidationResult {
-    const definitions = (template.variables || []) as VariableDefinition[];
+    const definitions = (template.variables || []) as unknown as VariableDefinition[];
     const result = this.variableResolver.validate(definitions, variables);
 
     return {
@@ -244,7 +247,7 @@ export class TemplateScaffoldingService {
     template: Template,
     userVariables: Record<string, unknown>,
   ): Record<string, unknown> {
-    const definitions = (template.variables || []) as VariableDefinition[];
+    const definitions = (template.variables || []) as unknown as VariableDefinition[];
     return this.variableResolver.resolve(definitions, userVariables);
   }
 
@@ -355,7 +358,8 @@ export class TemplateScaffoldingService {
     }
 
     const state = await job.getState();
-    const progress = typeof job.progress === 'number' ? job.progress : 0;
+    const rawProgress = job.progress();
+    const progress: number = typeof rawProgress === 'number' ? rawProgress : 0;
 
     const statusMap: Record<string, ScaffoldJobStatus> = {
       waiting: ScaffoldJobStatus.PENDING,

@@ -274,7 +274,7 @@ describe('SSO Audit E2E Tests', () => {
 
       expect(result).toBeDefined();
       expect(result.summary.totalEvents).toBe(100);
-      expect(result.summary.successRate).toBe(0.8);
+      expect((result.summary as any).successRate).toBe(0.8);
     });
 
     it('should default to 30-day period when dates not specified', async () => {
@@ -436,7 +436,7 @@ describe('SSO Audit E2E Tests', () => {
 
       const result = await controller.getWebhook(workspaceId, webhookId, mockReq);
 
-      expect(result.secret).toBe('********');
+      expect((result as any).secret).toBe('********');
     });
 
     it('should update a webhook', async () => {

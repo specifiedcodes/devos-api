@@ -18,7 +18,7 @@ import { Server, Socket } from 'socket.io';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { ScaffoldJobStatus } from '../services/template-scaffolding.service';
-import { InstallationStatus, InstallationStep } from '../../database/entities/template-installation.entity';
+import { InstallationStatus, InstallationStep } from '../../../database/entities/template-installation.entity';
 
 /**
  * Progress event payload

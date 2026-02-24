@@ -54,7 +54,7 @@ export class WorkspaceMember {
 
   @ManyToOne(() => CustomRole, { onDelete: 'SET NULL', nullable: true })
   @JoinColumn({ name: 'custom_role_id' })
-  customRole?: CustomRole;
+  customRole?: CustomRole | null;
 
   @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt!: Date;

@@ -166,7 +166,7 @@ export class SharedLinksService {
 
     await this.sharedLinkRepository.update(
       { id: linkId, workspaceId },
-      updateData,
+      updateData as any,
     );
 
     const updated = await this.findById(linkId, workspaceId);

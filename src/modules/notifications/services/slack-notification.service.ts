@@ -340,7 +340,7 @@ export class SlackNotificationService {
     if (config.mentionConfig !== undefined) updateData.mentionConfig = config.mentionConfig;
 
     if (Object.keys(updateData).length > 0) {
-      await this.slackIntegrationRepo.update({ workspaceId }, updateData);
+      await this.slackIntegrationRepo.update({ workspaceId }, updateData as any);
     }
 
     // Invalidate cache

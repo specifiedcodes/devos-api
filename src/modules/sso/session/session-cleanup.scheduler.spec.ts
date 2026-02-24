@@ -29,7 +29,7 @@ describe('SessionCleanupScheduler', () => {
 
   describe('handleExpiredSessionCleanup', () => {
     it('should call cleanupExpiredSessions', async () => {
-      mockSessionFederationService.cleanupExpiredSessions!.mockResolvedValue(5);
+      (mockSessionFederationService.cleanupExpiredSessions as jest.Mock).mockResolvedValue(5);
 
       await scheduler.handleExpiredSessionCleanup();
 
@@ -37,13 +37,13 @@ describe('SessionCleanupScheduler', () => {
     });
 
     it('should log count when sessions cleaned up', async () => {
-      mockSessionFederationService.cleanupExpiredSessions!.mockResolvedValue(3);
+      (mockSessionFederationService.cleanupExpiredSessions as jest.Mock).mockResolvedValue(3);
 
       await expect(scheduler.handleExpiredSessionCleanup()).resolves.not.toThrow();
     });
 
     it('should not throw on service error', async () => {
-      mockSessionFederationService.cleanupExpiredSessions!.mockRejectedValue(
+      (mockSessionFederationService.cleanupExpiredSessions as jest.Mock).mockRejectedValue(
         new Error('Database error'),
       );
 
@@ -51,7 +51,7 @@ describe('SessionCleanupScheduler', () => {
     });
 
     it('should handle zero cleaned up sessions silently', async () => {
-      mockSessionFederationService.cleanupExpiredSessions!.mockResolvedValue(0);
+      (mockSessionFederationService.cleanupExpiredSessions as jest.Mock).mockResolvedValue(0);
 
       await expect(scheduler.handleExpiredSessionCleanup()).resolves.not.toThrow();
     });
@@ -59,7 +59,7 @@ describe('SessionCleanupScheduler', () => {
 
   describe('handleTerminatedSessionPurge', () => {
     it('should call purgeTerminatedSessions', async () => {
-      mockSessionFederationService.purgeTerminatedSessions!.mockResolvedValue(10);
+      (mockSessionFederationService.purgeTerminatedSessions as jest.Mock).mockResolvedValue(10);
 
       await scheduler.handleTerminatedSessionPurge();
 
@@ -67,7 +67,7 @@ describe('SessionCleanupScheduler', () => {
     });
 
     it('should not throw on service error', async () => {
-      mockSessionFederationService.purgeTerminatedSessions!.mockRejectedValue(
+      (mockSessionFederationService.purgeTerminatedSessions as jest.Mock).mockRejectedValue(
         new Error('Database error'),
       );
 
@@ -75,7 +75,7 @@ describe('SessionCleanupScheduler', () => {
     });
 
     it('should handle zero purged sessions', async () => {
-      mockSessionFederationService.purgeTerminatedSessions!.mockResolvedValue(0);
+      (mockSessionFederationService.purgeTerminatedSessions as jest.Mock).mockResolvedValue(0);
 
       await expect(scheduler.handleTerminatedSessionPurge()).resolves.not.toThrow();
     });
@@ -91,7 +91,7 @@ describe('SessionCleanupScheduler', () => {
     });
 
     it('should not throw on service error', async () => {
-      mockSessionFederationService.getSessionsNearExpiry!.mockRejectedValue(
+      (mockSessionFederationService.getSessionsNearExpiry as jest.Mock).mockRejectedValue(
         new Error('Database error'),
       );
 
@@ -99,7 +99,7 @@ describe('SessionCleanupScheduler', () => {
     });
 
     it('should handle sessions near expiry', async () => {
-      mockSessionFederationService.getSessionsNearExpiry!.mockResolvedValue([
+      (mockSessionFederationService.getSessionsNearExpiry as jest.Mock).mockResolvedValue([
         { id: 's1' } as any,
         { id: 's2' } as any,
       ]);

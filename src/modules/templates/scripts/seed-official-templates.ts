@@ -66,7 +66,7 @@ function convertToEntity(template: ProjectTemplate): Partial<Template> {
       variables: [],
       files: {
         source_type: TemplateSourceType.GIT,
-        repository: null,
+        repository: undefined,
         branch: 'main',
       },
       post_install: [],

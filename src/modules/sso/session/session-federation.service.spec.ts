@@ -103,9 +103,9 @@ describe('SessionFederationService', () => {
   describe('createFederatedSession', () => {
     it('should save to PostgreSQL and populate Redis cache', async () => {
       const mockSaved = createMockSession();
-      mockRepository.find!.mockResolvedValue([]);
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
+      (mockRepository.find as jest.Mock).mockResolvedValue([]);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
 
       const result = await service.createFederatedSession(defaultParams);
 
@@ -116,13 +116,13 @@ describe('SessionFederationService', () => {
 
     it('should calculate correct expires_at based on timeout', async () => {
       const mockSaved = createMockSession();
-      mockRepository.find!.mockResolvedValue([]);
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
+      (mockRepository.find as jest.Mock).mockResolvedValue([]);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
 
       await service.createFederatedSession(defaultParams);
 
-      const createCall = mockRepository.create!.mock.calls[0][0] as any;
+      const createCall = (mockRepository.create as jest.Mock).mock.calls[0][0] as any;
       expect(createCall.sessionTimeoutMinutes).toBe(480);
       expect(createCall.expiresAt).toBeInstanceOf(Date);
     });
@@ -131,13 +131,13 @@ describe('SessionFederationService', () => {
       const existingSessions = Array.from({ length: 5 }, (_, i) =>
         createMockSession({ id: `session-${i}`, createdAt: new Date(Date.now() - (5 - i) * 60000) }),
       );
-      mockRepository.find!.mockResolvedValue(existingSessions);
+      (mockRepository.find as jest.Mock).mockResolvedValue(existingSessions);
 
       const mockSaved = createMockSession();
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
-      mockRepository.findOne!.mockResolvedValue(existingSessions[0]);
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(existingSessions[0]);
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.createFederatedSession(defaultParams);
 
@@ -147,13 +147,13 @@ describe('SessionFederationService', () => {
 
     it('should store IdP session mapping in Redis when idpSessionId provided', async () => {
       const mockSaved = createMockSession();
-      mockRepository.find!.mockResolvedValue([]);
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
+      (mockRepository.find as jest.Mock).mockResolvedValue([]);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
 
       await service.createFederatedSession(defaultParams);
 
-      const redisSetCalls = mockRedisService.set!.mock.calls;
+      const redisSetCalls = (mockRedisService.set as jest.Mock).mock.calls;
       const idpMapping = redisSetCalls.find((c: any) =>
         c[0].startsWith(SESSION_FEDERATION_CONSTANTS.REDIS_IDP_SESSION_PREFIX),
       );
@@ -163,13 +163,13 @@ describe('SessionFederationService', () => {
     it('should not store IdP session mapping when idpSessionId not provided', async () => {
       const paramsNoIdp = { ...defaultParams, idpSessionId: undefined };
       const mockSaved = createMockSession({ idpSessionId: null });
-      mockRepository.find!.mockResolvedValue([]);
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
+      (mockRepository.find as jest.Mock).mockResolvedValue([]);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
 
       await service.createFederatedSession(paramsNoIdp);
 
-      const redisSetCalls = mockRedisService.set!.mock.calls;
+      const redisSetCalls = (mockRedisService.set as jest.Mock).mock.calls;
       const idpMapping = redisSetCalls.find((c: any) =>
         c[0].startsWith(SESSION_FEDERATION_CONSTANTS.REDIS_IDP_SESSION_PREFIX),
       );
@@ -185,22 +185,22 @@ describe('SessionFederationService', () => {
         devosSessionId: mockDevosSessionId,
       };
       const mockSaved = createMockSession();
-      mockRepository.find!.mockResolvedValue([]);
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
+      (mockRepository.find as jest.Mock).mockResolvedValue([]);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
 
       await service.createFederatedSession(paramsNoTimeout);
 
-      const createCall = mockRepository.create!.mock.calls[0][0] as any;
+      const createCall = (mockRepository.create as jest.Mock).mock.calls[0][0] as any;
       expect(createCall.sessionTimeoutMinutes).toBe(SESSION_FEDERATION_CONSTANTS.DEFAULT_SESSION_TIMEOUT_MINUTES);
       expect(createCall.idleTimeoutMinutes).toBe(SESSION_FEDERATION_CONSTANTS.DEFAULT_IDLE_TIMEOUT_MINUTES);
     });
 
     it('should log session_created audit event', async () => {
       const mockSaved = createMockSession();
-      mockRepository.find!.mockResolvedValue([]);
-      mockRepository.create!.mockReturnValue(mockSaved);
-      mockRepository.save!.mockResolvedValue(mockSaved);
+      (mockRepository.find as jest.Mock).mockResolvedValue([]);
+      (mockRepository.create as jest.Mock).mockReturnValue(mockSaved);
+      (mockRepository.save as jest.Mock).mockResolvedValue(mockSaved);
 
       await service.createFederatedSession(defaultParams);
 
@@ -231,7 +231,7 @@ describe('SessionFederationService', () => {
         isIdleExpired: false,
         remainingMinutes: 240,
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
 
       const result = await service.validateSession(mockSessionId);
 
@@ -256,7 +256,7 @@ describe('SessionFederationService', () => {
         isIdleExpired: false,
         remainingMinutes: 0,
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
 
       const result = await service.validateSession(mockSessionId);
 
@@ -281,7 +281,7 @@ describe('SessionFederationService', () => {
         isIdleExpired: true,
         remainingMinutes: 240,
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
 
       const result = await service.validateSession(mockSessionId);
 
@@ -290,8 +290,8 @@ describe('SessionFederationService', () => {
     });
 
     it('should return terminated for already-terminated session from DB', async () => {
-      mockRedisService.get!.mockResolvedValue(null);
-      mockRepository.findOne!.mockResolvedValue(
+      (mockRedisService.get as jest.Mock).mockResolvedValue(null);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(
         createMockSession({
           terminatedAt: new Date(),
           terminationReason: SessionTerminationReason.LOGOUT,
@@ -305,9 +305,9 @@ describe('SessionFederationService', () => {
     });
 
     it('should fall back to PostgreSQL on Redis cache miss', async () => {
-      mockRedisService.get!.mockResolvedValue(null);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(null);
       const futureExpiry = new Date(Date.now() + 4 * 60 * 60 * 1000);
-      mockRepository.findOne!.mockResolvedValue(
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(
         createMockSession({
           expiresAt: futureExpiry,
           lastActivityAt: new Date(),
@@ -323,8 +323,8 @@ describe('SessionFederationService', () => {
     });
 
     it('should return not_found for non-existent session', async () => {
-      mockRedisService.get!.mockResolvedValue(null);
-      mockRepository.findOne!.mockResolvedValue(null);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(null);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(null);
 
       const result = await service.validateSession(mockSessionId);
 
@@ -341,8 +341,8 @@ describe('SessionFederationService', () => {
         expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
         lastActivityAt: new Date(Date.now() - 120 * 1000).toISOString(), // 2 minutes ago
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.updateActivity(mockSessionId);
 
@@ -356,7 +356,7 @@ describe('SessionFederationService', () => {
         expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
         lastActivityAt: new Date(Date.now() - 30 * 1000).toISOString(), // 30 seconds ago
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
 
       await service.updateActivity(mockSessionId);
 
@@ -365,7 +365,7 @@ describe('SessionFederationService', () => {
     });
 
     it('should skip update when session not found in Redis cache', async () => {
-      mockRedisService.get!.mockResolvedValue(null);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(null);
 
       await service.updateActivity(mockSessionId);
 
@@ -377,8 +377,8 @@ describe('SessionFederationService', () => {
 
   describe('terminateSession', () => {
     it('should update PostgreSQL and remove from Redis', async () => {
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.terminateSession(mockSessionId, SessionTerminationReason.LOGOUT);
 
@@ -392,8 +392,8 @@ describe('SessionFederationService', () => {
     });
 
     it('should log audit event with termination reason', async () => {
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.terminateSession(mockSessionId, SessionTerminationReason.FORCED);
 
@@ -408,12 +408,12 @@ describe('SessionFederationService', () => {
     });
 
     it('should remove IdP session mapping from Redis', async () => {
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.terminateSession(mockSessionId, SessionTerminationReason.LOGOUT);
 
-      const delCalls = mockRedisService.del!.mock.calls;
+      const delCalls = (mockRedisService.del as jest.Mock).mock.calls;
       const idpDeleted = delCalls.some((c: any) =>
         c[0].startsWith(SESSION_FEDERATION_CONSTANTS.REDIS_IDP_SESSION_PREFIX),
       );
@@ -421,7 +421,7 @@ describe('SessionFederationService', () => {
     });
 
     it('should handle non-existent session gracefully', async () => {
-      mockRepository.findOne!.mockResolvedValue(null);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(null);
 
       await expect(
         service.terminateSession('non-existent-id', SessionTerminationReason.LOGOUT),
@@ -435,11 +435,11 @@ describe('SessionFederationService', () => {
         createMockSession({ id: 'session-1' }),
         createMockSession({ id: 'session-2' }),
       ];
-      mockRepository.find!.mockResolvedValue(sessions);
-      mockRepository.findOne!.mockImplementation(({ where }: any) => {
+      (mockRepository.find as jest.Mock).mockResolvedValue(sessions);
+      (mockRepository.findOne as jest.Mock).mockImplementation(({ where }: any) => {
         return Promise.resolve(sessions.find((s) => s.id === where.id) || null);
       });
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       const count = await service.terminateUserSessions(
         mockUserId,
@@ -463,11 +463,11 @@ describe('SessionFederationService', () => {
         andWhere: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue(sessions),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
-      mockRepository.findOne!.mockImplementation(({ where }: any) => {
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.findOne as jest.Mock).mockImplementation(({ where }: any) => {
         return Promise.resolve(sessions.find((s) => s.id === where.id) || null);
       });
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       const result = await service.terminateAllWorkspaceSessions(
         mockWorkspaceId,
@@ -483,9 +483,9 @@ describe('SessionFederationService', () => {
 
   describe('handleIdpLogout', () => {
     it('should terminate linked DevOS session via Redis lookup', async () => {
-      mockRedisService.get!.mockResolvedValue(mockSessionId);
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(mockSessionId);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.handleIdpLogout(mockIdpSessionId);
 
@@ -495,9 +495,9 @@ describe('SessionFederationService', () => {
     });
 
     it('should fall back to PostgreSQL when Redis lookup fails', async () => {
-      mockRedisService.get!.mockResolvedValue(null);
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(null);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.handleIdpLogout(mockIdpSessionId);
 
@@ -511,8 +511,8 @@ describe('SessionFederationService', () => {
     });
 
     it('should handle no matching session gracefully', async () => {
-      mockRedisService.get!.mockResolvedValue(null);
-      mockRepository.findOne!.mockResolvedValue(null);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(null);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(null);
 
       await expect(service.handleIdpLogout('unknown-idp-session')).resolves.not.toThrow();
     });
@@ -527,7 +527,7 @@ describe('SessionFederationService', () => {
         orderBy: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue(activeSessions),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       const result = await service.getActiveSessions(mockUserId);
 
@@ -550,7 +550,7 @@ describe('SessionFederationService', () => {
         andWhere: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue(sessions),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       const summary = await service.getWorkspaceSessionSummary(mockWorkspaceId);
 
@@ -568,9 +568,9 @@ describe('SessionFederationService', () => {
         idleTimeoutMinutes: 30,
         expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.updateSessionTokens(mockSessionId, 'new-access-jti', 'new-refresh-jti');
 
@@ -587,9 +587,9 @@ describe('SessionFederationService', () => {
         idleTimeoutMinutes: 30,
         expiresAt: new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString(),
       };
-      mockRedisService.get!.mockResolvedValue(JSON.stringify(metadata));
-      mockRepository.findOne!.mockResolvedValue(createMockSession());
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRedisService.get as jest.Mock).mockResolvedValue(JSON.stringify(metadata));
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(createMockSession());
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       await service.updateSessionTokens(mockSessionId, 'new-access-jti', 'new-refresh-jti');
 
@@ -619,9 +619,9 @@ describe('SessionFederationService', () => {
           .mockResolvedValueOnce(expiredSessions) // absolute timeout
           .mockResolvedValueOnce([]),              // idle timeout
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
-      mockRepository.findOne!.mockResolvedValue(expiredSessions[0]);
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(expiredSessions[0]);
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       const count = await service.cleanupExpiredSessions();
 
@@ -643,9 +643,9 @@ describe('SessionFederationService', () => {
           .mockResolvedValueOnce([])          // absolute timeout
           .mockResolvedValueOnce([idleSession]), // idle timeout
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
-      mockRepository.findOne!.mockResolvedValue(idleSession);
-      mockRepository.update!.mockResolvedValue({ affected: 1 } as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(idleSession);
+      (mockRepository.update as jest.Mock).mockResolvedValue({ affected: 1 } as any);
 
       const count = await service.cleanupExpiredSessions();
 
@@ -659,7 +659,7 @@ describe('SessionFederationService', () => {
         take: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue([]),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       await service.cleanupExpiredSessions();
 
@@ -676,7 +676,7 @@ describe('SessionFederationService', () => {
         andWhere: jest.fn().mockReturnThis(),
         execute: jest.fn().mockResolvedValue({ affected: 5 }),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       const count = await service.purgeTerminatedSessions();
 
@@ -687,7 +687,7 @@ describe('SessionFederationService', () => {
   describe('getSessionById', () => {
     it('should return session when found', async () => {
       const session = createMockSession();
-      mockRepository.findOne!.mockResolvedValue(session);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(session);
 
       const result = await service.getSessionById(mockSessionId);
 
@@ -695,7 +695,7 @@ describe('SessionFederationService', () => {
     });
 
     it('should return null when not found', async () => {
-      mockRepository.findOne!.mockResolvedValue(null);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(null);
 
       const result = await service.getSessionById('non-existent');
 
@@ -706,7 +706,7 @@ describe('SessionFederationService', () => {
   describe('findByRefreshTokenJti', () => {
     it('should return session by refresh token JTI', async () => {
       const session = createMockSession();
-      mockRepository.findOne!.mockResolvedValue(session);
+      (mockRepository.findOne as jest.Mock).mockResolvedValue(session);
 
       const result = await service.findByRefreshTokenJti('refresh-jti-001');
 
@@ -725,7 +725,7 @@ describe('SessionFederationService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([sessions, 1]),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       const result = await service.listWorkspaceSessions(mockWorkspaceId, {
         status: 'active',
@@ -746,7 +746,7 @@ describe('SessionFederationService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       await service.listWorkspaceSessions(mockWorkspaceId, { userId: mockUserId });
 
@@ -765,7 +765,7 @@ describe('SessionFederationService', () => {
         take: jest.fn().mockReturnThis(),
         getManyAndCount: jest.fn().mockResolvedValue([[], 0]),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       await service.listWorkspaceSessions(mockWorkspaceId, { status: 'terminated' });
 
@@ -783,7 +783,7 @@ describe('SessionFederationService', () => {
         andWhere: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue(nearExpiry),
       };
-      mockRepository.createQueryBuilder!.mockReturnValue(mockQueryBuilder as any);
+      (mockRepository.createQueryBuilder as jest.Mock).mockReturnValue(mockQueryBuilder as any);
 
       const result = await service.getSessionsNearExpiry(10);
 

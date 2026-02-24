@@ -215,9 +215,7 @@ export class PostInstallService {
       // Instead of embedding script in shell command, we pass it safely
       if (containerId === 'direct') {
         // For direct execution, use spawn with explicit shell
-        const childProcess = spawn('sh', ['-c', script], {
-          maxBuffer: 10 * 1024 * 1024,
-        });
+        const childProcess = spawn('sh', ['-c', script]);
 
         let stdout = '';
         let stderr = '';
@@ -253,9 +251,7 @@ export class PostInstallService {
         });
       } else {
         // For Docker execution, use spawn with array arguments
-        const childProcess = spawn('docker', ['exec', containerId, 'sh', '-c', script], {
-          maxBuffer: 10 * 1024 * 1024,
-        });
+        const childProcess = spawn('docker', ['exec', containerId, 'sh', '-c', script]);
 
         let stdout = '';
         let stderr = '';

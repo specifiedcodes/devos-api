@@ -138,16 +138,17 @@ describe('Session Federation E2E Tests', () => {
 
     it('should get workspace session summary', async () => {
       const summary = {
-        activeCount: 5,
-        byProviderType: { saml: 3, oidc: 2 },
-        averageSessionAge: 120,
+        workspaceId,
+        totalActiveSessions: 5,
+        activeUsers: 3,
+        sessionsByProvider: { saml: 3, oidc: 2 },
       };
       mockSessionService.getWorkspaceSessionSummary.mockResolvedValue(summary);
 
       const result = await controller.getWorkspaceSummary(workspaceId, mockReq);
 
-      expect(result.activeCount).toBe(5);
-      expect(result.byProviderType).toEqual({ saml: 3, oidc: 2 });
+      expect(result.totalActiveSessions).toBe(5);
+      expect(result.sessionsByProvider).toEqual({ saml: 3, oidc: 2 });
     });
 
     it('should update session timeout configuration', async () => {

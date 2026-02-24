@@ -417,7 +417,7 @@ describe('MarketplaceService - Review Enhancements (Story 18-7)', () => {
         marketplaceAgentId: mockAgentId,
         publisherReply: null,
         reviewer: { name: 'Reviewer' },
-      } as MarketplaceReview);
+      } as unknown as MarketplaceReview);
       reviewRepo.save.mockResolvedValue({
         id: mockReviewId,
         marketplaceAgentId: mockAgentId,
@@ -425,7 +425,7 @@ describe('MarketplaceService - Review Enhancements (Story 18-7)', () => {
         publisherReplyAt: expect.any(Date),
         publisherReplyBy: mockUserId,
         reviewer: { name: 'Reviewer' },
-      } as MarketplaceReview);
+      } as unknown as MarketplaceReview);
 
       // Mock vote counts
       reviewVoteRepo.createQueryBuilder.mockReturnValue({

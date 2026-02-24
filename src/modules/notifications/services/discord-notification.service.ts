@@ -453,7 +453,7 @@ export class DiscordNotificationService {
     }
 
     if (Object.keys(updateData).length > 0) {
-      await this.discordIntegrationRepo.update({ workspaceId }, updateData);
+      await this.discordIntegrationRepo.update({ workspaceId }, updateData as any);
     }
 
     // Invalidate cache

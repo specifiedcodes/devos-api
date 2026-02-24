@@ -44,7 +44,7 @@ describe('TemplateRegistryService', () => {
     definition: {
       stack: { frontend: 'Next.js', backend: 'NestJS' },
       variables: [],
-      files: { source_type: 'git', repository: 'https://github.com/test/template' },
+      files: { source_type: TemplateSourceType.GIT, repository: 'https://github.com/test/template' },
     },
     category: TemplateCategory.WEB_APP,
     tags: ['test', 'template'],
@@ -397,7 +397,7 @@ describe('TemplateRegistryService', () => {
       // Need to mock findOne for findById to work
       templateRepo.findOne.mockResolvedValue({ ...mockTemplate, isPublished: false } as Template);
       memberRepo.findOne.mockResolvedValue(mockMember as WorkspaceMember);
-      templateRepo.save.mockImplementation(async (template: Template) => {
+      templateRepo.save.mockImplementation(async (template: any) => {
         return { ...template, isPublished: true } as Template;
       });
       auditService.logTemplatePublished.mockResolvedValue(null);

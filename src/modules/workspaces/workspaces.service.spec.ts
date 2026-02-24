@@ -34,6 +34,8 @@ describe('WorkspacesService', () => {
     deletedAt: null,
     currentWorkspaceId: null,
     currentWorkspace: null,
+    ssoProfileData: null,
+    scimExternalId: null,
     backupCodes: [],
   };
 

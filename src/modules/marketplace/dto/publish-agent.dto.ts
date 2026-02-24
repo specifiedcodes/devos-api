@@ -13,39 +13,39 @@ export class PublishAgentDto {
   @ApiProperty({ description: 'Agent definition ID to publish' })
   @IsUUID()
   @IsNotEmpty()
-  agentDefinitionId: string;
+  agentDefinitionId!: string;
 
   @ApiProperty({ description: 'Workspace ID where agent is defined' })
   @IsUUID()
   @IsNotEmpty()
-  workspaceId: string;
+  workspaceId!: string;
 
   @ApiProperty({ description: 'Unique slug for marketplace URL', maxLength: 100 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(100)
-  name: string;
+  name!: string;
 
   @ApiProperty({ description: 'Display name', maxLength: 255 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
-  displayName: string;
+  displayName!: string;
 
   @ApiProperty({ description: 'Short description (max 200 chars)', maxLength: 200 })
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
-  shortDescription: string;
+  shortDescription!: string;
 
   @ApiProperty({ description: 'Long description (markdown supported)' })
   @IsString()
   @IsNotEmpty()
-  longDescription: string;
+  longDescription!: string;
 
   @ApiProperty({ description: 'Category', enum: MarketplaceAgentCategory })
   @IsEnum(MarketplaceAgentCategory)
-  category: MarketplaceAgentCategory;
+  category!: MarketplaceAgentCategory;
 
   @ApiPropertyOptional({ description: 'Tags for discovery (max 10 tags, each up to 50 chars)', type: [String] })
   @IsOptional()
@@ -67,7 +67,7 @@ export class PublishAgentDto {
 
   @ApiProperty({ description: 'Pricing type', enum: MarketplacePricingType, default: MarketplacePricingType.FREE })
   @IsEnum(MarketplacePricingType)
-  pricingType: MarketplacePricingType;
+  pricingType!: MarketplacePricingType;
 
   @ApiPropertyOptional({ description: 'Price in cents (for paid agents)' })
   @IsOptional()

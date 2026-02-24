@@ -25,7 +25,13 @@ export const DEFAULT_EXCLUDE_PATTERNS = [
 /**
  * Pattern detection rules for template variable suggestions.
  */
-export const DETECTION_RULES = [
+export const DETECTION_RULES: ReadonlyArray<{
+  type: 'project_name' | 'database_url' | 'api_key' | 'port' | 'env_var' | 'custom';
+  regex: RegExp;
+  suggestedVariable: string;
+  confidence: number;
+  filePatterns?: string[];
+}> = [
   {
     type: 'project_name',
     regex: /"name"\s*:\s*"([a-z][a-z0-9-]+)"/,

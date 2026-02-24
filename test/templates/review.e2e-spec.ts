@@ -9,12 +9,11 @@ import * as request from 'supertest';
 import { AppModule } from '../../src/app.module';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Template } from '../../src/database/entities/template.entity';
+import { Template, TemplateCategory } from '../../src/database/entities/template.entity';
 import { TemplateReview } from '../../src/database/entities/template-review.entity';
 import { User } from '../../src/database/entities/user.entity';
 import { Workspace } from '../../src/database/entities/workspace.entity';
-import { WorkspaceMember } from '../../src/database/entities/workspace-member.entity';
-import { Role } from '../../src/database/entities/workspace-member.entity';
+import { WorkspaceMember, WorkspaceRole } from '../../src/database/entities/workspace-member.entity';
 
 describe('Template Reviews (e2e)', () => {
   let app: INestApplication;
@@ -61,39 +60,35 @@ describe('Template Reviews (e2e)', () => {
     // Create test user
     testUser = userRepository.create({
       email: 'test@example.com',
-      name: 'Test User',
       passwordHash: 'hashed_password',
-      isEmailVerified: true,
-    });
+    } as Partial<User> as User);
     await userRepository.save(testUser);
 
     // Create admin user
     adminUser = userRepository.create({
       email: 'admin@example.com',
-      name: 'Admin User',
       passwordHash: 'hashed_password',
-      isEmailVerified: true,
-    });
+    } as Partial<User> as User);
     await userRepository.save(adminUser);
 
     // Create workspace
     testWorkspace = workspaceRepository.create({
       name: 'Test Workspace',
-      slug: 'test-workspace',
-      ownerId: testUser.id,
-    });
+      ownerUserId: testUser.id,
+      schemaName: 'workspace_test',
+    } as Partial<Workspace> as Workspace);
     await workspaceRepository.save(testWorkspace);
 
     // Add workspace members
     await workspaceMemberRepository.save({
       workspaceId: testWorkspace.id,
       userId: testUser.id,
-      role: Role.MEMBER,
+      role: WorkspaceRole.DEVELOPER,
     });
     await workspaceMemberRepository.save({
       workspaceId: testWorkspace.id,
       userId: adminUser.id,
-      role: Role.ADMIN,
+      role: WorkspaceRole.ADMIN,
     });
 
     // Create test template
@@ -103,7 +98,7 @@ describe('Template Reviews (e2e)', () => {
       displayName: 'Test Template',
       description: 'A test template',
       version: '1.0.0',
-      category: 'web-app',
+      category: TemplateCategory.WEB_APP,
       definition: {
         stack: { frontend: 'nextjs' },
         variables: [],
@@ -112,7 +107,7 @@ describe('Template Reviews (e2e)', () => {
       avgRating: 0,
       ratingCount: 0,
       createdBy: testUser.id,
-    });
+    } as Partial<Template> as Template);
     await templateRepository.save(testTemplate);
 
     // Get access tokens (mock auth - in real tests you'd call auth endpoints)

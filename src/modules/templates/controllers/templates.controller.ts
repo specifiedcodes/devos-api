@@ -46,7 +46,7 @@ import {
   TemplateListResponseDto,
   TemplateCategoriesResponseDto,
 } from '../dto/template-response.dto';
-import { Template, TemplateCategory } from '../../../database/entities/template.entity';
+import { Template, TemplateCategory, TemplateTestStatus } from '../../../database/entities/template.entity';
 import { TemplateAnalyticsService } from '../services/template-analytics.service';
 import { TemplateAnalyticsEventType } from '../../../database/entities/template-analytics-event.entity';
 
@@ -239,7 +239,7 @@ export class TemplatesController {
 
     // Fallback to legacy service (hardcoded templates)
     // This maintains backward compatibility with Story 4.2
-    return this.templatesService.getTemplateById(id);
+    return this.templatesService.getTemplateById(id) as any;
   }
 
   /**
@@ -507,7 +507,7 @@ export class TemplatesController {
     }
 
     // Fallback to legacy hardcoded templates
-    return this.templatesService.getTemplatesByCategory(category);
+    return this.templatesService.getTemplatesByCategory(category as any) as any;
   }
 
   /**
@@ -542,7 +542,7 @@ export class TemplatesController {
       // Story 19-8: Featured Templates Curation
       isFeatured: template.isFeatured as boolean | undefined,
       featuredOrder: template.featuredOrder as number | undefined,
-      testStatus: template.testStatus as string | undefined,
+      testStatus: template.testStatus as TemplateTestStatus | undefined,
       lastTestRunAt: (template.lastTestRunAt as Date)?.toISOString?.(),
       totalUses: template.totalUses as number | undefined,
       avgRating: template.avgRating != null ? Number(template.avgRating) : 0,
@@ -635,7 +635,7 @@ export class TemplatesController {
     const userId = req.user.id;
     const workspaceId = dto.workspaceId || req.user?.workspaceId;
 
-    return this.templateScaffoldingService.scaffold(workspaceId, userId, {
+    return this.templateScaffoldingService.scaffold(workspaceId || '', userId, {
       templateId: id,
       projectName: dto.projectName,
       variables: dto.variables,

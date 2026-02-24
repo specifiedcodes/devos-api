@@ -189,7 +189,7 @@ describe('CustomRoleService', () => {
 
       const result = await service.getRole(mockRoleId, mockWorkspaceId);
 
-      expect(result.creatorName).toBe('admin@test.com');
+      expect((result as any).creatorName).toBe('admin@test.com');
     });
   });
 

@@ -222,7 +222,7 @@ describe('TemplateCreationController', () => {
 
       service.detectPatterns.mockResolvedValue(mockPatterns);
 
-      const result = await controller.detectPatterns({ files });
+      const result = await controller.detectPatterns(mockWorkspaceId, mockRequest as any, { files });
 
       expect(service.detectPatterns).toHaveBeenCalledWith(files);
       expect(result).toEqual({ patterns: mockPatterns });
@@ -233,7 +233,7 @@ describe('TemplateCreationController', () => {
 
       service.detectPatterns.mockResolvedValue([]);
 
-      const result = await controller.detectPatterns({ files });
+      const result = await controller.detectPatterns(mockWorkspaceId, mockRequest as any, { files });
 
       expect(result.patterns).toEqual([]);
     });
@@ -321,7 +321,7 @@ describe('TemplateCreationController', () => {
 
       service.applyTemplatization.mockResolvedValue(mockResult);
 
-      const result = await controller.applyTemplatization({ files, patterns });
+      const result = await controller.applyTemplatization(mockWorkspaceId, mockRequest as any, { files, patterns });
 
       expect(service.applyTemplatization).toHaveBeenCalledWith(files, patterns);
       expect(result).toEqual({ files: mockResult });

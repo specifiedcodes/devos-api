@@ -373,7 +373,7 @@ describe('SsoAuditWebhookService', () => {
     });
 
     it('should truncate response body to max length', async () => {
-      const delivery = {
+      const delivery: any = {
         id: 'del-1',
         webhookId: 'wh-1',
         eventId: 'event-1',

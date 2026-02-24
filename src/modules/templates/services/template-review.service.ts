@@ -90,7 +90,7 @@ export class TemplateReviewService {
         .getRawOne();
 
       await manager.update(Template, dto.templateId, {
-        avgRating: stats?.avgRating ? parseFloat(stats.avgRating).toFixed(2) : 0,
+        avgRating: stats?.avgRating ? parseFloat(parseFloat(stats.avgRating).toFixed(2)) : 0,
         ratingCount: stats?.ratingCount ? parseInt(stats.ratingCount, 10) : 0,
       });
 
@@ -102,8 +102,8 @@ export class TemplateReviewService {
       templateId: dto.templateId,
       workspaceId,
       actorId: userId,
-      action: 'review_created',
-      metadata: { rating: dto.rating, reviewId: savedReview.id },
+      eventType: 'review_created',
+      details: { rating: dto.rating, reviewId: savedReview.id },
     });
 
     // Load user relation
@@ -301,10 +301,10 @@ export class TemplateReviewService {
     // Log audit event for flagging
     await this.auditService.logEvent({
       templateId: review.templateId,
-      workspaceId: review.template?.workspaceId || undefined,
+      workspaceId: review.template?.workspaceId ?? null,
       actorId: flaggedBy,
-      action: 'review_flagged',
-      metadata: { reviewId, reason },
+      eventType: 'review_flagged',
+      details: { reviewId, reason },
     });
   }
 
@@ -396,7 +396,7 @@ export class TemplateReviewService {
       .getRawOne();
 
     await this.templateRepository.update(templateId, {
-      avgRating: stats?.avgRating ? parseFloat(stats.avgRating).toFixed(2) : 0,
+      avgRating: stats?.avgRating ? parseFloat(parseFloat(stats.avgRating).toFixed(2)) : 0,
       ratingCount: stats?.ratingCount ? parseInt(stats.ratingCount, 10) : 0,
     });
   }

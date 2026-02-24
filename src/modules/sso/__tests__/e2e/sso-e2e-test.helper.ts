@@ -261,9 +261,10 @@ export interface MockResponse {
 }
 
 /**
- * Create a mock response object for controller tests
+ * Create a mock response object for controller tests.
+ * Returns `any` so it can be passed directly to controller methods expecting express Response.
  */
-export function createMockResponse(): MockResponse {
+export function createMockResponse(): any {
   const res: MockResponse = {
     json: jest.fn().mockReturnThis(),
     send: jest.fn().mockReturnThis(),

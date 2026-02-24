@@ -93,7 +93,7 @@ describe('SessionFederationController', () => {
   describe('GET /sessions (listMySessions)', () => {
     it('should return current user federated sessions (200)', async () => {
       const sessions = [createMockSession()];
-      mockService.getActiveSessions!.mockResolvedValue(sessions);
+      (mockService.getActiveSessions as jest.Mock).mockResolvedValue(sessions);
 
       const result = await controller.listMySessions(mockRequest());
 
@@ -103,7 +103,7 @@ describe('SessionFederationController', () => {
     });
 
     it('should return empty array for user with no SSO sessions (200)', async () => {
-      mockService.getActiveSessions!.mockResolvedValue([]);
+      (mockService.getActiveSessions as jest.Mock).mockResolvedValue([]);
 
       const result = await controller.listMySessions(mockRequest());
 
@@ -115,7 +115,7 @@ describe('SessionFederationController', () => {
     it('should return workspace sessions for admin (200)', async () => {
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.ADMIN });
       const sessions = [createMockSession()];
-      mockService.listWorkspaceSessions!.mockResolvedValue({ sessions, total: 1 });
+      (mockService.listWorkspaceSessions as jest.Mock).mockResolvedValue({ sessions, total: 1 });
 
       const result = await controller.listWorkspaceSessions(
         mockWorkspaceId,
@@ -145,7 +145,7 @@ describe('SessionFederationController', () => {
 
     it('should apply query filters (status, userId, pagination)', async () => {
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.ADMIN });
-      mockService.listWorkspaceSessions!.mockResolvedValue({ sessions: [], total: 0 });
+      (mockService.listWorkspaceSessions as jest.Mock).mockResolvedValue({ sessions: [], total: 0 });
 
       const query = { status: 'active' as const, userId: mockUserId, page: 2, limit: 25 };
       await controller.listWorkspaceSessions(mockWorkspaceId, query, mockRequest());
@@ -165,7 +165,7 @@ describe('SessionFederationController', () => {
   describe('GET /sessions/workspace/:workspaceId/summary', () => {
     it('should return correct counts (200)', async () => {
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.OWNER });
-      mockService.getWorkspaceSessionSummary!.mockResolvedValue({
+      (mockService.getWorkspaceSessionSummary as jest.Mock).mockResolvedValue({
         workspaceId: mockWorkspaceId,
         totalActiveSessions: 5,
         activeUsers: 3,
@@ -227,7 +227,7 @@ describe('SessionFederationController', () => {
   describe('POST /sessions/workspace/:workspaceId/force-reauth', () => {
     it('should terminate all sessions (200)', async () => {
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.ADMIN });
-      mockService.terminateAllWorkspaceSessions!.mockResolvedValue({
+      (mockService.terminateAllWorkspaceSessions as jest.Mock).mockResolvedValue({
         terminatedCount: 5,
         affectedUserIds: ['u1', 'u2'],
       });
@@ -242,7 +242,7 @@ describe('SessionFederationController', () => {
     it('should terminate only target user sessions with targetUserId', async () => {
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.ADMIN });
       const targetUserId = '55555555-5555-5555-5555-555555555555';
-      mockService.terminateUserSessions!.mockResolvedValue(2);
+      (mockService.terminateUserSessions as jest.Mock).mockResolvedValue(2);
 
       const dto = { targetUserId, reason: 'policy_change' };
       const result = await controller.forceReauth(mockWorkspaceId, dto, mockRequest());
@@ -253,7 +253,7 @@ describe('SessionFederationController', () => {
 
     it('should log audit event', async () => {
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.ADMIN });
-      mockService.terminateAllWorkspaceSessions!.mockResolvedValue({
+      (mockService.terminateAllWorkspaceSessions as jest.Mock).mockResolvedValue({
         terminatedCount: 0,
         affectedUserIds: [],
       });
@@ -289,7 +289,7 @@ describe('SessionFederationController', () => {
 
   describe('DELETE /sessions/:sessionId', () => {
     it('should terminate user own session (204)', async () => {
-      mockService.getSessionById!.mockResolvedValue(createMockSession());
+      (mockService.getSessionById as jest.Mock).mockResolvedValue(createMockSession());
 
       await controller.terminateSession(mockSessionId, mockRequest());
 
@@ -301,7 +301,7 @@ describe('SessionFederationController', () => {
 
     it('should allow admin to terminate any workspace session (204)', async () => {
       const adminId = '99999999-9999-9999-9999-999999999999';
-      mockService.getSessionById!.mockResolvedValue(
+      (mockService.getSessionById as jest.Mock).mockResolvedValue(
         createMockSession({ userId: 'other-user' }),
       );
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.ADMIN });
@@ -313,7 +313,7 @@ describe('SessionFederationController', () => {
 
     it('should reject termination of another user session by non-admin (403)', async () => {
       const nonAdminId = '99999999-9999-9999-9999-999999999999';
-      mockService.getSessionById!.mockResolvedValue(
+      (mockService.getSessionById as jest.Mock).mockResolvedValue(
         createMockSession({ userId: 'other-user' }),
       );
       mockWorkspaceMemberRepo.findOne.mockResolvedValue({ role: WorkspaceRole.DEVELOPER });
@@ -324,7 +324,7 @@ describe('SessionFederationController', () => {
     });
 
     it('should return 404 for non-existent session', async () => {
-      mockService.getSessionById!.mockResolvedValue(null);
+      (mockService.getSessionById as jest.Mock).mockResolvedValue(null);
 
       await expect(
         controller.terminateSession('non-existent-id', mockRequest()),
@@ -334,7 +334,7 @@ describe('SessionFederationController', () => {
 
   describe('POST /sessions/validate', () => {
     it('should return valid for active session (200)', async () => {
-      mockService.validateSession!.mockResolvedValue({
+      (mockService.validateSession as jest.Mock).mockResolvedValue({
         isValid: true,
         reason: 'active',
       });
@@ -346,7 +346,7 @@ describe('SessionFederationController', () => {
     });
 
     it('should return expired for timed-out session (200)', async () => {
-      mockService.validateSession!.mockResolvedValue({
+      (mockService.validateSession as jest.Mock).mockResolvedValue({
         isValid: false,
         reason: 'expired',
       });
@@ -358,7 +358,7 @@ describe('SessionFederationController', () => {
     });
 
     it('should return not_found for missing session', async () => {
-      mockService.validateSession!.mockResolvedValue({
+      (mockService.validateSession as jest.Mock).mockResolvedValue({
         isValid: false,
         reason: 'not_found',
       });

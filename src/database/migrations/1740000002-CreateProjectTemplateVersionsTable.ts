@@ -6,7 +6,7 @@
  * Creates the project_template_versions table for tracking which template
  * version was used for each project.
  */
-import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey, TableEnum } from 'typeorm';
+import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey } from 'typeorm';
 
 export class CreateProjectTemplateVersionsTable1740000002 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {

@@ -26,6 +26,7 @@ describe('TemplateScaffoldingService', () => {
 
   const mockTemplate: Template = {
     id: 'template-123',
+    workspaceId: null,
     name: 'test-template',
     displayName: 'Test Template',
     description: 'A test template',
@@ -54,6 +55,12 @@ describe('TemplateScaffoldingService', () => {
     isOfficial: true,
     isPublished: true,
     isActive: true,
+    isFeatured: false,
+    featuredOrder: null,
+    testStatus: 'unknown' as any,
+    lastTestRunAt: null,
+    pricingType: 'free' as any,
+    priceCents: null,
     totalUses: 0,
     avgRating: 0,
     ratingCount: 0,

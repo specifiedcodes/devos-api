@@ -619,11 +619,11 @@ export class TemplateRegistryService {
 
       // Map legacy template to new entity structure
       const template = this.templateRepository.create({
-        workspaceId: null, // Official templates have no workspace
+        workspaceId: null as any,
         name: hardcodedTemplate.id,
         displayName: hardcodedTemplate.name,
         description: hardcodedTemplate.description,
-        longDescription: null,
+        longDescription: null as any,
         version: '1.0.0',
         schemaVersion: 'v1',
         definition: {
@@ -636,7 +636,6 @@ export class TemplateRegistryService {
           variables: [],
           files: {
             source_type: 'git',
-            repository: null,
             branch: 'main',
           },
         },
@@ -652,12 +651,12 @@ export class TemplateRegistryService {
         },
         variables: [],
         sourceType: TemplateSourceType.GIT,
-        sourceUrl: null,
+        sourceUrl: null as any,
         sourceBranch: 'main',
         isOfficial: true,
         isPublished: true,
         isActive: true,
-        createdBy: null,
+        createdBy: null as any,
       });
 
       await this.templateRepository.save(template);

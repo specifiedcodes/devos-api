@@ -147,7 +147,7 @@ describe('MarketplaceController', () => {
   describe('checkForUpdates', () => {
     it('should call service.checkForUpdates with correct params', async () => {
       const dto = { workspaceId: 'workspace-uuid' };
-      const expectedResult = [];
+      const expectedResult: any[] = [];
       service.checkForUpdates.mockResolvedValue(expectedResult);
 
       const result = await controller.checkForUpdates(dto, mockRequest);

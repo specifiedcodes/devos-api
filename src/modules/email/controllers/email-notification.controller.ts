@@ -179,7 +179,7 @@ export class EmailNotificationController {
     if (body.rateLimitPerHour !== undefined) updateData.rateLimitPerHour = body.rateLimitPerHour;
 
     if (Object.keys(updateData).length > 0) {
-      await this.emailConfigRepo.update({ workspaceId }, updateData);
+      await this.emailConfigRepo.update({ workspaceId }, updateData as any);
     }
 
     // Invalidate cache

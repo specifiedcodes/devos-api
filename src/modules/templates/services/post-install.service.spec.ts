@@ -41,7 +41,7 @@ describe('PostInstallService', () => {
     }).compile();
 
     service = module.get<PostInstallService>(PostInstallService);
-    mockExec = exec as jest.Mock;
+    mockExec = exec as unknown as jest.Mock;
     mockExec.mockReset();
   });
 

@@ -34,7 +34,7 @@ import { AgentDefinition, AgentDefinitionSpec } from '../../database/entities/ag
 import { WorkspaceMember, WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { User } from '../../database/entities/user.entity';
 import { ReviewVote } from '../../database/entities/review-vote.entity';
-import { ReviewReport, ReviewReportReason } from '../../database/entities/review-report.entity';
+import { ReviewReport, ReviewReportReason, ReviewReportStatus } from '../../database/entities/review-report.entity';
 import {
   InstallationLog,
   InstallationStatus,
@@ -1163,7 +1163,7 @@ export class MarketplaceService {
       reporterUserId: actorId,
       reason: dto.reason,
       details: dto.details || null,
-      status: 'pending' as const,
+      status: ReviewReportStatus.PENDING,
     });
 
     await this.reviewReportRepo.save(report);
@@ -1903,7 +1903,7 @@ export class MarketplaceService {
         targetVersion: item.targetVersion,
         status: item.status,
         initiatedBy: item.initiatedBy || undefined,
-        initiatedByName: item.initiator?.name || undefined,
+        initiatedByName: (item.initiator as any)?.name || item.initiator?.email || undefined,
         installedAgentId: item.installedAgentId || undefined,
         errorMessage: item.errorMessage || undefined,
         duration: item.completedAt
@@ -2012,7 +2012,7 @@ export class MarketplaceService {
 
   private extractPermissionsFromDefinition(definition: AgentDefinition | null): string[] {
     if (!definition) return [];
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return [];
     const spec = def.spec as Record<string, unknown> | undefined;
     if (!spec) return [];
@@ -2022,7 +2022,7 @@ export class MarketplaceService {
 
   private extractToolsFromDefinition(definition: AgentDefinition | null): string[] {
     if (!definition) return [];
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) return [];
     const spec = def.spec as Record<string, unknown> | undefined;
     if (!spec) return [];
@@ -2039,7 +2039,7 @@ export class MarketplaceService {
 
     // Basic cost estimation based on typical agent usage
     // In a full implementation, this would analyze model preferences and estimated tokens
-    const def = definition.definition as Record<string, unknown>;
+    const def = definition.definition as unknown as Record<string, unknown>;
     if (!def) {
       return { perRun: 5, description: 'Approximately $0.05 per agent invocation' };
     }
@@ -2206,7 +2206,7 @@ export class MarketplaceService {
     dto.isVerified = agent.isVerified;
     dto.pricingType = agent.pricingType;
     dto.priceCents = agent.priceCents || undefined;
-    dto.publisherName = agent.publisher?.name || 'Unknown';
+    dto.publisherName = (agent.publisher as any)?.name || agent.publisher?.email || 'Unknown';
     dto.createdAt = agent.createdAt;
     return dto;
   }
@@ -2253,7 +2253,7 @@ export class MarketplaceService {
     dto.id = review.id;
     dto.marketplaceAgentId = review.marketplaceAgentId;
     dto.reviewerUserId = review.reviewerUserId;
-    dto.reviewerName = review.reviewer?.name || 'Anonymous';
+    dto.reviewerName = (review.reviewer as any)?.name || review.reviewer?.email || 'Anonymous';
     dto.rating = review.rating;
     dto.review = review.review || undefined;
     dto.versionReviewed = review.versionReviewed || undefined;

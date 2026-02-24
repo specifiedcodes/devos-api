@@ -463,7 +463,7 @@ describe('MarketplaceService', () => {
           isVerified: false,
           createdAt: new Date(),
         },
-      ] as MarketplaceAgent[];
+      ] as unknown as MarketplaceAgent[];
 
       marketplaceAgentRepo.createQueryBuilder.mockReturnValue({
         where: jest.fn().mockReturnThis(),
@@ -604,7 +604,7 @@ describe('MarketplaceService', () => {
         rating: 5,
         review: 'Great agent!',
         reviewer: { name: 'Test User' },
-      } as MarketplaceReview);
+      } as unknown as MarketplaceReview);
       reviewRepo.createQueryBuilder.mockReturnValue({
         select: jest.fn().mockReturnThis(),
         addSelect: jest.fn().mockReturnThis(),
