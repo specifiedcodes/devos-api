@@ -17,6 +17,7 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { SkipIpCheck } from '../../../common/decorators/skip-ip-check.decorator';
 import { Permission } from '../../../common/decorators/permission.decorator';
+import { extractClientIp } from '../../../common/utils/extract-client-ip';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { IpAllowlistService } from '../services/ip-allowlist.service';
 import { CreateIpEntryDto } from '../dto/create-ip-entry.dto';
@@ -60,7 +61,7 @@ export class IpAllowlistController {
     @Body() dto: UpdateIpConfigDto,
     @Req() req: any,
   ): Promise<IpConfigResponseDto> {
-    const clientIp = this.extractClientIp(req);
+    const clientIp = extractClientIp(req);
     return this.ipAllowlistService.updateConfig(
       workspaceId,
       req.user.id,
@@ -145,7 +146,7 @@ export class IpAllowlistController {
     @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
     @Req() req: any,
   ): Promise<IpTestResponseDto> {
-    const clientIp = this.extractClientIp(req);
+    const clientIp = extractClientIp(req);
     return this.ipAllowlistService.testIp(workspaceId, clientIp);
   }
 
@@ -160,13 +161,4 @@ export class IpAllowlistController {
     return this.ipAllowlistService.getBlockedAttempts(workspaceId);
   }
 
-  // ==================== HELPERS ====================
-
-  private extractClientIp(req: any): string {
-    const forwardedFor = req.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      return forwardedFor.split(',')[0].trim();
-    }
-    return req.ip || req.connection?.remoteAddress || '0.0.0.0';
-  }
 }

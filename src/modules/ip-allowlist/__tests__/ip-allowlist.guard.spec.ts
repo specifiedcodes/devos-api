@@ -163,19 +163,22 @@ describe('IpAllowlistGuard', () => {
     expect(result).toBe(true);
   });
 
-  it('should extract IP from X-Forwarded-For header', async () => {
+  it('should use request.ip over X-Forwarded-For header (trust proxy)', async () => {
     ipAllowlistService.checkIp.mockResolvedValue({ allowed: true, inGracePeriod: false });
+    // When request.ip is set (respects Express trust proxy config), it takes priority
     const context = createMockExecutionContext({
       params: { workspaceId: mockWorkspaceId },
       workspaceRole: WorkspaceRole.ADMIN,
       headers: { 'x-forwarded-for': '203.0.113.50, 10.0.0.1' },
+      ip: '192.168.1.100',
     });
 
     await guard.canActivate(context);
 
+    // Should use request.ip, NOT X-Forwarded-For
     expect(ipAllowlistService.checkIp).toHaveBeenCalledWith(
       mockWorkspaceId,
-      '203.0.113.50',
+      '192.168.1.100',
     );
   });
 

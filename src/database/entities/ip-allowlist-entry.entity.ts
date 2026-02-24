@@ -55,9 +55,10 @@ export class IpAllowlistEntry {
   @IsBoolean()
   isActive!: boolean;
 
-  @Column({ type: 'uuid', name: 'created_by' })
+  @Column({ type: 'uuid', name: 'created_by', nullable: true })
+  @IsOptional()
   @IsUUID()
-  createdBy!: string;
+  createdBy!: string | null;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'created_by' })

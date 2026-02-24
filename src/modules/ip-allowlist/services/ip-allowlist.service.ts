@@ -3,11 +3,10 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-  ForbiddenException,
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import * as net from 'net';
 import { IpAllowlistEntry } from '../../../database/entities/ip-allowlist-entry.entity';
 import { IpAllowlistConfig } from '../../../database/entities/ip-allowlist-config.entity';
@@ -59,6 +58,7 @@ export class IpAllowlistService {
     private readonly configRepository: Repository<IpAllowlistConfig>,
     private readonly redisService: RedisService,
     private readonly auditService: AuditService,
+    private readonly dataSource: DataSource,
   ) {}
 
   // ==================== CONFIG OPERATIONS ====================
@@ -119,7 +119,9 @@ export class IpAllowlistService {
       config.gracePeriodEndsAt = gracePeriodEnd;
       config.emergencyDisableUntil = null;
 
-      // Auto-add caller's IP if not already in allowlist
+      // Auto-add caller's IP if not already in allowlist.
+      // Do this BEFORE saving config to ensure atomicity:
+      // if auto-add fails, config is not saved in enabled state.
       const existingEntry = await this.entryRepository.findOne({
         where: { workspaceId, ipAddress: callerIp },
       });
@@ -135,6 +137,7 @@ export class IpAllowlistService {
       config.emergencyDisableUntil = null;
     }
 
+    // Save config AFTER auto-add succeeds (ensures config is not enabled without admin IP)
     await this.configRepository.save(config);
     await this.invalidateConfigCache(workspaceId);
 
@@ -210,39 +213,45 @@ export class IpAllowlistService {
     userId: string,
     dto: CreateIpEntryDto,
   ): Promise<IpEntryResponseDto> {
-    // 1. Validate IP/CIDR format
+    // 1. Validate IP/CIDR format (outside transaction - pure validation)
     this.validateIpOrCidr(dto.ipAddress);
 
-    // 2. Check max entries limit
-    const count = await this.entryRepository.count({ where: { workspaceId } });
-    if (count >= this.MAX_ENTRIES_PER_WORKSPACE) {
-      throw new BadRequestException(
-        `Maximum ${this.MAX_ENTRIES_PER_WORKSPACE} IP allowlist entries per workspace`,
-      );
-    }
+    // 2. Use transaction to prevent TOCTOU race on duplicate/limit checks
+    const saved = await this.dataSource.transaction(async (manager) => {
+      const txEntryRepo = manager.getRepository(IpAllowlistEntry);
 
-    // 3. Check for duplicate
-    const existing = await this.entryRepository.findOne({
-      where: { workspaceId, ipAddress: dto.ipAddress },
-    });
-    if (existing) {
-      throw new ConflictException(
-        `IP address ${dto.ipAddress} already exists in the allowlist`,
-      );
-    }
+      // Check max entries limit
+      const count = await txEntryRepo.count({ where: { workspaceId } });
+      if (count >= this.MAX_ENTRIES_PER_WORKSPACE) {
+        throw new BadRequestException(
+          `Maximum ${this.MAX_ENTRIES_PER_WORKSPACE} IP allowlist entries per workspace`,
+        );
+      }
 
-    // 4. Create entry
-    const entry = this.entryRepository.create({
-      workspaceId,
-      ipAddress: dto.ipAddress,
-      description: dto.description,
-      isActive: true,
-      createdBy: userId,
+      // Check for duplicate
+      const existing = await txEntryRepo.findOne({
+        where: { workspaceId, ipAddress: dto.ipAddress },
+      });
+      if (existing) {
+        throw new ConflictException(
+          `IP address ${dto.ipAddress} already exists in the allowlist`,
+        );
+      }
+
+      // Create entry
+      const entry = txEntryRepo.create({
+        workspaceId,
+        ipAddress: dto.ipAddress,
+        description: dto.description,
+        isActive: true,
+        createdBy: userId,
+      });
+      return txEntryRepo.save(entry);
     });
-    const saved = await this.entryRepository.save(entry);
+
     await this.invalidateEntryCache(workspaceId);
 
-    // 5. Audit log
+    // Audit log (fire-and-forget)
     this.auditService
       .log(workspaceId, userId, AuditAction.CREATE, 'ip_allowlist_entry', saved.id, {
         ipAddress: saved.ipAddress,
@@ -436,10 +445,24 @@ export class IpAllowlistService {
    * Get recent blocked IP attempts for a workspace.
    */
   async getBlockedAttempts(workspaceId: string, limit: number = 100): Promise<BlockedAttemptDto[]> {
+    // Cap limit to prevent unbounded Redis reads
+    const cappedLimit = Math.min(Math.max(1, limit), this.MAX_BLOCKED_ATTEMPTS);
     try {
       const key = `${this.BLOCKED_PREFIX}${workspaceId}`;
-      const rawEntries = await this.redisService.zrevrange(key, 0, limit - 1);
-      return rawEntries.map((raw: string) => JSON.parse(raw) as BlockedAttemptDto);
+      const rawEntries = await this.redisService.zrevrange(key, 0, cappedLimit - 1);
+      // Parse each entry individually, filtering out malformed entries
+      const results: BlockedAttemptDto[] = [];
+      for (const raw of rawEntries) {
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed && typeof parsed.ipAddress === 'string' && typeof parsed.endpoint === 'string') {
+            results.push(parsed as BlockedAttemptDto);
+          }
+        } catch {
+          this.logger.warn(`Skipping malformed blocked attempt entry in workspace=${workspaceId}`);
+        }
+      }
+      return results;
     } catch (error) {
       this.logger.warn(`Failed to get blocked attempts for workspace=${workspaceId}`);
       return [];

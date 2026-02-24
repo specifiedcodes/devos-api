@@ -1,7 +1,14 @@
 import { IsOptional, IsString, IsBoolean, MaxLength, Matches } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
-const IP_OR_CIDR_REGEX = /^(?:(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?|[0-9a-fA-F:]+(?:\/\d{1,3})?)$/;
+/**
+ * See create-ip-entry.dto.ts for regex documentation.
+ * Service layer performs definitive validation via net.isIPv4()/net.isIPv6().
+ */
+const IPV4_OCTET = '(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)';
+const IP_OR_CIDR_REGEX = new RegExp(
+  `^(?:${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}(?:\\/(?:3[0-2]|[12]?\\d))?|[0-9a-fA-F:]+(?:\\/(?:12[0-8]|1[01]\\d|[1-9]?\\d))?)$`,
+);
 
 export class UpdateIpEntryDto {
   @ApiPropertyOptional({

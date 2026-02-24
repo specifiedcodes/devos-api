@@ -3,12 +3,18 @@ import { ApiProperty } from '@nestjs/swagger';
 
 /**
  * Regex for validating IPv4 addresses, IPv6 addresses, and CIDR notation.
- * - IPv4: 0-255.0-255.0-255.0-255
- * - IPv4 CIDR: 0-255.0-255.0-255.0-255/0-32
+ * - IPv4: Each octet validated as 0-255
+ * - IPv4 CIDR: IPv4/0-32
  * - IPv6: Colon-separated hex groups
  * - IPv6 CIDR: IPv6/0-128
+ *
+ * Note: This is a first-pass DTO validation. The service layer performs
+ * definitive validation via Node.js net.isIPv4()/net.isIPv6().
  */
-const IP_OR_CIDR_REGEX = /^(?:(?:\d{1,3}\.){3}\d{1,3}(?:\/\d{1,2})?|[0-9a-fA-F:]+(?:\/\d{1,3})?)$/;
+const IPV4_OCTET = '(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)';
+const IP_OR_CIDR_REGEX = new RegExp(
+  `^(?:${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}\\.${IPV4_OCTET}(?:\\/(?:3[0-2]|[12]?\\d))?|[0-9a-fA-F:]+(?:\\/(?:12[0-8]|1[01]\\d|[1-9]?\\d))?)$`,
+);
 
 export class CreateIpEntryDto {
   @ApiProperty({

@@ -6,7 +6,7 @@
  */
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import {
   NotFoundException,
   BadRequestException,
@@ -24,6 +24,7 @@ describe('IpAllowlistService', () => {
   let configRepo: jest.Mocked<Repository<IpAllowlistConfig>>;
   let redisService: jest.Mocked<RedisService>;
   let auditService: jest.Mocked<AuditService>;
+  let mockDataSource: jest.Mocked<DataSource>;
 
   const mockWorkspaceId = '11111111-1111-1111-1111-111111111111';
   const mockUserId = '22222222-2222-2222-2222-222222222222';
@@ -98,6 +99,12 @@ describe('IpAllowlistService', () => {
             log: jest.fn().mockResolvedValue(undefined),
           },
         },
+        {
+          provide: DataSource,
+          useValue: {
+            transaction: jest.fn(),
+          },
+        },
       ],
     }).compile();
 
@@ -106,6 +113,16 @@ describe('IpAllowlistService', () => {
     configRepo = module.get(getRepositoryToken(IpAllowlistConfig));
     redisService = module.get(RedisService) as jest.Mocked<RedisService>;
     auditService = module.get(AuditService) as jest.Mocked<AuditService>;
+    mockDataSource = module.get(DataSource) as jest.Mocked<DataSource>;
+
+    // Set up DataSource.transaction to execute the callback with a mock manager
+    // that delegates to the same entryRepo mock
+    mockDataSource.transaction.mockImplementation(async (cb: any) => {
+      const mockManager = {
+        getRepository: jest.fn().mockReturnValue(entryRepo),
+      };
+      return cb(mockManager);
+    });
   });
 
   // ==================== IP VALIDATION ====================

@@ -8,6 +8,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { IpAllowlistService } from '../../modules/ip-allowlist/services/ip-allowlist.service';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
+import { extractClientIp } from '../utils/extract-client-ip';
 
 export const SKIP_IP_CHECK_KEY = 'skip_ip_check';
 
@@ -56,7 +57,7 @@ export class IpAllowlistGuard implements CanActivate {
     }
 
     const userId = request.user?.id;
-    const clientIp = this.extractClientIp(request);
+    const clientIp = extractClientIp(request);
 
     // Workspace owner always has access (emergency bypass)
     if (request.workspaceRole === WorkspaceRole.OWNER) {
@@ -90,17 +91,4 @@ export class IpAllowlistGuard implements CanActivate {
     });
   }
 
-  /**
-   * Extract the real client IP from the request.
-   * Checks X-Forwarded-For header first (for reverse proxy/load balancer),
-   * then falls back to request.ip.
-   */
-  private extractClientIp(request: any): string {
-    const forwardedFor = request.headers['x-forwarded-for'];
-    if (forwardedFor) {
-      // X-Forwarded-For can be comma-separated; take the first (original client)
-      return forwardedFor.split(',')[0].trim();
-    }
-    return request.ip || request.connection?.remoteAddress || '0.0.0.0';
-  }
 }

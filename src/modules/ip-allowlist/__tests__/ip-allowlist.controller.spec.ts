@@ -111,14 +111,16 @@ describe('IpAllowlistController', () => {
       );
     });
 
-    it('should extract client IP from X-Forwarded-For', async () => {
-      const reqWithForwarded = {
+    it('should use request.ip for client IP extraction (trust proxy)', async () => {
+      const reqWithIp = {
         ...mockReq,
-        headers: { 'x-forwarded-for': '203.0.113.50, 10.0.0.1' },
+        ip: '203.0.113.50',
+        headers: { 'x-forwarded-for': '10.0.0.1, 192.168.0.1' },
       };
 
-      await controller.updateConfig(mockWorkspaceId, { isEnabled: true }, reqWithForwarded);
+      await controller.updateConfig(mockWorkspaceId, { isEnabled: true }, reqWithIp);
 
+      // Should use request.ip, NOT X-Forwarded-For
       expect(service.updateConfig).toHaveBeenCalledWith(
         mockWorkspaceId,
         mockUserId,
