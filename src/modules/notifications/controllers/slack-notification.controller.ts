@@ -409,6 +409,10 @@ export class SlackNotificationController {
     if (!integration) {
       throw new NotFoundException('No Slack integration found for this workspace');
     }
+    // Validate that the slackIntegrationId in the DTO belongs to this workspace
+    if (dto.slackIntegrationId !== integration.id) {
+      throw new BadRequestException('slackIntegrationId does not belong to this workspace');
+    }
     return this.notificationConfigService.upsertConfig(dto);
   }
 
@@ -449,14 +453,21 @@ export class SlackNotificationController {
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ): Promise<{ items: SlackInteractionLog[]; total: number }> {
-    const take = Math.min(Math.max(limit || 50, 1), 100);
-    const skip = Math.max(offset || 0, 0);
+    const parsedLimit = Number(limit);
+    const parsedOffset = Number(offset);
+    const take = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 50, 1), 100);
+    const skip = Math.max(Number.isFinite(parsedOffset) ? parsedOffset : 0, 0);
 
     const [items, total] = await this.interactionLogRepo.findAndCount({
       where: { workspaceId },
       order: { createdAt: 'DESC' },
       take,
       skip,
+      select: [
+        'id', 'workspaceId', 'slackUserId', 'devosUserId',
+        'interactionType', 'actionId', 'resultStatus',
+        'resultMessage', 'responseTimeMs', 'createdAt',
+      ],
     });
 
     return { items, total };

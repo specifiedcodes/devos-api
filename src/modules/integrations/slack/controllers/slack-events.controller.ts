@@ -156,8 +156,9 @@ export class SlackEventsController {
 
     this.logger.log(`Slack interaction received: ${payload.type} from team ${payload.team?.id}`);
 
-    // Deduplication check
-    const interactionId = payload.trigger_id || payload.callback_id || `${Date.now()}`;
+    // Deduplication check - use trigger_id, callback_id, or a composite of team+user+action for fallback
+    const interactionId = payload.trigger_id || payload.callback_id
+      || `${payload.team?.id || 'unknown'}:${payload.user?.id || 'unknown'}:${payload.actions?.[0]?.action_id || 'none'}:${Math.floor(Date.now() / 1000)}`;
     const dedupeKey = `slack-interaction:${interactionId}`;
     const isDuplicate = await this.redisService.get(dedupeKey);
     if (isDuplicate) {

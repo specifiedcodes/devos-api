@@ -66,12 +66,12 @@ export class CreateSlackNotificationConfigAndInteractionLog1770000000010 impleme
       true,
     );
 
-    // Unique index on (slack_integration_id, event_type)
+    // Unique index on (slack_integration_id, event_type, project_id) to allow per-project overrides
     await queryRunner.createIndex(
       'slack_notification_configs',
       new TableIndex({
-        name: 'IDX_slack_notif_config_integration_event',
-        columnNames: ['slack_integration_id', 'event_type'],
+        name: 'IDX_slack_notif_config_integration_event_project',
+        columnNames: ['slack_integration_id', 'event_type', 'project_id'],
         isUnique: true,
       }),
     );

@@ -345,12 +345,15 @@ export class SlackInteractionHandlerService {
           resultMessage = 'Help command executed';
           break;
 
-        default:
+        default: {
+          // Sanitize user-provided subcommand to prevent injection in logs/responses
+          const safeSubcommand = (subcommand || '(empty)').replace(/[`*_~<>]/g, '').substring(0, 50);
           response = this.buildEphemeralResponse(
-            `Unknown command: \`${subcommand || '(empty)'}\`\n` +
+            `Unknown command: \`${safeSubcommand}\`\n` +
             'Type `/devos help` for available commands.',
           );
-          resultMessage = `Unknown subcommand: ${subcommand}`;
+          resultMessage = `Unknown subcommand: ${safeSubcommand}`;
+        }
           break;
       }
     } catch (error) {
@@ -544,7 +547,13 @@ export class SlackInteractionHandlerService {
     for (const key of Object.keys(payload)) {
       if (sensitiveKeys.includes(key.toLowerCase())) {
         sanitized[key] = '[REDACTED]';
-      } else if (typeof payload[key] === 'object' && payload[key] !== null && !Array.isArray(payload[key])) {
+      } else if (Array.isArray(payload[key])) {
+        sanitized[key] = payload[key].map((item: any) =>
+          typeof item === 'object' && item !== null
+            ? this.sanitizePayload(item)
+            : item,
+        );
+      } else if (typeof payload[key] === 'object' && payload[key] !== null) {
         sanitized[key] = this.sanitizePayload(payload[key]);
       } else {
         sanitized[key] = payload[key];

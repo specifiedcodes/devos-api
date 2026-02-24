@@ -18,7 +18,7 @@ import {
 import { SlackIntegration } from './slack-integration.entity';
 
 @Entity('slack_notification_configs')
-@Index(['slackIntegrationId', 'eventType'], { unique: true })
+@Index(['slackIntegrationId', 'eventType', 'projectId'], { unique: true })
 @Index(['slackIntegrationId'])
 @Index(['projectId'])
 export class SlackNotificationConfig {

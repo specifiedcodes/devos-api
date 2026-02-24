@@ -8,7 +8,7 @@
 
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { IsNull, Repository } from 'typeorm';
 import { SlackNotificationConfig } from '../../../../database/entities/slack-notification-config.entity';
 import { SlackIntegration } from '../../../../database/entities/slack-integration.entity';
 import { RedisService } from '../../../redis/redis.service';
@@ -44,11 +44,13 @@ export class SlackNotificationConfigService {
    * Upserts based on (slackIntegrationId, eventType).
    */
   async upsertConfig(dto: UpsertNotificationConfigDto): Promise<SlackNotificationConfig> {
-    // Check if config already exists for this integration + event type
+    // Check if config already exists for this integration + event type + project
+    const projectId = dto.projectId || null;
     const existing = await this.configRepo.findOne({
       where: {
         slackIntegrationId: dto.slackIntegrationId,
         eventType: dto.eventType,
+        projectId: projectId === null ? IsNull() : projectId,
       },
     });
 
