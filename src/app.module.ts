@@ -137,6 +137,9 @@ import { GeoRestriction } from './database/entities/geo-restriction.entity';
 import { GeoRestrictionModule } from './modules/geo-restriction/geo-restriction.module';
 import { PermissionAuditEvent } from './database/entities/permission-audit-event.entity';
 import { PermissionAuditModule } from './modules/permission-audit/permission-audit.module';
+import { ApiToken } from './database/entities/api-token.entity';
+import { PermissionWebhook } from './database/entities/permission-webhook.entity';
+import { PermissionAnalyticsModule } from './modules/permission-analytics/permission-analytics.module';
 
 @Module({
   imports: [
@@ -233,6 +236,8 @@ import { PermissionAuditModule } from './modules/permission-audit/permission-aud
         IpAllowlistConfig,
         GeoRestriction,
         PermissionAuditEvent,
+        ApiToken,
+        PermissionWebhook,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -302,6 +307,7 @@ import { PermissionAuditModule } from './modules/permission-audit/permission-aud
     IpAllowlistModule,
     GeoRestrictionModule,
     PermissionAuditModule,
+    PermissionAnalyticsModule,
   ],
   controllers: [AppController],
   providers: [
