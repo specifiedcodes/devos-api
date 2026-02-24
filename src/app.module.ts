@@ -147,6 +147,9 @@ import { DiscordNotificationConfig } from './database/entities/discord-notificat
 import { LinearIntegrationModule } from './modules/integrations/linear/linear-integration.module';
 import { LinearIntegration } from './database/entities/linear-integration.entity';
 import { LinearSyncItem } from './database/entities/linear-sync-item.entity';
+import { JiraIntegrationModule } from './modules/integrations/jira/jira-integration.module';
+import { JiraIntegration } from './database/entities/jira-integration.entity';
+import { JiraSyncItem } from './database/entities/jira-sync-item.entity';
 
 @Module({
   imports: [
@@ -249,6 +252,8 @@ import { LinearSyncItem } from './database/entities/linear-sync-item.entity';
         DiscordNotificationConfig,
         LinearIntegration,
         LinearSyncItem,
+        JiraIntegration,
+        JiraSyncItem,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -322,6 +327,7 @@ import { LinearSyncItem } from './database/entities/linear-sync-item.entity';
     SlackIntegrationModule,
     DiscordIntegrationModule,
     LinearIntegrationModule,
+    JiraIntegrationModule,
   ],
   controllers: [AppController],
   providers: [
