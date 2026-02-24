@@ -29,7 +29,7 @@ import { InvitationResponseDto } from './dto/invitation-response.dto';
 import { WorkspaceMemberDto } from './dto/workspace-member.dto';
 import { ChangeMemberRoleDto } from './dto/change-member-role.dto';
 import { TransferOwnershipDto } from './dto/transfer-ownership.dto';
-import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { UpdateMemberRoleDto, EnrichedMemberResponse } from './dto/update-member-role.dto';
 import { BulkUpdateMemberRolesDto } from './dto/bulk-update-member-roles.dto';
 import { InvitationStatus } from '../../database/entities/workspace-invitation.entity';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
@@ -286,7 +286,7 @@ export class WorkspacesController {
     @Param('memberId', ParseUUIDPipe) memberId: string,
     @Body() dto: UpdateMemberRoleDto,
     @Request() req: any,
-  ): Promise<any> {
+  ): Promise<EnrichedMemberResponse> {
     return this.workspacesService.updateMemberRoleWithCustom(
       workspaceId,
       memberId,

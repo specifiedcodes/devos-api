@@ -13,8 +13,12 @@ import {
   IsUUID,
   IsEnum,
   ValidateIf,
+  Validate,
+  ValidatorConstraint,
+  ValidatorConstraintInterface,
+  ValidationArguments,
 } from 'class-validator';
-import { ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export enum SystemRole {
   OWNER = 'owner',
@@ -35,4 +39,23 @@ export class UpdateMemberRoleDto {
   @IsUUID()
   @ValidateIf((o) => !o.role)
   customRoleId?: string;
+}
+
+/**
+ * Enriched member response with role display info.
+ * Used as the return type for updateMemberRoleWithCustom and GET /members.
+ * Replaces the previous `Promise<any>` return type for type safety.
+ */
+export interface EnrichedMemberResponse {
+  id: string;
+  userId: string;
+  name: string | null;
+  email: string;
+  role: string;
+  roleName: string;
+  customRoleId: string | null;
+  customRoleName: string | null;
+  lastActiveAt: string | null;
+  joinedAt: string | Date;
+  avatarUrl: string | null;
 }

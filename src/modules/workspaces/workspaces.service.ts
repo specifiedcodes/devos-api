@@ -15,7 +15,7 @@ import { CreateWorkspaceDto } from './dto/create-workspace.dto';
 import { WorkspaceResponseDto } from './dto/workspace-response.dto';
 import { CreateInvitationDto } from './dto/create-invitation.dto';
 import { InvitationResponseDto } from './dto/invitation-response.dto';
-import { UpdateMemberRoleDto, SystemRole } from './dto/update-member-role.dto';
+import { UpdateMemberRoleDto, SystemRole, EnrichedMemberResponse } from './dto/update-member-role.dto';
 import { BulkUpdateMemberRolesDto } from './dto/bulk-update-member-roles.dto';
 import { RedisService } from '../redis/redis.service';
 import { EmailService } from '../email/email.service';
@@ -1419,7 +1419,7 @@ export class WorkspacesService {
     memberId: string,
     dto: UpdateMemberRoleDto,
     actorId: string,
-  ): Promise<any> {
+  ): Promise<EnrichedMemberResponse> {
     // 1. Find the member
     const member = await this.workspaceMemberRepository.findOne({
       where: { id: memberId, workspaceId },
@@ -1437,7 +1437,12 @@ export class WorkspacesService {
       customRoleName: member.customRole?.displayName ?? null,
     };
 
-    // 2. Validate based on whether system role or custom role is being assigned
+    // 2. Reject if both role and customRoleId are provided
+    if (dto.role && dto.customRoleId) {
+      throw new BadRequestException('Provide either role or customRoleId, not both');
+    }
+
+    // 3. Validate based on whether system role or custom role is being assigned
     if (dto.role) {
       const newRole = dto.role as unknown as WorkspaceRole;
 
@@ -1569,6 +1574,11 @@ export class WorkspacesService {
     dto: BulkUpdateMemberRolesDto,
     actorId: string,
   ): Promise<void> {
+    // Reject if both role and customRoleId are provided
+    if (dto.role && dto.customRoleId) {
+      throw new BadRequestException('Provide either role or customRoleId, not both');
+    }
+
     // Find all members
     const members = await this.workspaceMemberRepository.find({
       where: {
