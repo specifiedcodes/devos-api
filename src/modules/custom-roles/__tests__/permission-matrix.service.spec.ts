@@ -28,6 +28,7 @@ import {
 } from '../../../database/entities/workspace-member.entity';
 import { AuditService } from '../../../shared/audit/audit.service';
 import { PermissionCacheService } from '../services/permission-cache.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
 
 describe('PermissionMatrixService', () => {
   let service: PermissionMatrixService;
@@ -146,6 +147,12 @@ describe('PermissionMatrixService', () => {
             invalidateUserPermissions: jest.fn().mockResolvedValue(undefined),
             invalidateAll: jest.fn().mockResolvedValue(undefined),
             checkPermission: jest.fn(),
+          },
+        },
+        {
+          provide: PermissionAuditService,
+          useValue: {
+            record: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

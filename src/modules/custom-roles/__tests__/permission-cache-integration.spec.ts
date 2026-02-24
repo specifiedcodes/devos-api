@@ -22,6 +22,7 @@ import {
 } from '../../../database/entities/workspace-member.entity';
 import { AuditService } from '../../../shared/audit/audit.service';
 import { RedisService } from '../../redis/redis.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
 
 describe('Permission Cache Invalidation Integration', () => {
   const mockWorkspaceId = '11111111-1111-1111-1111-111111111111';
@@ -94,6 +95,7 @@ describe('Permission Cache Invalidation Integration', () => {
           { provide: AuditService, useValue: auditService },
           { provide: DataSource, useValue: dataSource },
           { provide: PermissionCacheService, useValue: cacheService },
+          { provide: PermissionAuditService, useValue: { record: jest.fn().mockResolvedValue(undefined) } },
         ],
       }).compile();
 
@@ -193,6 +195,7 @@ describe('Permission Cache Invalidation Integration', () => {
           { provide: AuditService, useValue: auditService },
           { provide: DataSource, useValue: dataSource },
           { provide: PermissionCacheService, useValue: cacheService },
+          { provide: PermissionAuditService, useValue: { record: jest.fn().mockResolvedValue(undefined) } },
         ],
       }).compile();
 

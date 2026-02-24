@@ -6,6 +6,7 @@ import { WorkspaceMember } from '../../database/entities/workspace-member.entity
 import { CustomRoleService } from './services/custom-role.service';
 import { PermissionMatrixService } from './services/permission-matrix.service';
 import { PermissionCacheService } from './services/permission-cache.service';
+import { RoleTemplateService } from './services/role-template.service';
 import { CustomRoleController } from './controllers/custom-role.controller';
 import { PermissionMatrixController } from './controllers/permission-matrix.controller';
 import { PermissionAuditModule } from '../permission-audit/permission-audit.module';
@@ -16,7 +17,7 @@ import { PermissionAuditModule } from '../permission-audit/permission-audit.modu
     PermissionAuditModule,
   ],
   controllers: [CustomRoleController, PermissionMatrixController],
-  providers: [CustomRoleService, PermissionMatrixService, PermissionCacheService],
-  exports: [CustomRoleService, PermissionMatrixService, PermissionCacheService],
+  providers: [CustomRoleService, PermissionMatrixService, PermissionCacheService, RoleTemplateService],
+  exports: [CustomRoleService, PermissionMatrixService, PermissionCacheService, RoleTemplateService],
 })
 export class CustomRolesModule {}

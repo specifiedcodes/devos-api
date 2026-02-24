@@ -11,3 +11,4 @@ export {
   PermissionMatrixResponseDto,
   EffectivePermissionsResponseDto,
 } from './permission-matrix-response.dto';
+export { CreateRoleFromTemplateDto } from './create-from-template.dto';

@@ -23,17 +23,22 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { CustomRoleService } from '../services/custom-role.service';
+import { RoleTemplateService } from '../services/role-template.service';
 import { CreateCustomRoleDto } from '../dto/create-custom-role.dto';
 import { UpdateCustomRoleDto } from '../dto/update-custom-role.dto';
 import { CloneCustomRoleDto } from '../dto/clone-custom-role.dto';
 import { ReorderRolesDto } from '../dto/reorder-roles.dto';
+import { CreateRoleFromTemplateDto } from '../dto/create-from-template.dto';
 
 @ApiTags('Custom Roles')
 @ApiBearerAuth('JWT-auth')
 @Controller('api/v1/workspaces/:workspaceId/roles')
 @UseGuards(JwtAuthGuard, RoleGuard)
 export class CustomRoleController {
-  constructor(private readonly customRoleService: CustomRoleService) {}
+  constructor(
+    private readonly customRoleService: CustomRoleService,
+    private readonly roleTemplateService: RoleTemplateService,
+  ) {}
 
   // === Static routes MUST be defined BEFORE dynamic routes ===
 
@@ -45,6 +50,50 @@ export class CustomRoleController {
     @Param('workspaceId', ParseUUIDPipe) _workspaceId: string,
   ): Promise<{ icons: string[] }> {
     return { icons: this.customRoleService.getAvailableIcons() };
+  }
+
+  @Get('templates')
+  @ApiOperation({ summary: 'List all available role templates' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 200, description: 'Template list retrieved' })
+  async listTemplates(
+    @Param('workspaceId', ParseUUIDPipe) _workspaceId: string,
+  ): Promise<{ templates: any[] }> {
+    return { templates: this.roleTemplateService.listTemplates() };
+  }
+
+  @Get('templates/:templateId')
+  @ApiOperation({ summary: 'Get a single role template with full permission details' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'templateId', type: 'string' })
+  @ApiResponse({ status: 200, description: 'Template details retrieved' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async getTemplate(
+    @Param('workspaceId', ParseUUIDPipe) _workspaceId: string,
+    @Param('templateId') templateId: string,
+  ): Promise<any> {
+    return this.roleTemplateService.getTemplate(templateId);
+  }
+
+  @Post('from-template')
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create a custom role from a template' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 201, description: 'Role created from template' })
+  @ApiResponse({ status: 400, description: 'Invalid input or max roles reached' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async createRoleFromTemplate(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: CreateRoleFromTemplateDto,
+    @Req() req: any,
+  ): Promise<any> {
+    return this.roleTemplateService.createRoleFromTemplate(
+      workspaceId,
+      dto,
+      req.user.id,
+    );
   }
 
   @Put('reorder')
@@ -199,6 +248,28 @@ export class CustomRoleController {
       roleId,
       workspaceId,
       dto,
+      req.user.id,
+    );
+  }
+
+  @Post(':roleId/reset-to-template')
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Reset a role\'s permissions to its template defaults' })
+  @ApiParam({ name: 'workspaceId', type: 'string', format: 'uuid' })
+  @ApiParam({ name: 'roleId', type: 'string', format: 'uuid' })
+  @ApiResponse({ status: 204, description: 'Permissions reset to template defaults' })
+  @ApiResponse({ status: 400, description: 'Role was not created from a template' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Role not found' })
+  async resetToTemplate(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('roleId', ParseUUIDPipe) roleId: string,
+    @Req() req: any,
+  ): Promise<void> {
+    await this.roleTemplateService.resetRoleToTemplate(
+      roleId,
+      workspaceId,
       req.user.id,
     );
   }

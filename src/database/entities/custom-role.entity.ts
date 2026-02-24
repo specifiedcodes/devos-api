@@ -100,6 +100,12 @@ export class CustomRole {
   @Column({ type: 'int', name: 'priority_order', default: 0 })
   priority!: number;
 
+  @Column({ type: 'varchar', length: 50, name: 'template_id', nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  templateId!: string | null;
+
   @Column({ type: 'uuid', name: 'created_by', nullable: true })
   @IsOptional()
   @IsUUID()

@@ -8,6 +8,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { APP_GUARD } from '@nestjs/core';
 import { CustomRoleController } from '../controllers/custom-role.controller';
 import { CustomRoleService } from '../services/custom-role.service';
+import { RoleTemplateService } from '../services/role-template.service';
 import { BaseRole, CustomRole } from '../../../database/entities/custom-role.entity';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -73,6 +74,15 @@ describe('CustomRoleController', () => {
             reorderRoles: jest.fn().mockResolvedValue(undefined),
             getRoleMembers: jest.fn().mockResolvedValue([]),
             getAvailableIcons: jest.fn().mockReturnValue(['shield', 'crown']),
+          },
+        },
+        {
+          provide: RoleTemplateService,
+          useValue: {
+            listTemplates: jest.fn().mockReturnValue([]),
+            getTemplate: jest.fn(),
+            createRoleFromTemplate: jest.fn(),
+            resetRoleToTemplate: jest.fn(),
           },
         },
       ],

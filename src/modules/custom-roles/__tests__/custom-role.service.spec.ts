@@ -18,6 +18,7 @@ import { CustomRole, BaseRole } from '../../../database/entities/custom-role.ent
 import { WorkspaceMember, WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { AuditService } from '../../../shared/audit/audit.service';
 import { PermissionCacheService } from '../services/permission-cache.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
 
 describe('CustomRoleService', () => {
   let service: CustomRoleService;
@@ -117,6 +118,12 @@ describe('CustomRoleService', () => {
             invalidateRolePermissions: jest.fn().mockResolvedValue(undefined),
             invalidateUserPermissions: jest.fn().mockResolvedValue(undefined),
             invalidateAll: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        {
+          provide: PermissionAuditService,
+          useValue: {
+            record: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],
