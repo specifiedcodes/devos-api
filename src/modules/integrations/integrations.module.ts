@@ -29,6 +29,15 @@ import { DeploymentRollback } from '../../database/entities/deployment-rollback.
 import { ProjectPreferences } from '../../database/entities/project-preferences.entity';
 import { OnboardingModule } from '../onboarding/onboarding.module';
 import { NotificationModule } from '../notification/notification.module';
+// Story 21-7: Integration Management aggregation
+import { IntegrationManagementService } from './services/integration-management.service';
+import { IntegrationManagementController } from './services/integration-management.controller';
+import { SlackIntegration } from '../../database/entities/slack-integration.entity';
+import { DiscordIntegration } from '../../database/entities/discord-integration.entity';
+import { LinearIntegration } from '../../database/entities/linear-integration.entity';
+import { JiraIntegration } from '../../database/entities/jira-integration.entity';
+import { LinearSyncItem } from '../../database/entities/linear-sync-item.entity';
+import { JiraSyncItem } from '../../database/entities/jira-sync-item.entity';
 
 /**
  * IntegrationsModule
@@ -55,7 +64,20 @@ import { NotificationModule } from '../notification/notification.module';
  */
 @Module({
   imports: [
-    TypeOrmModule.forFeature([IntegrationConnection, Project, DeploymentApproval, DeploymentRollback, ProjectPreferences]),
+    TypeOrmModule.forFeature([
+      IntegrationConnection,
+      Project,
+      DeploymentApproval,
+      DeploymentRollback,
+      ProjectPreferences,
+      // Story 21-7: Integration Management aggregation
+      SlackIntegration,
+      DiscordIntegration,
+      LinearIntegration,
+      JiraIntegration,
+      LinearSyncItem,
+      JiraSyncItem,
+    ]),
     HttpModule.register({
       timeout: 15000, // 15 second timeout for external API calls (GitHub, Railway, Vercel)
       maxRedirects: 5,
@@ -75,8 +97,9 @@ import { NotificationModule } from '../notification/notification.module';
     DeploymentMonitoringController,
     DeploymentApprovalController,
     DeploymentRollbackController,
+    IntegrationManagementController, // Story 21-7
   ],
-  providers: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService],
-  exports: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService],
+  providers: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService],
+  exports: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService],
 })
 export class IntegrationsModule {}
