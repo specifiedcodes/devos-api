@@ -38,6 +38,9 @@ import { LinearIntegration } from '../../database/entities/linear-integration.en
 import { JiraIntegration } from '../../database/entities/jira-integration.entity';
 import { LinearSyncItem } from '../../database/entities/linear-sync-item.entity';
 import { JiraSyncItem } from '../../database/entities/jira-sync-item.entity';
+// Story 21-8: Webhook Management
+import { WebhookModule } from './webhooks/webhook.module';
+import { OutgoingWebhook } from '../../database/entities/outgoing-webhook.entity';
 
 /**
  * IntegrationsModule
@@ -77,6 +80,7 @@ import { JiraSyncItem } from '../../database/entities/jira-sync-item.entity';
       JiraIntegration,
       LinearSyncItem,
       JiraSyncItem,
+      OutgoingWebhook, // Story 21-8: Webhook Management
     ]),
     HttpModule.register({
       timeout: 15000, // 15 second timeout for external API calls (GitHub, Railway, Vercel)
@@ -84,6 +88,7 @@ import { JiraSyncItem } from '../../database/entities/jira-sync-item.entity';
     }),
     OnboardingModule,
     NotificationModule,
+    WebhookModule, // Story 21-8: Webhook Management
   ],
   controllers: [
     IntegrationController,

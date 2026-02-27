@@ -17,6 +17,7 @@ import { LinearIntegration } from '../../../database/entities/linear-integration
 import { JiraIntegration } from '../../../database/entities/jira-integration.entity';
 import { LinearSyncItem } from '../../../database/entities/linear-sync-item.entity';
 import { JiraSyncItem } from '../../../database/entities/jira-sync-item.entity';
+import { OutgoingWebhook } from '../../../database/entities/outgoing-webhook.entity';
 import { RedisService } from '../../redis/redis.service';
 
 // ==================== Enums ====================
@@ -151,6 +152,8 @@ export class IntegrationManagementService {
     private readonly linearSyncItemRepo: Repository<LinearSyncItem>,
     @InjectRepository(JiraSyncItem)
     private readonly jiraSyncItemRepo: Repository<JiraSyncItem>,
+    @InjectRepository(OutgoingWebhook)
+    private readonly outgoingWebhookRepo: Repository<OutgoingWebhook>,
     private readonly redisService: RedisService,
   ) {}
 
@@ -230,13 +233,14 @@ export class IntegrationManagementService {
     type ActivityItem = { type: IntegrationType; event: string; timestamp: string; details?: string };
 
     // Fetch all integration activities in parallel for performance
-    const [slackActivities, discordActivities, linearActivities, jiraActivities, connectionActivities] =
+    const [slackActivities, discordActivities, linearActivities, jiraActivities, connectionActivities, webhookActivities] =
       await Promise.all([
         this.fetchSlackActivity(workspaceId),
         this.fetchDiscordActivity(workspaceId),
         this.fetchLinearActivity(workspaceId),
         this.fetchJiraActivity(workspaceId),
         this.fetchConnectionActivity(workspaceId),
+        this.fetchWebhookActivity(workspaceId),
       ]);
 
     const activities: ActivityItem[] = [
@@ -245,6 +249,7 @@ export class IntegrationManagementService {
       ...linearActivities,
       ...jiraActivities,
       ...connectionActivities,
+      ...webhookActivities,
     ];
 
     // Sort by timestamp descending, then limit
@@ -495,7 +500,7 @@ export class IntegrationManagementService {
       case IntegrationType.JIRA:
         return this.fetchJiraStatus(workspaceId);
       case IntegrationType.WEBHOOKS:
-        return this.createComingSoonStatus(type);
+        return this.fetchWebhookStatus(workspaceId);
       default:
         return this.createDefaultStatus(type);
     }
@@ -807,7 +812,7 @@ export class IntegrationManagementService {
       connected: false,
       status: 'disconnected',
       configUrl: this.getConfigUrl(type),
-      available: type !== IntegrationType.WEBHOOKS,
+      available: true,
     };
   }
 
@@ -821,7 +826,7 @@ export class IntegrationManagementService {
       connected: false,
       status: 'error',
       configUrl: this.getConfigUrl(type),
-      available: type !== IntegrationType.WEBHOOKS,
+      available: true,
     };
   }
 
@@ -837,6 +842,72 @@ export class IntegrationManagementService {
       configUrl: this.getConfigUrl(type),
       available: false,
     };
+  }
+
+  private async fetchWebhookStatus(workspaceId: string): Promise<UnifiedIntegrationStatus> {
+    const meta = INTEGRATION_METADATA[IntegrationType.WEBHOOKS];
+    const webhooks = await this.outgoingWebhookRepo.find({
+      where: { workspaceId },
+    });
+
+    if (webhooks.length === 0) {
+      return {
+        type: IntegrationType.WEBHOOKS,
+        name: meta.name,
+        description: meta.description,
+        category: meta.category,
+        connected: false,
+        status: 'disconnected',
+        configUrl: this.getConfigUrl(IntegrationType.WEBHOOKS),
+        available: true,
+      };
+    }
+
+    const activeCount = webhooks.filter(w => w.isActive).length;
+    const errorCount = webhooks.reduce((sum, w) => sum + w.failureCount, 0);
+    const hasErrors = webhooks.some(w => w.consecutiveFailures >= w.maxConsecutiveFailures);
+    const lastTriggered = webhooks
+      .filter(w => w.lastTriggeredAt)
+      .sort((a, b) => (b.lastTriggeredAt?.getTime() || 0) - (a.lastTriggeredAt?.getTime() || 0))[0];
+
+    return {
+      type: IntegrationType.WEBHOOKS,
+      name: meta.name,
+      description: meta.description,
+      category: meta.category,
+      connected: activeCount > 0,
+      status: hasErrors ? 'error' : activeCount > 0 ? 'active' : 'disconnected',
+      accountLabel: `${activeCount} active, ${webhooks.length} total`,
+      lastActivityAt: lastTriggered?.lastTriggeredAt?.toISOString(),
+      errorCount,
+      configUrl: this.getConfigUrl(IntegrationType.WEBHOOKS),
+      available: true,
+    };
+  }
+
+  private async fetchWebhookActivity(
+    workspaceId: string,
+  ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
+    try {
+      const webhooks = await this.outgoingWebhookRepo.find({
+        where: { workspaceId },
+      });
+      const items: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
+      for (const webhook of webhooks) {
+        if (webhook.lastTriggeredAt) {
+          items.push({
+            type: IntegrationType.WEBHOOKS,
+            event: webhook.lastDeliveryStatus === 'success' ? 'delivery_success' : 'delivery_failed',
+            timestamp: webhook.lastTriggeredAt.toISOString(),
+            details: `Webhook "${webhook.name}"`,
+          });
+        }
+      }
+      return items;
+    } catch (err) {
+      this.logger.warn('Failed to fetch webhook activity', err);
+      return [];
+    }
   }
 
   private getConfigUrl(type: IntegrationType): string {
