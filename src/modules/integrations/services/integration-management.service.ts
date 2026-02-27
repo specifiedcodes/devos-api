@@ -830,20 +830,6 @@ export class IntegrationManagementService {
     };
   }
 
-  private createComingSoonStatus(type: IntegrationType): UnifiedIntegrationStatus {
-    const meta = INTEGRATION_METADATA[type];
-    return {
-      type,
-      name: meta?.name || type,
-      description: meta?.description || '',
-      category: meta?.category || IntegrationCategory.CUSTOM,
-      connected: false,
-      status: 'coming-soon',
-      configUrl: this.getConfigUrl(type),
-      available: false,
-    };
-  }
-
   private async fetchWebhookStatus(workspaceId: string): Promise<UnifiedIntegrationStatus> {
     const meta = INTEGRATION_METADATA[IntegrationType.WEBHOOKS];
     const webhooks = await this.outgoingWebhookRepo.find({

@@ -7,9 +7,10 @@
 
 import {
   IsNotEmpty, IsOptional, IsString, IsBoolean, IsArray,
-  IsUrl, IsInt, Min, Max, MaxLength, ArrayMaxSize,
+  IsUrl, IsInt, Min, Max, MaxLength, ArrayMaxSize, IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { DeliveryStatus } from '../../../../database/entities/webhook-delivery-log.entity';
 
 export class CreateWebhookDto {
   @IsNotEmpty()
@@ -89,7 +90,9 @@ export class DeliveryLogQueryDto {
   offset?: number;
 
   @IsOptional()
-  @IsString()
+  @IsIn(Object.values(DeliveryStatus), {
+    message: `status must be one of: ${Object.values(DeliveryStatus).join(', ')}`,
+  })
   status?: string;
 }
 

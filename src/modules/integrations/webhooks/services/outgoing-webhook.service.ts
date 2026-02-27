@@ -76,9 +76,9 @@ export class OutgoingWebhookService {
     const rawSecret = crypto.randomBytes(32).toString('hex');
     const encryptedSecret = this.encryptionService.encrypt(rawSecret);
 
-    // Encrypt headers if provided - store encrypted string in headers field
-    const encryptedHeaders = dto.headers && Object.keys(dto.headers).length > 0
-      ? this.encryptHeaders(dto.headers)
+    // Encrypt headers if provided - wrap encrypted string in object for JSONB storage
+    const encryptedHeaders: Record<string, string> = dto.headers && Object.keys(dto.headers).length > 0
+      ? { _encrypted: this.encryptionService.encrypt(JSON.stringify(dto.headers)) }
       : {};
 
     const webhook = this.webhookRepo.create({
@@ -169,10 +169,9 @@ export class OutgoingWebhookService {
     }
 
     if (dto.headers !== undefined) {
-      const encryptedHeaders = Object.keys(dto.headers).length > 0
-        ? this.encryptHeaders(dto.headers)
+      updates.headers = Object.keys(dto.headers).length > 0
+        ? { _encrypted: this.encryptionService.encrypt(JSON.stringify(dto.headers)) }
         : {};
-      updates.headers = encryptedHeaders;
     }
 
     await this.webhookRepo.update({ id: webhookId }, updates);
@@ -373,13 +372,15 @@ export class OutgoingWebhookService {
 
     // Queue delivery for each webhook
     for (const webhook of subscribedWebhooks) {
-      // Truncate payload if too large
+      // Truncate payload if too large - store a safe summary instead of broken JSON parse
       const payloadStr = JSON.stringify(payload);
-      let finalPayload = payload;
+      let finalPayload: Record<string, unknown> = payload;
       if (payloadStr.length > MAX_PAYLOAD_SIZE) {
         finalPayload = {
-          ...JSON.parse(payloadStr.substring(0, MAX_PAYLOAD_SIZE - 100)),
           _truncated: true,
+          _originalSize: payloadStr.length,
+          event: payload.event || eventType,
+          timestamp: payload.timestamp || new Date().toISOString(),
         };
       }
 
@@ -512,28 +513,31 @@ export class OutgoingWebhookService {
   }
 
   /**
-   * Handle webhook delivery failure: increment failures, auto-disable if threshold reached.
+   * Handle webhook delivery failure: atomically increment failures, auto-disable if threshold reached.
+   * Uses atomic SQL SET col = col + 1 to avoid TOCTOU race conditions under concurrent deliveries.
    */
   private async handleDeliveryFailure(webhook: OutgoingWebhook): Promise<void> {
-    const newConsecutiveFailures = webhook.consecutiveFailures + 1;
-    const newFailureCount = webhook.failureCount + 1;
+    // Atomic increment to avoid race conditions when multiple deliveries fail concurrently
+    await this.webhookRepo
+      .createQueryBuilder()
+      .update(OutgoingWebhook)
+      .set({
+        consecutiveFailures: () => 'consecutive_failures + 1',
+        failureCount: () => 'failure_count + 1',
+        lastTriggeredAt: new Date(),
+        lastDeliveryStatus: 'failed',
+      } as any)
+      .where('id = :id', { id: webhook.id })
+      .execute();
 
-    const updates: Partial<OutgoingWebhook> = {
-      consecutiveFailures: newConsecutiveFailures,
-      failureCount: newFailureCount,
-      lastTriggeredAt: new Date(),
-      lastDeliveryStatus: 'failed',
-    };
-
-    // Auto-disable if threshold reached
-    if (newConsecutiveFailures >= webhook.maxConsecutiveFailures) {
-      updates.isActive = false;
+    // Re-read to check auto-disable threshold
+    const updated = await this.webhookRepo.findOne({ where: { id: webhook.id } });
+    if (updated && updated.consecutiveFailures >= updated.maxConsecutiveFailures && updated.isActive) {
+      await this.webhookRepo.update({ id: webhook.id }, { isActive: false });
       this.logger.warn(
-        `Webhook ${webhook.id} auto-disabled after ${newConsecutiveFailures} consecutive failures`,
+        `Webhook ${webhook.id} auto-disabled after ${updated.consecutiveFailures} consecutive failures`,
       );
     }
-
-    await this.webhookRepo.update({ id: webhook.id }, updates);
 
     // Invalidate cache on failure (status or active state changed)
     await this.invalidateCache(webhook.workspaceId);
@@ -599,25 +603,16 @@ export class OutgoingWebhookService {
   }
 
   /**
-   * Encrypt custom headers for storage.
-   */
-  private encryptHeaders(headers: Record<string, string>): string {
-    return this.encryptionService.encrypt(JSON.stringify(headers));
-  }
-
-  /**
    * Decrypt custom headers from storage.
+   * Headers are stored as { _encrypted: "encrypted_string" } in JSONB.
    */
   private decryptHeaders(headers: Record<string, string>): Record<string, string> {
-    // If headers appear to be encrypted (contain the iv:authTag:ciphertext format)
-    const headerStr = typeof headers === 'string' ? headers : JSON.stringify(headers);
-    try {
-      const decrypted = this.encryptionService.decrypt(headerStr);
+    if (headers._encrypted) {
+      const decrypted = this.encryptionService.decrypt(headers._encrypted);
       return JSON.parse(decrypted);
-    } catch {
-      // If decryption fails, headers may not be encrypted; return as-is
-      return typeof headers === 'string' ? JSON.parse(headers) : headers;
     }
+    // Legacy or unencrypted headers - return as-is (excluding internal keys)
+    return headers;
   }
 
   /**

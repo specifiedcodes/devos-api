@@ -4,6 +4,11 @@
  *
  * REST controller for webhook management endpoints.
  * All endpoints require workspace admin or owner role.
+ *
+ * IMPORTANT: Route ordering matters in NestJS. More specific sub-resource routes
+ * (e.g., ':webhookId/deliveries', ':webhookId/test') must be declared BEFORE
+ * the generic ':webhookId' param route to prevent the param from matching
+ * literal path segments like 'deliveries' or 'test'.
  */
 
 import {
@@ -65,49 +70,7 @@ export class OutgoingWebhookController {
     return { ...webhook, secret };
   }
 
-  /**
-   * GET /api/v1/workspaces/:workspaceId/webhooks/:webhookId
-   * Get a single webhook by ID.
-   */
-  @Get(':webhookId')
-  @UseGuards(RoleGuard)
-  @Roles(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
-  async getWebhook(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('webhookId', ParseUUIDPipe) webhookId: string,
-  ): Promise<WebhookResponseDto> {
-    return this.outgoingWebhookService.getWebhook(workspaceId, webhookId);
-  }
-
-  /**
-   * PUT /api/v1/workspaces/:workspaceId/webhooks/:webhookId
-   * Update webhook configuration.
-   */
-  @Put(':webhookId')
-  @UseGuards(RoleGuard)
-  @Roles(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
-  async updateWebhook(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('webhookId', ParseUUIDPipe) webhookId: string,
-    @Body() dto: UpdateWebhookDto,
-  ): Promise<WebhookResponseDto> {
-    return this.outgoingWebhookService.updateWebhook(workspaceId, webhookId, dto);
-  }
-
-  /**
-   * DELETE /api/v1/workspaces/:workspaceId/webhooks/:webhookId
-   * Delete a webhook and all its delivery logs.
-   */
-  @Delete(':webhookId')
-  @HttpCode(204)
-  @UseGuards(RoleGuard)
-  @Roles(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
-  async deleteWebhook(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('webhookId', ParseUUIDPipe) webhookId: string,
-  ): Promise<void> {
-    return this.outgoingWebhookService.deleteWebhook(workspaceId, webhookId);
-  }
+  // --- Sub-resource routes MUST come before the generic :webhookId route ---
 
   /**
    * POST /api/v1/workspaces/:workspaceId/webhooks/:webhookId/test
@@ -166,5 +129,51 @@ export class OutgoingWebhookController {
     @Param('deliveryId', ParseUUIDPipe) deliveryId: string,
   ): Promise<DeliveryLogResponseDto> {
     return this.outgoingWebhookService.retryDelivery(workspaceId, webhookId, deliveryId);
+  }
+
+  // --- Generic :webhookId routes come AFTER sub-resource routes ---
+
+  /**
+   * GET /api/v1/workspaces/:workspaceId/webhooks/:webhookId
+   * Get a single webhook by ID.
+   */
+  @Get(':webhookId')
+  @UseGuards(RoleGuard)
+  @Roles(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  async getWebhook(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('webhookId', ParseUUIDPipe) webhookId: string,
+  ): Promise<WebhookResponseDto> {
+    return this.outgoingWebhookService.getWebhook(workspaceId, webhookId);
+  }
+
+  /**
+   * PUT /api/v1/workspaces/:workspaceId/webhooks/:webhookId
+   * Update webhook configuration.
+   */
+  @Put(':webhookId')
+  @UseGuards(RoleGuard)
+  @Roles(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  async updateWebhook(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('webhookId', ParseUUIDPipe) webhookId: string,
+    @Body() dto: UpdateWebhookDto,
+  ): Promise<WebhookResponseDto> {
+    return this.outgoingWebhookService.updateWebhook(workspaceId, webhookId, dto);
+  }
+
+  /**
+   * DELETE /api/v1/workspaces/:workspaceId/webhooks/:webhookId
+   * Delete a webhook and all its delivery logs.
+   */
+  @Delete(':webhookId')
+  @HttpCode(204)
+  @UseGuards(RoleGuard)
+  @Roles(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  async deleteWebhook(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('webhookId', ParseUUIDPipe) webhookId: string,
+  ): Promise<void> {
+    return this.outgoingWebhookService.deleteWebhook(workspaceId, webhookId);
   }
 }
