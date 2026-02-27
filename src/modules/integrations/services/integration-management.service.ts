@@ -209,12 +209,14 @@ export class IntegrationManagementService {
     workspaceId: string,
   ): Promise<{ total: number; connected: number; errored: number; disconnected: number }> {
     const statuses = await this.getAllIntegrationStatuses(workspaceId);
-    return {
-      total: statuses.filter((s) => s.available).length,
-      connected: statuses.filter((s) => s.connected).length,
-      errored: statuses.filter((s) => s.status === 'error').length,
-      disconnected: statuses.filter((s) => s.status === 'disconnected' && s.available).length,
-    };
+    const summary = { total: 0, connected: 0, errored: 0, disconnected: 0 };
+    for (const s of statuses) {
+      if (s.available) summary.total++;
+      if (s.connected) summary.connected++;
+      if (s.status === 'error') summary.errored++;
+      if (s.status === 'disconnected' && s.available) summary.disconnected++;
+    }
+    return summary;
   }
 
   /**
@@ -225,132 +227,183 @@ export class IntegrationManagementService {
     limit?: number,
   ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
     const effectiveLimit = Math.min(limit || 10, 50);
-    const activities: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
+    type ActivityItem = { type: IntegrationType; event: string; timestamp: string; details?: string };
 
-    // Gather activity from each integration type
+    // Fetch all integration activities in parallel for performance
+    const [slackActivities, discordActivities, linearActivities, jiraActivities, connectionActivities] =
+      await Promise.all([
+        this.fetchSlackActivity(workspaceId),
+        this.fetchDiscordActivity(workspaceId),
+        this.fetchLinearActivity(workspaceId),
+        this.fetchJiraActivity(workspaceId),
+        this.fetchConnectionActivity(workspaceId),
+      ]);
+
+    const activities: ActivityItem[] = [
+      ...slackActivities,
+      ...discordActivities,
+      ...linearActivities,
+      ...jiraActivities,
+      ...connectionActivities,
+    ];
+
+    // Sort by timestamp descending, then limit
+    activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+
+    return activities.slice(0, effectiveLimit);
+  }
+
+  private async fetchSlackActivity(
+    workspaceId: string,
+  ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
     try {
       const slack = await this.slackRepo.findOne({ where: { workspaceId } });
-      if (slack) {
-        if (slack.lastMessageAt) {
-          activities.push({
-            type: IntegrationType.SLACK,
-            event: 'message_sent',
-            timestamp: slack.lastMessageAt.toISOString(),
-            details: `${slack.messageCount} total messages`,
-          });
-        }
-        if (slack.lastErrorAt) {
-          activities.push({
-            type: IntegrationType.SLACK,
-            event: 'error',
-            timestamp: slack.lastErrorAt.toISOString(),
-            details: slack.lastError || undefined,
-          });
-        }
-        activities.push({
+      if (!slack) return [];
+      const items: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
+      if (slack.lastMessageAt) {
+        items.push({
           type: IntegrationType.SLACK,
-          event: 'connected',
-          timestamp: slack.connectedAt.toISOString(),
-          details: `Connected to ${slack.teamName || 'Slack workspace'}`,
+          event: 'message_sent',
+          timestamp: slack.lastMessageAt.toISOString(),
+          details: `${slack.messageCount} total messages`,
         });
       }
+      if (slack.lastErrorAt) {
+        items.push({
+          type: IntegrationType.SLACK,
+          event: 'error',
+          timestamp: slack.lastErrorAt.toISOString(),
+          details: slack.lastError || undefined,
+        });
+      }
+      items.push({
+        type: IntegrationType.SLACK,
+        event: 'connected',
+        timestamp: slack.connectedAt.toISOString(),
+        details: `Connected to ${slack.teamName || 'Slack workspace'}`,
+      });
+      return items;
     } catch (err) {
       this.logger.warn('Failed to fetch Slack activity', err);
+      return [];
     }
+  }
 
+  private async fetchDiscordActivity(
+    workspaceId: string,
+  ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
     try {
       const discord = await this.discordRepo.findOne({ where: { workspaceId } });
-      if (discord) {
-        if (discord.lastMessageAt) {
-          activities.push({
-            type: IntegrationType.DISCORD,
-            event: 'message_sent',
-            timestamp: discord.lastMessageAt.toISOString(),
-            details: `${discord.messageCount} total messages`,
-          });
-        }
-        if (discord.lastErrorAt) {
-          activities.push({
-            type: IntegrationType.DISCORD,
-            event: 'error',
-            timestamp: discord.lastErrorAt.toISOString(),
-            details: discord.lastError || undefined,
-          });
-        }
-        activities.push({
+      if (!discord) return [];
+      const items: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
+      if (discord.lastMessageAt) {
+        items.push({
           type: IntegrationType.DISCORD,
-          event: 'connected',
-          timestamp: discord.connectedAt.toISOString(),
-          details: `Connected to ${discord.guildName || 'Discord server'}`,
+          event: 'message_sent',
+          timestamp: discord.lastMessageAt.toISOString(),
+          details: `${discord.messageCount} total messages`,
         });
       }
+      if (discord.lastErrorAt) {
+        items.push({
+          type: IntegrationType.DISCORD,
+          event: 'error',
+          timestamp: discord.lastErrorAt.toISOString(),
+          details: discord.lastError || undefined,
+        });
+      }
+      items.push({
+        type: IntegrationType.DISCORD,
+        event: 'connected',
+        timestamp: discord.connectedAt.toISOString(),
+        details: `Connected to ${discord.guildName || 'Discord server'}`,
+      });
+      return items;
     } catch (err) {
       this.logger.warn('Failed to fetch Discord activity', err);
+      return [];
     }
+  }
 
+  private async fetchLinearActivity(
+    workspaceId: string,
+  ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
     try {
       const linear = await this.linearRepo.findOne({ where: { workspaceId } });
-      if (linear) {
-        if (linear.lastSyncAt) {
-          activities.push({
-            type: IntegrationType.LINEAR,
-            event: 'sync',
-            timestamp: linear.lastSyncAt.toISOString(),
-            details: `${linear.syncCount} total syncs`,
-          });
-        }
-        if (linear.lastErrorAt) {
-          activities.push({
-            type: IntegrationType.LINEAR,
-            event: 'error',
-            timestamp: linear.lastErrorAt.toISOString(),
-            details: linear.lastError || undefined,
-          });
-        }
+      if (!linear) return [];
+      const items: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
+      if (linear.lastSyncAt) {
+        items.push({
+          type: IntegrationType.LINEAR,
+          event: 'sync',
+          timestamp: linear.lastSyncAt.toISOString(),
+          details: `${linear.syncCount} total syncs`,
+        });
       }
+      if (linear.lastErrorAt) {
+        items.push({
+          type: IntegrationType.LINEAR,
+          event: 'error',
+          timestamp: linear.lastErrorAt.toISOString(),
+          details: linear.lastError || undefined,
+        });
+      }
+      return items;
     } catch (err) {
       this.logger.warn('Failed to fetch Linear activity', err);
+      return [];
     }
+  }
 
+  private async fetchJiraActivity(
+    workspaceId: string,
+  ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
     try {
       const jira = await this.jiraRepo.findOne({ where: { workspaceId } });
-      if (jira) {
-        if (jira.lastSyncAt) {
-          activities.push({
-            type: IntegrationType.JIRA,
-            event: 'sync',
-            timestamp: jira.lastSyncAt.toISOString(),
-            details: `${jira.syncCount} total syncs`,
-          });
-        }
-        if (jira.lastErrorAt) {
-          activities.push({
-            type: IntegrationType.JIRA,
-            event: 'error',
-            timestamp: jira.lastErrorAt.toISOString(),
-            details: jira.lastError || undefined,
-          });
-        }
+      if (!jira) return [];
+      const items: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
+      if (jira.lastSyncAt) {
+        items.push({
+          type: IntegrationType.JIRA,
+          event: 'sync',
+          timestamp: jira.lastSyncAt.toISOString(),
+          details: `${jira.syncCount} total syncs`,
+        });
       }
+      if (jira.lastErrorAt) {
+        items.push({
+          type: IntegrationType.JIRA,
+          event: 'error',
+          timestamp: jira.lastErrorAt.toISOString(),
+          details: jira.lastError || undefined,
+        });
+      }
+      return items;
     } catch (err) {
       this.logger.warn('Failed to fetch Jira activity', err);
+      return [];
     }
+  }
 
+  private async fetchConnectionActivity(
+    workspaceId: string,
+  ): Promise<Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }>> {
     try {
       const connections = await this.integrationConnectionRepo.find({
         where: { workspaceId },
       });
+      const items: Array<{ type: IntegrationType; event: string; timestamp: string; details?: string }> = [];
       for (const conn of connections) {
         const type = this.mapProviderToType(conn.provider);
         if (type) {
-          activities.push({
+          items.push({
             type,
             event: 'connected',
             timestamp: conn.connectedAt.toISOString(),
             details: conn.externalUsername ? `Connected as ${conn.externalUsername}` : undefined,
           });
           if (conn.lastUsedAt) {
-            activities.push({
+            items.push({
               type,
               event: 'last_used',
               timestamp: conn.lastUsedAt.toISOString(),
@@ -358,14 +411,11 @@ export class IntegrationManagementService {
           }
         }
       }
+      return items;
     } catch (err) {
       this.logger.warn('Failed to fetch IntegrationConnection activity', err);
+      return [];
     }
-
-    // Sort by timestamp descending, then limit
-    activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-    return activities.slice(0, effectiveLimit);
   }
 
   /**
@@ -403,10 +453,11 @@ export class IntegrationManagementService {
       }
     });
 
-    // Use Promise.allSettled with a 5s timeout
-    const timeoutPromise = new Promise<void>((_, reject) =>
-      setTimeout(() => reject(new Error('Integration status aggregation timeout')), 5000),
-    );
+    // Use Promise.all with a 5s timeout (clean up timer to avoid leak)
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeoutPromise = new Promise<void>((_, reject) => {
+      timeoutId = setTimeout(() => reject(new Error('Integration status aggregation timeout')), 5000);
+    });
 
     try {
       const results = await Promise.race([
@@ -418,6 +469,10 @@ export class IntegrationManagementService {
       this.logger.warn('Integration status aggregation timed out, returning partial data');
       // Return default statuses on timeout
       return Object.values(IntegrationType).map((type) => this.createDefaultStatus(type));
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
     }
   }
 
