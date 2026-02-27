@@ -19,6 +19,7 @@ import { LinearIntegration } from '../../../database/entities/linear-integration
 import { JiraIntegration } from '../../../database/entities/jira-integration.entity';
 import { LinearSyncItem } from '../../../database/entities/linear-sync-item.entity';
 import { JiraSyncItem } from '../../../database/entities/jira-sync-item.entity';
+import { OutgoingWebhook } from '../../../database/entities/outgoing-webhook.entity';
 import { RedisService } from '../../redis/redis.service';
 
 // ==================== Test Helpers ====================
@@ -57,6 +58,7 @@ describe('IntegrationManagementService', () => {
   let jiraRepo: ReturnType<typeof createMockRepository>;
   let linearSyncItemRepo: ReturnType<typeof createMockRepository>;
   let jiraSyncItemRepo: ReturnType<typeof createMockRepository>;
+  let outgoingWebhookRepo: ReturnType<typeof createMockRepository>;
   let redisService: ReturnType<typeof createMockRedisService>;
 
   beforeEach(async () => {
@@ -67,6 +69,7 @@ describe('IntegrationManagementService', () => {
     jiraRepo = createMockRepository();
     linearSyncItemRepo = createMockRepository();
     jiraSyncItemRepo = createMockRepository();
+    outgoingWebhookRepo = createMockRepository();
     redisService = createMockRedisService();
 
     const module: TestingModule = await Test.createTestingModule({
@@ -79,6 +82,7 @@ describe('IntegrationManagementService', () => {
         { provide: getRepositoryToken(JiraIntegration), useValue: jiraRepo },
         { provide: getRepositoryToken(LinearSyncItem), useValue: linearSyncItemRepo },
         { provide: getRepositoryToken(JiraSyncItem), useValue: jiraSyncItemRepo },
+        { provide: getRepositoryToken(OutgoingWebhook), useValue: outgoingWebhookRepo },
         { provide: RedisService, useValue: redisService },
       ],
     }).compile();
@@ -307,12 +311,12 @@ describe('IntegrationManagementService', () => {
       });
     });
 
-    it('returns coming-soon status for webhooks', async () => {
+    it('returns disconnected status for webhooks when none configured', async () => {
       const result = await service.getAllIntegrationStatuses(WORKSPACE_ID);
       const webhooks = result.find((r) => r.type === IntegrationType.WEBHOOKS);
       expect(webhooks).toBeDefined();
-      expect(webhooks!.status).toBe('coming-soon');
-      expect(webhooks!.available).toBe(false);
+      expect(webhooks!.status).toBe('disconnected');
+      expect(webhooks!.available).toBe(true);
       expect(webhooks!.connected).toBe(false);
     });
 
@@ -394,7 +398,7 @@ describe('IntegrationManagementService', () => {
       });
 
       const result = await service.getIntegrationSummary(WORKSPACE_ID);
-      expect(result.total).toBe(8); // 9 types - 1 coming-soon (webhooks)
+      expect(result.total).toBe(9); // all 9 types including webhooks
       expect(result.connected).toBe(1); // only slack
       expect(result.errored).toBe(0);
       expect(result.disconnected).toBeGreaterThan(0);

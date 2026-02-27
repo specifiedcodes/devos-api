@@ -12,6 +12,7 @@ import {
   IntegrationCategory,
   UnifiedIntegrationStatus,
 } from '../services/integration-management.service';
+import { IntegrationHealthService } from '../services/integration-health.service';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 
@@ -43,10 +44,20 @@ describe('IntegrationManagementController', () => {
       getRecentActivity: jest.fn(),
     };
 
+    const mockHealthService = {
+      getAllHealth: jest.fn(),
+      getHealthSummary: jest.fn(),
+      getHealth: jest.fn(),
+      getHealthHistory: jest.fn(),
+      forceHealthCheck: jest.fn(),
+      retryFailed: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [IntegrationManagementController],
       providers: [
         { provide: IntegrationManagementService, useValue: mockService },
+        { provide: IntegrationHealthService, useValue: mockHealthService },
       ],
     })
       .overrideGuard(JwtAuthGuard)

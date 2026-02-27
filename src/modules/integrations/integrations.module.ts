@@ -41,6 +41,9 @@ import { JiraSyncItem } from '../../database/entities/jira-sync-item.entity';
 // Story 21-8: Webhook Management
 import { WebhookModule } from './webhooks/webhook.module';
 import { OutgoingWebhook } from '../../database/entities/outgoing-webhook.entity';
+// Story 21-9: Integration Health Monitoring
+import { IntegrationHealthCheck } from '../../database/entities/integration-health-check.entity';
+import { IntegrationHealthService } from './services/integration-health.service';
 
 /**
  * IntegrationsModule
@@ -81,6 +84,7 @@ import { OutgoingWebhook } from '../../database/entities/outgoing-webhook.entity
       LinearSyncItem,
       JiraSyncItem,
       OutgoingWebhook, // Story 21-8: Webhook Management
+      IntegrationHealthCheck, // Story 21-9: Integration Health Monitoring
     ]),
     HttpModule.register({
       timeout: 15000, // 15 second timeout for external API calls (GitHub, Railway, Vercel)
@@ -104,7 +108,7 @@ import { OutgoingWebhook } from '../../database/entities/outgoing-webhook.entity
     DeploymentRollbackController,
     IntegrationManagementController, // Story 21-7
   ],
-  providers: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService],
-  exports: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService],
+  providers: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
+  exports: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
 })
 export class IntegrationsModule {}
