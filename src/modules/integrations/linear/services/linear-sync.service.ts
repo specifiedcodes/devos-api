@@ -144,7 +144,7 @@ export class LinearSyncService {
       await this.integrationRepo.update(integration.id, {
         lastSyncAt: new Date(),
         syncCount: () => 'sync_count + 1',
-      } as Partial<LinearIntegration>);
+      } as any);
 
       return syncItem;
     } finally {
@@ -262,7 +262,7 @@ export class LinearSyncService {
       await this.integrationRepo.update(integration.id, {
         lastSyncAt: new Date(),
         syncCount: () => 'sync_count + 1',
-      } as Partial<LinearIntegration>);
+      } as any);
 
       return syncItem;
     } finally {

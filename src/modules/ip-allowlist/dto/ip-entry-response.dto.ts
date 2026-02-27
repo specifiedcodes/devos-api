@@ -7,7 +7,7 @@ export class IpEntryResponseDto {
   @ApiProperty() ipAddress!: string;
   @ApiProperty() description!: string;
   @ApiProperty() isActive!: boolean;
-  @ApiProperty() createdBy!: string;
+  @ApiProperty({ nullable: true }) createdBy!: string | null;
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
 

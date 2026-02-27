@@ -47,7 +47,7 @@ describe('DiscordBotGatewayService', () => {
     botTokenIv: 'embedded',
     applicationId: mockApplicationId,
     publicKey: 'abcdef1234567890',
-    commandChannelId: null,
+    commandChannelId: undefined,
     status: 'active',
     isActive: true,
     enabledCommands: { status: true, agents: true, deploy: false, costs: true, link: true, help: true },

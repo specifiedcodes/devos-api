@@ -103,7 +103,7 @@ describe('Permission Cache Invalidation Integration', () => {
     });
 
     it('should invalidate cache after setPermission', async () => {
-      permissionRepo.findOne!.mockResolvedValue(null);
+      (permissionRepo.findOne as jest.Mock).mockResolvedValue(null);
 
       await matrixService.setPermission(mockRoleId, mockWorkspaceId, {
         resourceType: ResourceType.PROJECTS,
@@ -203,7 +203,7 @@ describe('Permission Cache Invalidation Integration', () => {
     });
 
     it('should invalidate cache after deleteRole', async () => {
-      customRoleRepo.findOne!.mockResolvedValue({
+      (customRoleRepo.findOne as jest.Mock).mockResolvedValue({
         id: mockRoleId,
         workspaceId: mockWorkspaceId,
         name: 'test-role',
@@ -228,8 +228,8 @@ describe('Permission Cache Invalidation Integration', () => {
         isSystem: false,
         isActive: true,
       };
-      customRoleRepo.findOne!.mockResolvedValue(existingRole as any);
-      customRoleRepo.save!.mockResolvedValue({
+      (customRoleRepo.findOne as jest.Mock).mockResolvedValue(existingRole as any);
+      (customRoleRepo.save as jest.Mock).mockResolvedValue({
         ...existingRole,
         baseRole: BaseRole.VIEWER,
       } as any);
@@ -254,8 +254,8 @@ describe('Permission Cache Invalidation Integration', () => {
         isSystem: false,
         isActive: true,
       };
-      customRoleRepo.findOne!.mockResolvedValue(existingRole as any);
-      customRoleRepo.save!.mockResolvedValue({
+      (customRoleRepo.findOne as jest.Mock).mockResolvedValue(existingRole as any);
+      (customRoleRepo.save as jest.Mock).mockResolvedValue({
         ...existingRole,
         displayName: 'Updated Name',
       } as any);

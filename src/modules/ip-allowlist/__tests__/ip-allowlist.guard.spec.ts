@@ -8,6 +8,7 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { IpAllowlistGuard, SKIP_IP_CHECK_KEY } from '../../../common/guards/ip-allowlist.guard';
 import { IpAllowlistService } from '../services/ip-allowlist.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
 import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 
 describe('IpAllowlistGuard', () => {
@@ -66,7 +67,8 @@ describe('IpAllowlistGuard', () => {
       recordBlockedAttempt: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<IpAllowlistService>;
 
-    guard = new IpAllowlistGuard(reflector, ipAllowlistService);
+    const mockPermissionAuditService = { record: jest.fn().mockResolvedValue(undefined) } as unknown as PermissionAuditService;
+    guard = new IpAllowlistGuard(reflector, ipAllowlistService, mockPermissionAuditService);
   });
 
   it('should pass through if @SkipIpCheck is present', async () => {

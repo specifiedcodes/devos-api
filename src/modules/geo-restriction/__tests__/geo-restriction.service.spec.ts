@@ -59,11 +59,13 @@ describe('GeoRestrictionService', () => {
       getDatabaseInfo: jest.fn().mockReturnValue({ available: true, buildDate: null, type: null }),
     };
 
+    const mockPermissionAuditService = { record: jest.fn().mockResolvedValue(undefined) };
     service = new GeoRestrictionService(
       mockRepository,
       mockRedisService,
       mockAuditService,
       mockGeoIpLookupService as any,
+      mockPermissionAuditService as any,
     );
   });
 
@@ -221,7 +223,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'allowlist', countries: ['US', 'GB'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('US');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('US');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -233,7 +235,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'allowlist', countries: ['US', 'GB'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('DE');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('DE');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -245,7 +247,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'blocklist', countries: ['CN', 'RU'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('CN');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('CN');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -257,7 +259,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'blocklist', countries: ['CN', 'RU'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('US');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('US');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -268,7 +270,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'blocklist', countries: ['CN'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue(null);
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue(null);
 
       const result = await service.checkGeo(WORKSPACE_ID, '10.0.0.1');
 
@@ -280,7 +282,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'blocklist', countries: ['CN'], logOnly: true }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('CN');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('CN');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -292,7 +294,7 @@ describe('GeoRestrictionService', () => {
       mockRedisService.get.mockResolvedValue(
         JSON.stringify({ isActive: true, mode: 'blocklist', countries: ['CN'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('US');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('US');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -305,7 +307,7 @@ describe('GeoRestrictionService', () => {
       mockRepository.findOne.mockResolvedValue(
         createMockConfig({ isActive: true, mode: GeoRestrictionMode.BLOCKLIST, countries: ['CN'], logOnly: false }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('US');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('US');
 
       const result = await service.checkGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -332,7 +334,7 @@ describe('GeoRestrictionService', () => {
       mockRepository.findOne.mockResolvedValue(
         createMockConfig({ isActive: true, mode: GeoRestrictionMode.BLOCKLIST, countries: [] }),
       );
-      mockGeoIpLookupService.lookup!.mockReturnValue('US');
+      (mockGeoIpLookupService.lookup as jest.Mock).mockReturnValue('US');
 
       const result = await service.testGeo(WORKSPACE_ID, '8.8.8.8');
 
@@ -342,7 +344,7 @@ describe('GeoRestrictionService', () => {
 
     it('should report geoIpAvailable in test result', async () => {
       mockRepository.findOne.mockResolvedValue(null);
-      mockGeoIpLookupService.isDatabaseAvailable!.mockReturnValue(false);
+      (mockGeoIpLookupService.isDatabaseAvailable as jest.Mock).mockReturnValue(false);
 
       const result = await service.testGeo(WORKSPACE_ID, '8.8.8.8');
 

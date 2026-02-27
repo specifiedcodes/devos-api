@@ -63,7 +63,8 @@ describe('GeoRestrictionGuard', () => {
       recordBlockedAttempt: jest.fn().mockResolvedValue(undefined),
     };
 
-    guard = new GeoRestrictionGuard(reflector, geoRestrictionService as any);
+    const mockPermissionAuditService = { record: jest.fn().mockResolvedValue(undefined) };
+    guard = new GeoRestrictionGuard(reflector, geoRestrictionService as any, mockPermissionAuditService as any);
   });
 
   it('should pass through when no workspaceId present', async () => {
@@ -99,7 +100,7 @@ describe('GeoRestrictionGuard', () => {
   });
 
   it('should allow when geo check returns allowed', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({
+    (geoRestrictionService.checkGeo as jest.Mock).mockResolvedValue({
       allowed: true,
       detectedCountry: 'US',
     });
@@ -113,7 +114,7 @@ describe('GeoRestrictionGuard', () => {
   });
 
   it('should throw 403 ForbiddenException when geo check denies', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({
+    (geoRestrictionService.checkGeo as jest.Mock).mockResolvedValue({
       allowed: false,
       detectedCountry: 'CN',
       reason: 'country_in_blocklist',
@@ -126,7 +127,7 @@ describe('GeoRestrictionGuard', () => {
   });
 
   it('should record blocked attempt when geo denies', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({
+    (geoRestrictionService.checkGeo as jest.Mock).mockResolvedValue({
       allowed: false,
       detectedCountry: 'CN',
       reason: 'country_in_blocklist',
@@ -140,7 +141,7 @@ describe('GeoRestrictionGuard', () => {
   });
 
   it('should allow in log-only mode and record attempt', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({
+    (geoRestrictionService.checkGeo as jest.Mock).mockResolvedValue({
       allowed: true,
       detectedCountry: 'CN',
       reason: 'log_only_would_deny',
@@ -156,7 +157,7 @@ describe('GeoRestrictionGuard', () => {
   });
 
   it('should allow when geo not active', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({
+    (geoRestrictionService.checkGeo as jest.Mock).mockResolvedValue({
       allowed: true,
       detectedCountry: null,
       reason: 'geo_not_active',
@@ -183,7 +184,7 @@ describe('GeoRestrictionGuard', () => {
   });
 
   it('should throw ForbiddenException with GEO_RESTRICTED code', async () => {
-    geoRestrictionService.checkGeo!.mockResolvedValue({
+    (geoRestrictionService.checkGeo as jest.Mock).mockResolvedValue({
       allowed: false,
       detectedCountry: 'RU',
       reason: 'country_in_blocklist',

@@ -49,7 +49,7 @@ describe('PermissionCacheService', () => {
 
   describe('checkPermission', () => {
     it('should return true on cache hit with value "1"', async () => {
-      redisService.get!.mockResolvedValue('1');
+      (redisService.get as jest.Mock).mockResolvedValue('1');
 
       const result = await service.checkPermission(mockUserId, mockWorkspaceId, 'projects', 'create');
 
@@ -59,7 +59,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should return false on cache hit with value "0"', async () => {
-      redisService.get!.mockResolvedValue('0');
+      (redisService.get as jest.Mock).mockResolvedValue('0');
 
       const result = await service.checkPermission(mockUserId, mockWorkspaceId, 'projects', 'delete');
 
@@ -68,8 +68,8 @@ describe('PermissionCacheService', () => {
     });
 
     it('should fall back to DB on cache miss and cache the result', async () => {
-      redisService.get!.mockResolvedValue(null);
-      permissionMatrixService.checkPermission!.mockResolvedValue(true);
+      (redisService.get as jest.Mock).mockResolvedValue(null);
+      (permissionMatrixService.checkPermission as jest.Mock).mockResolvedValue(true);
 
       const result = await service.checkPermission(mockUserId, mockWorkspaceId, 'agents', 'view');
 
@@ -83,8 +83,8 @@ describe('PermissionCacheService', () => {
     });
 
     it('should cache "0" when DB returns false', async () => {
-      redisService.get!.mockResolvedValue(null);
-      permissionMatrixService.checkPermission!.mockResolvedValue(false);
+      (redisService.get as jest.Mock).mockResolvedValue(null);
+      (permissionMatrixService.checkPermission as jest.Mock).mockResolvedValue(false);
 
       const result = await service.checkPermission(mockUserId, mockWorkspaceId, 'secrets', 'view_plaintext');
 
@@ -95,8 +95,8 @@ describe('PermissionCacheService', () => {
     });
 
     it('should fall back to DB when Redis get fails', async () => {
-      redisService.get!.mockRejectedValue(new Error('Redis connection error'));
-      permissionMatrixService.checkPermission!.mockResolvedValue(true);
+      (redisService.get as jest.Mock).mockRejectedValue(new Error('Redis connection error'));
+      (permissionMatrixService.checkPermission as jest.Mock).mockResolvedValue(true);
 
       const result = await service.checkPermission(mockUserId, mockWorkspaceId, 'projects', 'read');
 
@@ -105,9 +105,9 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not throw when Redis set fails (fire-and-forget)', async () => {
-      redisService.get!.mockResolvedValue(null);
-      permissionMatrixService.checkPermission!.mockResolvedValue(true);
-      redisService.set!.mockRejectedValue(new Error('Redis write error'));
+      (redisService.get as jest.Mock).mockResolvedValue(null);
+      (permissionMatrixService.checkPermission as jest.Mock).mockResolvedValue(true);
+      (redisService.set as jest.Mock).mockRejectedValue(new Error('Redis write error'));
 
       const result = await service.checkPermission(mockUserId, mockWorkspaceId, 'stories', 'create');
 
@@ -115,7 +115,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should use correct cache key format', async () => {
-      redisService.get!.mockResolvedValue('1');
+      (redisService.get as jest.Mock).mockResolvedValue('1');
 
       await service.checkPermission('user-123', 'ws-456', 'deployments', 'approve');
 
@@ -131,7 +131,7 @@ describe('PermissionCacheService', () => {
         `perm:${mockWorkspaceId}:${mockUserId}:projects:create`,
         `perm:${mockWorkspaceId}:${mockUserId}:agents:view`,
       ];
-      redisService.scanKeys!.mockResolvedValue(mockKeys);
+      (redisService.scanKeys as jest.Mock).mockResolvedValue(mockKeys);
 
       await service.invalidateUserPermissions(mockWorkspaceId, mockUserId);
 
@@ -140,7 +140,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not call del when no matching keys found', async () => {
-      redisService.scanKeys!.mockResolvedValue([]);
+      (redisService.scanKeys as jest.Mock).mockResolvedValue([]);
 
       await service.invalidateUserPermissions(mockWorkspaceId, mockUserId);
 
@@ -148,7 +148,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not throw when Redis fails', async () => {
-      redisService.scanKeys!.mockRejectedValue(new Error('Redis error'));
+      (redisService.scanKeys as jest.Mock).mockRejectedValue(new Error('Redis error'));
 
       await expect(service.invalidateUserPermissions(mockWorkspaceId, mockUserId)).resolves.toBeUndefined();
     });
@@ -163,7 +163,7 @@ describe('PermissionCacheService', () => {
         `perm:${mockWorkspaceId}:user2:agents:view`,
         `perm:${mockWorkspaceId}:user3:secrets:delete`,
       ];
-      redisService.scanKeys!.mockResolvedValue(mockKeys);
+      (redisService.scanKeys as jest.Mock).mockResolvedValue(mockKeys);
 
       await service.invalidateRolePermissions(mockWorkspaceId);
 
@@ -172,7 +172,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not call del when no matching keys found', async () => {
-      redisService.scanKeys!.mockResolvedValue([]);
+      (redisService.scanKeys as jest.Mock).mockResolvedValue([]);
 
       await service.invalidateRolePermissions(mockWorkspaceId);
 
@@ -180,7 +180,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not throw when Redis fails', async () => {
-      redisService.scanKeys!.mockRejectedValue(new Error('Redis error'));
+      (redisService.scanKeys as jest.Mock).mockRejectedValue(new Error('Redis error'));
 
       await expect(service.invalidateRolePermissions(mockWorkspaceId)).resolves.toBeUndefined();
     });
@@ -194,7 +194,7 @@ describe('PermissionCacheService', () => {
         'perm:ws1:user1:projects:create',
         'perm:ws2:user2:agents:view',
       ];
-      redisService.scanKeys!.mockResolvedValue(mockKeys);
+      (redisService.scanKeys as jest.Mock).mockResolvedValue(mockKeys);
 
       await service.invalidateAll();
 
@@ -203,7 +203,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not call del when no matching keys found', async () => {
-      redisService.scanKeys!.mockResolvedValue([]);
+      (redisService.scanKeys as jest.Mock).mockResolvedValue([]);
 
       await service.invalidateAll();
 
@@ -211,7 +211,7 @@ describe('PermissionCacheService', () => {
     });
 
     it('should not throw when Redis fails', async () => {
-      redisService.scanKeys!.mockRejectedValue(new Error('Redis error'));
+      (redisService.scanKeys as jest.Mock).mockRejectedValue(new Error('Redis error'));
 
       await expect(service.invalidateAll()).resolves.toBeUndefined();
     });

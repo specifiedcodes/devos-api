@@ -172,7 +172,7 @@ export class JiraSyncService {
       await this.integrationRepo.update(integration.id, {
         lastSyncAt: new Date(),
         syncCount: () => 'sync_count + 1',
-      } as Partial<JiraIntegration>);
+      } as any);
 
       return syncItem;
     } finally {
@@ -289,7 +289,7 @@ export class JiraSyncService {
       await this.integrationRepo.update(integration.id, {
         lastSyncAt: new Date(),
         syncCount: () => 'sync_count + 1',
-      } as Partial<JiraIntegration>);
+      } as any);
 
       return syncItem;
     } finally {

@@ -23,7 +23,7 @@ describe('JiraApiClientService', () => {
   let service: JiraApiClientService;
 
   const mockEncryptionService = {
-    encrypt: jest.fn().mockReturnValue({ encrypted: 'enc', iv: 'iv' }),
+    encrypt: jest.fn().mockReturnValue('enc'),
     decrypt: jest.fn().mockReturnValue('decrypted-token'),
   };
 
@@ -118,7 +118,7 @@ describe('JiraApiClientService', () => {
 
       await service.request(mockIntegration as JiraIntegration, 'GET', '/myself');
 
-      expect(mockEncryptionService.decrypt).toHaveBeenCalledWith('enc-access', 'access-iv');
+      expect(mockEncryptionService.decrypt).toHaveBeenCalledWith('enc-access');
     });
 
     it('handles 401 by attempting token refresh', async () => {
@@ -354,7 +354,7 @@ describe('JiraApiClientService', () => {
         'int-1',
         expect.objectContaining({
           accessToken: 'enc',
-          accessTokenIv: 'iv',
+          accessTokenIv: '',
         }),
       );
     });

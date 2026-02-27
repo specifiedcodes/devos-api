@@ -349,7 +349,7 @@ export class PermissionWebhookService {
 
     // All retries exhausted - increment failure count
     const newFailureCount = webhook.failureCount + 1;
-    const updates: Partial<PermissionWebhook> = {
+    const updates: Record<string, any> = {
       failureCount: newFailureCount,
       lastTriggeredAt: new Date(),
     };

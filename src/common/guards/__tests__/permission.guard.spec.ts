@@ -12,6 +12,7 @@ import { ExecutionContext, ForbiddenException } from '@nestjs/common';
 import { PermissionGuard, RequiredPermission } from '../permission.guard';
 import { PermissionCacheService } from '../../../modules/custom-roles/services/permission-cache.service';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { PermissionAuditService } from '../../../modules/permission-audit/services/permission-audit.service';
 
 describe('PermissionGuard', () => {
   let guard: PermissionGuard;
@@ -67,12 +68,15 @@ describe('PermissionGuard', () => {
       log: jest.fn().mockResolvedValue(undefined),
     };
 
+    const mockPermissionAuditService = { record: jest.fn().mockResolvedValue(undefined) };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         PermissionGuard,
         { provide: Reflector, useValue: reflector },
         { provide: PermissionCacheService, useValue: permissionCacheService },
         { provide: AuditService, useValue: auditService },
+        { provide: PermissionAuditService, useValue: mockPermissionAuditService },
       ],
     }).compile();
 
@@ -128,7 +132,7 @@ describe('PermissionGuard', () => {
 
     it('should extract workspaceId from query.workspaceId fallback', async () => {
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(true);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(true);
       const context = createMockContext({ params: {}, body: {}, query: { workspaceId: mockWorkspaceId } });
 
       const result = await guard.canActivate(context);
@@ -141,7 +145,7 @@ describe('PermissionGuard', () => {
 
     it('should extract workspaceId from body.workspaceId fallback', async () => {
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(true);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(true);
       const context = createMockContext({ params: {}, body: { workspaceId: mockWorkspaceId } });
 
       const result = await guard.canActivate(context);
@@ -156,7 +160,7 @@ describe('PermissionGuard', () => {
     it('should return true when permission is granted', async () => {
       const permission: RequiredPermission = { resource: 'projects', action: 'create' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(true);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(true);
       const context = createMockContext();
 
       const result = await guard.canActivate(context);
@@ -167,7 +171,7 @@ describe('PermissionGuard', () => {
     it('should attach checkedPermission to request when granted', async () => {
       const permission: RequiredPermission = { resource: 'agents', action: 'view' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(true);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(true);
       const context = createMockContext();
       const request = context.switchToHttp().getRequest();
 
@@ -179,7 +183,7 @@ describe('PermissionGuard', () => {
     it('should not log audit when permission is granted', async () => {
       const permission: RequiredPermission = { resource: 'stories', action: 'read' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(true);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(true);
       const context = createMockContext();
 
       await guard.canActivate(context);
@@ -194,7 +198,7 @@ describe('PermissionGuard', () => {
     it('should throw ForbiddenException when permission is denied', async () => {
       const permission: RequiredPermission = { resource: 'secrets', action: 'view_plaintext' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(false);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(false);
       const context = createMockContext();
 
       await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
@@ -203,7 +207,7 @@ describe('PermissionGuard', () => {
     it('should include required permission in error response', async () => {
       const permission: RequiredPermission = { resource: 'deployments', action: 'approve' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(false);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(false);
       const context = createMockContext();
 
       try {
@@ -221,7 +225,7 @@ describe('PermissionGuard', () => {
     it('should log audit on permission denial (fire-and-forget)', async () => {
       const permission: RequiredPermission = { resource: 'workspace', action: 'manage_roles' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(false);
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(false);
       const context = createMockContext();
 
       try {
@@ -246,8 +250,8 @@ describe('PermissionGuard', () => {
     it('should not fail if audit log throws', async () => {
       const permission: RequiredPermission = { resource: 'projects', action: 'delete' };
       reflector.getAllAndOverride.mockReturnValue(permission);
-      permissionCacheService.checkPermission!.mockResolvedValue(false);
-      auditService.log!.mockRejectedValue(new Error('Audit failed'));
+      (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(false);
+      (auditService.log as jest.Mock).mockRejectedValue(new Error('Audit failed'));
       const context = createMockContext();
 
       await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
@@ -271,7 +275,7 @@ describe('PermissionGuard', () => {
     testCases.forEach(({ resource, action }) => {
       it(`should check ${resource}:${action} permission correctly`, async () => {
         reflector.getAllAndOverride.mockReturnValue({ resource, action });
-        permissionCacheService.checkPermission!.mockResolvedValue(true);
+        (permissionCacheService.checkPermission as jest.Mock).mockResolvedValue(true);
         const context = createMockContext();
 
         const result = await guard.canActivate(context);

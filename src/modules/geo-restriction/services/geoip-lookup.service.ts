@@ -45,6 +45,7 @@ export class GeoIpLookupService implements OnModuleInit {
   async loadDatabase(): Promise<void> {
     try {
       // Dynamic import for maxmind package
+      // @ts-ignore - maxmind may not have type declarations installed
       const maxmind = await import('maxmind');
 
       for (const dbPath of this.DB_PATHS) {

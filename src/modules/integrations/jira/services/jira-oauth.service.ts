@@ -120,7 +120,7 @@ export class JiraOAuthService {
     const expiresIn = tokenData.expires_in || 3600;
     const tokenExpiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    // Encrypt the tokens
+    // Encrypt the tokens (encrypt() returns a single string in iv:authTag:ciphertext format)
     const encryptedAccess = this.encryptionService.encrypt(accessTokenPlain);
     const encryptedRefresh = this.encryptionService.encrypt(refreshTokenPlain);
 
@@ -130,10 +130,10 @@ export class JiraOAuthService {
       jiraSiteUrl: 'pending',
       jiraProjectKey: 'PEND',
       cloudId: 'pending',
-      accessToken: encryptedAccess.encrypted,
-      accessTokenIv: encryptedAccess.iv,
-      refreshToken: encryptedRefresh.encrypted,
-      refreshTokenIv: encryptedRefresh.iv,
+      accessToken: encryptedAccess,
+      accessTokenIv: '',
+      refreshToken: encryptedRefresh,
+      refreshTokenIv: '',
       tokenExpiresAt,
       connectedBy: userId,
       isActive: false, // Not active until setup is completed
@@ -214,8 +214,8 @@ export class JiraOAuthService {
       }
 
       const encryptedSecret = this.encryptionService.encrypt(webhookSecret);
-      integration.webhookSecret = encryptedSecret.encrypted;
-      integration.webhookSecretIv = encryptedSecret.iv;
+      integration.webhookSecret = encryptedSecret;
+      integration.webhookSecretIv = '';
     } catch (error) {
       this.logger.warn('Failed to register Jira webhook, integration will work without real-time updates');
     }
@@ -296,7 +296,7 @@ export class JiraOAuthService {
         lastError: result.error,
         lastErrorAt: new Date(),
         errorCount: () => 'error_count + 1',
-      } as Partial<JiraIntegration>);
+      } as any);
     }
 
     return {

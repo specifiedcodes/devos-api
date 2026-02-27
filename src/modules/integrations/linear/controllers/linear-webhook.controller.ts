@@ -79,10 +79,7 @@ export class LinearWebhookController {
       return { success: false };
     }
 
-    const decryptedSecret = this.encryptionService.decrypt(
-      integration.webhookSecret,
-      integration.webhookSecretIv,
-    );
+    const decryptedSecret = this.encryptionService.decrypt(integration.webhookSecret);
 
     if (!this.verifySignature(rawBody, signature, decryptedSecret)) {
       this.logger.warn('Invalid webhook signature');

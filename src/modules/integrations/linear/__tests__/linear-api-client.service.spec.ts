@@ -23,7 +23,7 @@ describe('LinearApiClientService', () => {
   let redisService: RedisService;
 
   const mockEncryptionService = {
-    encrypt: jest.fn().mockReturnValue({ encrypted: 'enc', iv: 'iv' }),
+    encrypt: jest.fn().mockReturnValue('enc'),
     decrypt: jest.fn().mockReturnValue('decrypted-token'),
   };
 
@@ -87,7 +87,7 @@ describe('LinearApiClientService', () => {
 
       await service.query('encrypted', 'my-iv', 'query { test }');
 
-      expect(mockEncryptionService.decrypt).toHaveBeenCalledWith('encrypted', 'my-iv');
+      expect(mockEncryptionService.decrypt).toHaveBeenCalledWith('encrypted');
     });
 
     it('handles 401 response (throws UnauthorizedException)', async () => {

@@ -75,10 +75,7 @@ export class JiraApiClientService {
     // Rate limit check
     await this.checkRateLimit(integration.id);
 
-    const decryptedToken = this.encryptionService.decrypt(
-      integration.accessToken,
-      integration.accessTokenIv,
-    );
+    const decryptedToken = this.encryptionService.decrypt(integration.accessToken);
 
     const baseUrl = `https://api.atlassian.com/ex/jira/${integration.cloudId}/rest/api/3`;
     const url = `${baseUrl}${path}`;
@@ -108,10 +105,7 @@ export class JiraApiClientService {
             try {
               await this.refreshAccessToken(integration);
               // Retry with new token
-              const newToken = this.encryptionService.decrypt(
-                integration.accessToken,
-                integration.accessTokenIv,
-              );
+              const newToken = this.encryptionService.decrypt(integration.accessToken);
               (fetchOptions.headers as Record<string, string>).Authorization = `Bearer ${newToken}`;
               const retryResponse = await fetch(url, fetchOptions);
               if (retryResponse.status === 401) {
@@ -183,7 +177,7 @@ export class JiraApiClientService {
     accessToken: string,
     accessTokenIv: string,
   ): Promise<Array<{ id: string; url: string; name: string; avatarUrl?: string }>> {
-    const decryptedToken = this.encryptionService.decrypt(accessToken, accessTokenIv);
+    const decryptedToken = this.encryptionService.decrypt(accessToken);
 
     const response = await fetch('https://api.atlassian.com/oauth/token/accessible-resources', {
       headers: {
@@ -491,10 +485,7 @@ export class JiraApiClientService {
     }
 
     try {
-      const decryptedRefreshToken = this.encryptionService.decrypt(
-        integration.refreshToken,
-        integration.refreshTokenIv,
-      );
+      const decryptedRefreshToken = this.encryptionService.decrypt(integration.refreshToken);
 
       const response = await fetch('https://auth.atlassian.com/oauth/token', {
         method: 'POST',
@@ -517,26 +508,26 @@ export class JiraApiClientService {
       const expiresIn = data.expires_in || 3600;
       const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-      // Encrypt new tokens
+      // Encrypt new tokens (encrypt() returns a single string in iv:authTag:ciphertext format)
       const encryptedAccess = this.encryptionService.encrypt(newAccessToken);
       const encryptedRefresh = this.encryptionService.encrypt(newRefreshToken);
 
       // Update integration record
-      integration.accessToken = encryptedAccess.encrypted;
-      integration.accessTokenIv = encryptedAccess.iv;
-      integration.refreshToken = encryptedRefresh.encrypted;
-      integration.refreshTokenIv = encryptedRefresh.iv;
+      integration.accessToken = encryptedAccess;
+      integration.accessTokenIv = '';
+      integration.refreshToken = encryptedRefresh;
+      integration.refreshTokenIv = '';
       integration.tokenExpiresAt = expiresAt;
 
       await this.integrationRepo.update(integration.id, {
-        accessToken: encryptedAccess.encrypted,
-        accessTokenIv: encryptedAccess.iv,
-        refreshToken: encryptedRefresh.encrypted,
-        refreshTokenIv: encryptedRefresh.iv,
+        accessToken: encryptedAccess,
+        accessTokenIv: '',
+        refreshToken: encryptedRefresh,
+        refreshTokenIv: '',
         tokenExpiresAt: expiresAt,
       });
 
-      return { accessToken: encryptedAccess.encrypted, expiresAt };
+      return { accessToken: encryptedAccess, expiresAt };
     } finally {
       await this.releaseLock(lockKey);
     }

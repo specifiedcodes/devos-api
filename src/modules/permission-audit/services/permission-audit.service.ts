@@ -247,7 +247,7 @@ export class PermissionAuditService {
       [
         event.createdAt.toISOString(),
         event.eventType,
-        event.actorId,
+        event.actorId || '',
         event.targetUserId || '',
         event.targetRoleId || '',
         event.ipAddress || '',
@@ -324,18 +324,29 @@ export class PermissionAuditService {
 
     // eslint-disable-next-line no-constant-condition
     while (true) {
+      // Use subquery to batch deletes since DeleteQueryBuilder doesn't support .limit()
+      const idsToDelete = await this.auditRepo
+        .createQueryBuilder('pae')
+        .select('pae.id')
+        .where('pae.created_at < :cutoffDate', { cutoffDate })
+        .take(BATCH_SIZE)
+        .getMany();
+
+      if (idsToDelete.length === 0) {
+        break;
+      }
+
       const result = await this.auditRepo
         .createQueryBuilder()
         .delete()
         .from(PermissionAuditEvent)
-        .where('created_at < :cutoffDate', { cutoffDate })
-        .limit(BATCH_SIZE)
+        .whereInIds(idsToDelete.map((e) => e.id))
         .execute();
 
       const deleted = result.affected || 0;
       totalDeleted += deleted;
 
-      if (deleted < BATCH_SIZE) {
+      if (idsToDelete.length < BATCH_SIZE) {
         break; // No more to delete
       }
     }

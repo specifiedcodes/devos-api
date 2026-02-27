@@ -440,7 +440,7 @@ export class DiscordNotificationService {
       throw new Error('No Discord integration found for workspace');
     }
 
-    const updateData: Partial<DiscordIntegration> = {};
+    const updateData: Record<string, any> = {};
     if (config.name !== undefined) updateData.name = config.name;
     if (config.defaultChannelName !== undefined) updateData.defaultChannelName = config.defaultChannelName;
     if (config.quietHoursConfig !== undefined) updateData.quietHoursConfig = config.quietHoursConfig;

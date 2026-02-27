@@ -115,15 +115,15 @@ export class LinearOAuthService {
     const tokenData = await tokenResponse.json();
     const accessTokenPlain = tokenData.access_token;
 
-    // Encrypt the access token
-    const { encrypted, iv } = this.encryptionService.encrypt(accessTokenPlain);
+    // Encrypt the access token (encrypt() returns a single string in iv:authTag:ciphertext format)
+    const encryptedAccessToken = this.encryptionService.encrypt(accessTokenPlain);
 
     // Create integration record with temporary team data
     const integration = this.integrationRepo.create({
       workspaceId,
       linearTeamId: 'pending', // Will be set in completeSetup
-      accessToken: encrypted,
-      accessTokenIv: iv,
+      accessToken: encryptedAccessToken,
+      accessTokenIv: '',
       connectedBy: userId,
       isActive: false, // Not active until setup is completed
     });
@@ -173,15 +173,15 @@ export class LinearOAuthService {
       this.logger.warn('Failed to create Linear webhook, integration will work without real-time updates');
     }
 
-    // Encrypt webhook secret
+    // Encrypt webhook secret (encrypt() returns a single string in iv:authTag:ciphertext format)
     const encryptedSecret = this.encryptionService.encrypt(webhookSecret);
 
     // Update integration
     integration.linearTeamId = dto.teamId;
     integration.linearTeamName = selectedTeam?.name;
     integration.isActive = true;
-    integration.webhookSecret = encryptedSecret.encrypted;
-    integration.webhookSecretIv = encryptedSecret.iv;
+    integration.webhookSecret = encryptedSecret;
+    integration.webhookSecretIv = '';
 
     if (dto.statusMapping) {
       integration.statusMapping = dto.statusMapping;
@@ -271,7 +271,7 @@ export class LinearOAuthService {
         lastError: result.error,
         lastErrorAt: new Date(),
         errorCount: () => 'error_count + 1',
-      } as Partial<LinearIntegration>);
+      } as any);
     }
 
     return {

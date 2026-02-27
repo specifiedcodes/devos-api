@@ -16,4 +16,13 @@ export class WorkspaceMemberDto {
 
   @ApiProperty({ description: 'Date when user joined workspace' })
   joinedAt!: Date;
+
+  @ApiProperty({ description: 'Custom role ID', required: false, nullable: true })
+  customRoleId?: string | null;
+
+  @ApiProperty({ description: 'Custom role name', required: false, nullable: true })
+  customRoleName?: string | null;
+
+  @ApiProperty({ description: 'Display role name', required: false })
+  roleName?: string;
 }

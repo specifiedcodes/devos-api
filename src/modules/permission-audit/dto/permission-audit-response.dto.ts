@@ -7,7 +7,7 @@ import {
 export class PermissionAuditEventResponseDto {
   @ApiProperty() id!: string;
   @ApiProperty({ enum: PermissionAuditEventType }) eventType!: string;
-  @ApiProperty() actorId!: string;
+  @ApiProperty({ nullable: true }) actorId!: string | null;
   @ApiPropertyOptional() targetUserId!: string | null;
   @ApiPropertyOptional() targetRoleId!: string | null;
   @ApiPropertyOptional() beforeState!: Record<string, any> | null;

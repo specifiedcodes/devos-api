@@ -66,7 +66,7 @@ export class LinearApiClientService {
       await this.checkRateLimit(integrationId);
     }
 
-    const decryptedToken = this.encryptionService.decrypt(accessToken, accessTokenIv);
+    const decryptedToken = this.encryptionService.decrypt(accessToken);
 
     let lastError: Error | null = null;
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {

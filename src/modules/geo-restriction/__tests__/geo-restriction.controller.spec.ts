@@ -132,7 +132,7 @@ describe('GeoRestrictionController', () => {
     });
 
     it('should return empty array when no blocked attempts', async () => {
-      service.getBlockedAttempts!.mockResolvedValue([]);
+      (service.getBlockedAttempts as jest.Mock).mockResolvedValue([]);
 
       const result = await controller.getBlockedAttempts(WORKSPACE_ID);
 

@@ -174,7 +174,7 @@ export class OutgoingWebhookService {
         : {};
     }
 
-    await this.webhookRepo.update({ id: webhookId }, updates);
+    await this.webhookRepo.update({ id: webhookId }, updates as any);
 
     // Invalidate cache
     await this.invalidateCache(workspaceId);

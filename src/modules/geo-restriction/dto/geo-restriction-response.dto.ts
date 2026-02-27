@@ -8,7 +8,7 @@ export class GeoRestrictionResponseDto {
   @ApiProperty({ type: [String] }) countries!: string[];
   @ApiProperty() isActive!: boolean;
   @ApiProperty() logOnly!: boolean;
-  @ApiProperty() createdBy!: string;
+  @ApiProperty({ nullable: true }) createdBy!: string | null;
   @ApiProperty({ nullable: true }) lastModifiedBy!: string | null;
   @ApiProperty() createdAt!: Date;
   @ApiProperty() updatedAt!: Date;
