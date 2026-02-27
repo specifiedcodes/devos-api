@@ -173,8 +173,21 @@ describe('Slack Interactive Components E2E', () => {
       trigger_id: 'trigger-123',
     };
 
-    await mockInteractionHandler.handleBlockActions(payload, WORKSPACE_ID);
+    // Route through the controller's interaction endpoint to exercise signature verification
+    const bodyStr = `payload=${encodeURIComponent(JSON.stringify(payload))}`;
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = generateSlackSignature(bodyStr, timestamp);
 
+    const result = await controller.handleInteraction(
+      signature,
+      timestamp,
+      { payload: JSON.stringify(payload) },
+      { rawBody: Buffer.from(bodyStr) },
+    );
+
+    // Controller acknowledges with { ok: true } and fires handler async
+    expect(result).toEqual({ ok: true });
+    // Verify the handler was invoked with the parsed payload
     expect(mockInteractionHandler.handleBlockActions).toHaveBeenCalledWith(
       expect.objectContaining({
         type: 'block_actions',
@@ -182,7 +195,6 @@ describe('Slack Interactive Components E2E', () => {
           expect.objectContaining({ action_id: 'approve_deployment' }),
         ]),
       }),
-      WORKSPACE_ID,
     );
   });
 

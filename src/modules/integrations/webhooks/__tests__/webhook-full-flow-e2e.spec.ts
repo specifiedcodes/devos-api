@@ -7,6 +7,7 @@
  */
 
 import * as crypto from 'crypto';
+import { randomUUID } from 'crypto';
 
 // ==================== Constants ====================
 
@@ -68,7 +69,7 @@ describe('Outgoing Webhook E2E - Full Lifecycle Flow', () => {
   }
 
   function createDeliveryLog(webhookId: string, data: Partial<any> = {}) {
-    const id = data.id || `delivery-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const id = data.id || `delivery-${randomUUID()}`;
     const log = {
       _type: 'WebhookDeliveryLog',
       id,

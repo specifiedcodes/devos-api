@@ -248,12 +248,14 @@ describe('Cross-Integration E2E Scenarios', () => {
     expect(Object.keys(encryptedTokens)).toHaveLength(4);
   });
 
-  it('should produce correct final state when concurrent Linear + Jira webhooks for same story arrive', async () => {
+  it('should resolve near-simultaneous Linear + Jira webhooks for same story via timestamp ordering (last-write-wins)', async () => {
     const storyId = 'story-shared-123';
-    const linearUpdate = { source: 'linear', status: 'In Progress', timestamp: Date.now() };
-    const jiraUpdate = { source: 'jira', status: 'In Review', timestamp: Date.now() + 100 };
+    const baseTimestamp = Date.now();
+    const linearUpdate = { source: 'linear', status: 'In Progress', timestamp: baseTimestamp };
+    const jiraUpdate = { source: 'jira', status: 'In Review', timestamp: baseTimestamp + 100 };
 
-    // Process sequentially (simulating queue ordering)
+    // BullMQ queue ensures sequential processing even for near-simultaneous arrivals.
+    // Updates are sorted by timestamp so last-write-wins produces a deterministic result.
     const updates = [linearUpdate, jiraUpdate].sort((a, b) => a.timestamp - b.timestamp);
     let finalStatus = 'backlog';
 
@@ -261,9 +263,17 @@ describe('Cross-Integration E2E Scenarios', () => {
       finalStatus = update.status;
     }
 
-    // Last update wins
+    // Last update (Jira, later timestamp) wins
     expect(finalStatus).toBe('In Review');
     expect(updates[updates.length - 1].source).toBe('jira');
+
+    // Verify ordering is deterministic regardless of arrival order
+    const reversedUpdates = [jiraUpdate, linearUpdate].sort((a, b) => a.timestamp - b.timestamp);
+    let reversedFinal = 'backlog';
+    for (const update of reversedUpdates) {
+      reversedFinal = update.status;
+    }
+    expect(reversedFinal).toBe('In Review');
   });
 
   it('should skip event dispatch silently for disabled integration', () => {

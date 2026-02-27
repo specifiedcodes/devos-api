@@ -25,8 +25,8 @@ const GUILD_ID = '987654321098765432';
 const DISCORD_USER_ID = '123456789012345678';
 const BOT_CONFIG_ID = '44444444-4444-4444-4444-444444444444';
 
-// Ed25519 test key pair (deterministic for tests)
-const TEST_PUBLIC_KEY = 'a]b'.padEnd(64, '0'); // Placeholder - real tests use nacl
+// Ed25519 test public key (64-char hex string, deterministic for tests)
+const TEST_PUBLIC_KEY = 'abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789';
 
 // ==================== Helpers ====================
 

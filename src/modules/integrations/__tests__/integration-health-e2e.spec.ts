@@ -51,9 +51,11 @@ describe('Integration Health Monitoring E2E', () => {
 
   // Mock fetch for health probes
   const mockFetch = jest.fn();
-  const originalFetch = global.fetch;
+  let originalFetch: typeof global.fetch;
 
   beforeEach(() => {
+    // Capture original fetch inside beforeEach to avoid capturing a pre-mocked version
+    originalFetch = global.fetch;
     redisStore = new Map();
     dbStore = new Map();
     global.fetch = mockFetch as any;

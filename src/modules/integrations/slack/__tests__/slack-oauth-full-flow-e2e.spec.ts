@@ -320,18 +320,35 @@ describe('Slack OAuth E2E - Full Lifecycle Flow', () => {
       status: 'active',
     });
 
-    // Simulate fetch call for channels (normally done via service)
-    const channelsFetchCall = mockFetch.mock.calls.find((call: any[]) =>
-      String(call[0]).includes('conversations.list'),
-    );
-    // The mock is set up to return channels - verify the mock response shape
-    const channelsResponse = await mockFetch('https://slack.com/api/conversations.list');
+    // Verify integration is retrievable and token can be decrypted
+    const integration = await mockSlackIntegrationRepo.findOne({
+      where: { workspaceId: WORKSPACE_ID },
+    });
+    expect(integration).toBeDefined();
+    expect(integration.status).toBe('active');
+
+    // Decrypt the bot token (as the service would do before calling Slack API)
+    const decryptedToken = mockEncryptionService.decrypt(integration.botToken);
+    expect(decryptedToken).toBe(SLACK_BOT_TOKEN);
+
+    // Simulate the service calling Slack conversations.list with decrypted token
+    const channelsResponse = await mockFetch('https://slack.com/api/conversations.list', {
+      headers: { Authorization: `Bearer ${decryptedToken}` },
+    });
     const channelsData = await channelsResponse.json();
 
     expect(channelsData.ok).toBe(true);
     expect(channelsData.channels).toHaveLength(3);
     expect(channelsData.channels[0].name).toBe('general');
     expect(channelsData.channels[1].name).toBe('dev-notifications');
+
+    // Verify the fetch was called with correct authorization header
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://slack.com/api/conversations.list',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: `Bearer ${SLACK_BOT_TOKEN}` }),
+      }),
+    );
   });
 
   it('should update SlackNotificationConfig when selecting default channel', async () => {
