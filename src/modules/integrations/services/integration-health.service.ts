@@ -34,6 +34,19 @@ const HEALTH_HISTORY_KEY_PREFIX = 'integration-health:history';
 const MAX_RETENTION_SECONDS = 30 * 24 * 60 * 60; // 30 days
 const MAX_HISTORY_ENTRIES = 8640; // 30 days * 288 checks/day at 5-min intervals
 
+/**
+ * Sanitize error messages to prevent leaking decrypted tokens or secrets.
+ * Strips Authorization headers and token values from error output.
+ */
+function sanitizeProbeError(err: unknown): string {
+  const message = (err as Error)?.message || 'Unknown probe error';
+  // Strip any Authorization header values (Bearer tokens, raw tokens)
+  return message
+    .replace(/Bearer\s+[^\s"'}]+/gi, 'Bearer [REDACTED]')
+    .replace(/Authorization:\s*[^\s"'}]+/gi, 'Authorization: [REDACTED]')
+    .replace(/token[=:]\s*[^\s"'}]+/gi, 'token=[REDACTED]');
+}
+
 @Injectable()
 export class IntegrationHealthService {
   private readonly logger = new Logger(IntegrationHealthService.name);
@@ -205,11 +218,12 @@ export class IntegrationHealthService {
     const key = this.historyKey(workspaceId, type);
 
     try {
-      // Get most recent entries (entire sorted set, then slice)
-      const entries = await this.redisService.zrangebyscore(key, '-inf', '+inf');
+      // Use zrevrange to get only the needed entries in reverse score order (newest first)
+      // This avoids fetching the entire sorted set into memory
+      const entries = await this.redisService.zrevrange(key, 0, effectiveLimit - 1);
       if (!entries || entries.length === 0) return [];
 
-      // Take the most recent entries
+      // Parse entries (already sorted newest first by Redis)
       const parsed: HealthHistoryEntry[] = entries
         .map(entry => {
           try {
@@ -220,10 +234,7 @@ export class IntegrationHealthService {
         })
         .filter((e): e is HealthHistoryEntry => e !== null);
 
-      // Sort descending by timestamp (newest first)
-      parsed.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-
-      return parsed.slice(0, effectiveLimit);
+      return parsed;
     } catch (err) {
       this.logger.warn('Failed to get health history from Redis', (err as Error)?.message);
       return [];
@@ -315,7 +326,7 @@ export class IntegrationHealthService {
           const webhooks = await this.webhookRepo.find({ where: { workspaceId } });
           if (webhooks.length === 0) return null;
           integrationId = webhooks[0].id; // Use first webhook as representative
-          probeResult = await this.withTimeout(this.probeWebhooks(workspaceId));
+          probeResult = await this.withTimeout(this.probeWebhooksFromList(webhooks));
           break;
         }
         default:
@@ -330,8 +341,14 @@ export class IntegrationHealthService {
       };
     }
 
+    // Guard against null integrationId (can happen if repo.findOne itself throws)
+    if (!integrationId) {
+      this.logger.warn(`No integrationId resolved for ${type} in workspace ${workspaceId}, skipping record`);
+      return null;
+    }
+
     // Record and return the result
-    return this.recordProbeResult(workspaceId, type, integrationId!, probeResult);
+    return this.recordProbeResult(workspaceId, type, integrationId, probeResult);
   }
 
   // ==================== Private: Probe Methods ====================
@@ -388,7 +405,7 @@ export class IntegrationHealthService {
       return {
         status: 'unhealthy',
         responseTimeMs: Date.now() - startTime,
-        error: (err as Error)?.message || 'Slack probe failed',
+        error: sanitizeProbeError(err),
       };
     }
   }
@@ -443,7 +460,7 @@ export class IntegrationHealthService {
       return {
         status: 'unhealthy',
         responseTimeMs: Date.now() - startTime,
-        error: (err as Error)?.message || 'Discord probe failed',
+        error: sanitizeProbeError(err),
       };
     }
   }
@@ -499,7 +516,7 @@ export class IntegrationHealthService {
       return {
         status: 'unhealthy',
         responseTimeMs: Date.now() - startTime,
-        error: (err as Error)?.message || 'Linear probe failed',
+        error: sanitizeProbeError(err),
       };
     }
   }
@@ -578,7 +595,7 @@ export class IntegrationHealthService {
       return {
         status: 'unhealthy',
         responseTimeMs: Date.now() - startTime,
-        error: (err as Error)?.message || 'Jira probe failed',
+        error: sanitizeProbeError(err),
       };
     }
   }
@@ -642,11 +659,11 @@ export class IntegrationHealthService {
 
   /**
    * Probe Webhooks: Check delivery status of all active webhooks.
+   * Accepts pre-fetched webhook list to avoid redundant DB query.
    */
-  private async probeWebhooks(workspaceId: string): Promise<ProbeResult> {
+  private async probeWebhooksFromList(webhooks: OutgoingWebhook[]): Promise<ProbeResult> {
     const startTime = Date.now();
     try {
-      const webhooks = await this.webhookRepo.find({ where: { workspaceId } });
       const activeWebhooks = webhooks.filter(w => w.isActive);
 
       if (activeWebhooks.length === 0) {
@@ -690,7 +707,7 @@ export class IntegrationHealthService {
       return {
         status: 'unhealthy',
         responseTimeMs: Date.now() - startTime,
-        error: (err as Error)?.message || 'Webhook probe failed',
+        error: sanitizeProbeError(err),
       };
     }
   }
@@ -866,18 +883,19 @@ export class IntegrationHealthService {
 
   /**
    * Find distinct workspace IDs that have at least one active integration.
+   * Uses DISTINCT queries to avoid fetching all rows into memory.
    */
   private async findDistinctWorkspaceIds(): Promise<string[]> {
     const workspaceIds = new Set<string>();
 
-    // Gather workspace IDs from all integration types in parallel
+    // Gather distinct workspace IDs from all integration types in parallel using QueryBuilder
     const [slacks, discords, linears, jiras, connections, webhooks] = await Promise.all([
-      this.slackRepo.find({ select: ['workspaceId'] }),
-      this.discordRepo.find({ select: ['workspaceId'] }),
-      this.linearRepo.find({ select: ['workspaceId'] }),
-      this.jiraRepo.find({ select: ['workspaceId'] }),
-      this.connectionRepo.find({ select: ['workspaceId'] }),
-      this.webhookRepo.find({ select: ['workspaceId'] }),
+      this.slackRepo.createQueryBuilder('s').select('DISTINCT s.workspace_id', 'workspaceId').getRawMany<{ workspaceId: string }>(),
+      this.discordRepo.createQueryBuilder('d').select('DISTINCT d.workspace_id', 'workspaceId').getRawMany<{ workspaceId: string }>(),
+      this.linearRepo.createQueryBuilder('l').select('DISTINCT l.workspace_id', 'workspaceId').getRawMany<{ workspaceId: string }>(),
+      this.jiraRepo.createQueryBuilder('j').select('DISTINCT j.workspace_id', 'workspaceId').getRawMany<{ workspaceId: string }>(),
+      this.connectionRepo.createQueryBuilder('c').select('DISTINCT c.workspace_id', 'workspaceId').getRawMany<{ workspaceId: string }>(),
+      this.webhookRepo.createQueryBuilder('w').select('DISTINCT w.workspace_id', 'workspaceId').getRawMany<{ workspaceId: string }>(),
     ]);
 
     for (const s of slacks) workspaceIds.add(s.workspaceId);
@@ -892,14 +910,20 @@ export class IntegrationHealthService {
 
   /**
    * Wrap a probe with a timeout using Promise.race().
+   * Clears the timeout timer when the probe resolves to prevent timer leaks.
    */
   private async withTimeout<T>(probe: Promise<T>): Promise<T> {
-    return Promise.race([
-      probe,
-      new Promise<T>((_, reject) =>
-        setTimeout(() => reject(new Error('Probe timeout')), this.probeTimeoutMs),
-      ),
-    ]);
+    let timer: ReturnType<typeof setTimeout>;
+    try {
+      return await Promise.race([
+        probe,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(() => reject(new Error('Probe timeout')), this.probeTimeoutMs);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer!);
+    }
   }
 
   /**

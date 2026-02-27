@@ -28,11 +28,16 @@ const WORKSPACE_ID = '11111111-1111-1111-1111-111111111111';
 const INTEGRATION_ID = '22222222-2222-2222-2222-222222222222';
 
 function createMockRepository() {
+  const mockQueryBuilder = {
+    select: jest.fn().mockReturnThis(),
+    getRawMany: jest.fn().mockResolvedValue([]),
+  };
   return {
     findOne: jest.fn().mockResolvedValue(null),
     find: jest.fn().mockResolvedValue([]),
     create: jest.fn().mockImplementation((data: any) => ({ ...data })),
     save: jest.fn().mockImplementation((data: any) => Promise.resolve({ id: 'mock-id', ...data })),
+    createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
   };
 }
 
@@ -204,12 +209,14 @@ describe('IntegrationHealthService', () => {
 
   describe('runScheduledHealthChecks', () => {
     it('iterates all workspaces with active integrations', async () => {
-      slackRepo.find.mockResolvedValue([{ workspaceId: WORKSPACE_ID }]);
-      discordRepo.find.mockResolvedValue([]);
-      linearRepo.find.mockResolvedValue([]);
-      jiraRepo.find.mockResolvedValue([]);
-      connectionRepo.find.mockResolvedValue([]);
-      webhookRepo.find.mockResolvedValue([]);
+      // Mock createQueryBuilder for distinct workspace ID queries
+      const mockQb = { select: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([{ workspaceId: WORKSPACE_ID }]) };
+      slackRepo.createQueryBuilder.mockReturnValue(mockQb);
+      discordRepo.createQueryBuilder.mockReturnValue({ select: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([]) });
+      linearRepo.createQueryBuilder.mockReturnValue({ select: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([]) });
+      jiraRepo.createQueryBuilder.mockReturnValue({ select: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([]) });
+      connectionRepo.createQueryBuilder.mockReturnValue({ select: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([]) });
+      webhookRepo.createQueryBuilder.mockReturnValue({ select: jest.fn().mockReturnThis(), getRawMany: jest.fn().mockResolvedValue([]) });
 
       // Mock actual checkWorkspaceHealth to avoid deep calls
       jest.spyOn(service, 'checkWorkspaceHealth').mockResolvedValue([]);
@@ -598,19 +605,26 @@ describe('IntegrationHealthService', () => {
   });
 
   describe('getHealthHistory', () => {
-    it('returns sorted history from Redis', async () => {
+    it('returns sorted history from Redis using zrevrange', async () => {
+      // zrevrange returns entries already sorted newest first
       const entries = [
-        JSON.stringify({ timestamp: '2025-01-01T00:00:00Z', status: 'healthy', responseTimeMs: 50 }),
         JSON.stringify({ timestamp: '2025-01-01T00:05:00Z', status: 'degraded', responseTimeMs: 150 }),
+        JSON.stringify({ timestamp: '2025-01-01T00:00:00Z', status: 'healthy', responseTimeMs: 50 }),
       ];
-      redisService.zrangebyscore.mockResolvedValue(entries);
+      redisService.zrevrange.mockResolvedValue(entries);
 
       const result = await service.getHealthHistory(WORKSPACE_ID, IntegrationHealthType.SLACK);
 
       expect(result).toHaveLength(2);
-      // Should be sorted newest first
+      // Already sorted newest first by Redis zrevrange
       expect(result[0].timestamp).toBe('2025-01-01T00:05:00Z');
       expect(result[1].timestamp).toBe('2025-01-01T00:00:00Z');
+      // Verify zrevrange was called with correct range (0 to limit-1)
+      expect(redisService.zrevrange).toHaveBeenCalledWith(
+        expect.stringContaining(`integration-health:history:${WORKSPACE_ID}:slack`),
+        0,
+        99, // default limit is 100, so 0 to 99
+      );
     });
   });
 
