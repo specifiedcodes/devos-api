@@ -150,6 +150,8 @@ import { LinearSyncItem } from './database/entities/linear-sync-item.entity';
 import { JiraIntegrationModule } from './modules/integrations/jira/jira-integration.module';
 import { JiraIntegration } from './database/entities/jira-integration.entity';
 import { JiraSyncItem } from './database/entities/jira-sync-item.entity';
+import { WhiteLabelConfig } from './database/entities/white-label-config.entity';
+import { WhiteLabelModule } from './modules/white-label/white-label.module';
 
 @Module({
   imports: [
@@ -254,6 +256,7 @@ import { JiraSyncItem } from './database/entities/jira-sync-item.entity';
         LinearSyncItem,
         JiraIntegration,
         JiraSyncItem,
+        WhiteLabelConfig,
       ],
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
@@ -328,6 +331,7 @@ import { JiraSyncItem } from './database/entities/jira-sync-item.entity';
     DiscordIntegrationModule,
     LinearIntegrationModule,
     JiraIntegrationModule,
+    WhiteLabelModule,
   ],
   controllers: [AppController],
   providers: [

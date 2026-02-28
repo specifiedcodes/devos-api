@@ -74,6 +74,7 @@ export function buildSwaggerConfig() {
     .addTag('Agent Status', 'Agent activity status tracking and history')
     .addTag('Agent Metrics', 'Agent performance metrics and alerts')
     .addTag('Notification Preferences', 'Per-user notification preference management')
+    .addTag('White-Label', 'White-label branding configuration and custom domain management')
     .build();
 }
 
