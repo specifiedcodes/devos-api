@@ -40,7 +40,8 @@ function readSmokeTestScript(repo: string): string {
     });
   });
 
-  describe('devos-api smoke test script', () => {
+  const apiAvailable = AVAILABLE_REPOS.includes('devos-api');
+  (apiAvailable ? describe : describe.skip)('devos-api smoke test script', () => {
     let content: string;
 
     beforeAll(() => {
@@ -82,7 +83,8 @@ function readSmokeTestScript(repo: string): string {
     });
   });
 
-  describe('devos-frontend smoke test script', () => {
+  const frontendAvailable = AVAILABLE_REPOS.includes('devos-frontend');
+  (frontendAvailable ? describe : describe.skip)('devos-frontend smoke test script', () => {
     let content: string;
 
     beforeAll(() => {
@@ -104,7 +106,8 @@ function readSmokeTestScript(repo: string): string {
     });
   });
 
-  describe('devos-orchestrator smoke test script', () => {
+  const orchestratorAvailable = AVAILABLE_REPOS.includes('devos-orchestrator');
+  (orchestratorAvailable ? describe : describe.skip)('devos-orchestrator smoke test script', () => {
     let content: string;
 
     beforeAll(() => {
@@ -121,7 +124,8 @@ function readSmokeTestScript(repo: string): string {
     });
   });
 
-  describe('devos-websocket smoke test script', () => {
+  const websocketAvailable = AVAILABLE_REPOS.includes('devos-websocket');
+  (websocketAvailable ? describe : describe.skip)('devos-websocket smoke test script', () => {
     let content: string;
 
     beforeAll(() => {

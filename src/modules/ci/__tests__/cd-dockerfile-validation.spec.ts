@@ -26,7 +26,8 @@ function readDockerignore(repo: string): string {
 }
 
 (shouldRun ? describe : describe.skip)('CD Dockerfile Validation', () => {
-  describe('devos-api Dockerfile', () => {
+  const apiAvailable = AVAILABLE_REPOS.includes('devos-api');
+  (apiAvailable ? describe : describe.skip)('devos-api Dockerfile', () => {
     let content: string;
 
     beforeAll(() => {
@@ -63,7 +64,8 @@ function readDockerignore(repo: string): string {
     });
   });
 
-  describe('devos-frontend Dockerfile', () => {
+  const frontendAvailable = AVAILABLE_REPOS.includes('devos-frontend');
+  (frontendAvailable ? describe : describe.skip)('devos-frontend Dockerfile', () => {
     let content: string;
 
     beforeAll(() => {
@@ -108,7 +110,8 @@ function readDockerignore(repo: string): string {
     });
   });
 
-  describe('devos-orchestrator Dockerfile', () => {
+  const orchestratorAvailable = AVAILABLE_REPOS.includes('devos-orchestrator');
+  (orchestratorAvailable ? describe : describe.skip)('devos-orchestrator Dockerfile', () => {
     let content: string;
 
     beforeAll(() => {
@@ -145,7 +148,8 @@ function readDockerignore(repo: string): string {
     });
   });
 
-  describe('devos-websocket Dockerfile', () => {
+  const websocketAvailable = AVAILABLE_REPOS.includes('devos-websocket');
+  (websocketAvailable ? describe : describe.skip)('devos-websocket Dockerfile', () => {
     let content: string;
 
     beforeAll(() => {

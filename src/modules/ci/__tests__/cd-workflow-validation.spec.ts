@@ -29,7 +29,8 @@ function loadCDWorkflow(repo: string): any {
 }
 
 (shouldRun ? describe : describe.skip)('CD Workflow Validation', () => {
-  describe('devos-api CD workflow', () => {
+  const apiAvailable = AVAILABLE_REPOS.includes('devos-api');
+  (apiAvailable ? describe : describe.skip)('devos-api CD workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
@@ -130,7 +131,8 @@ function loadCDWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-frontend CD workflow', () => {
+  const frontendAvailable = AVAILABLE_REPOS.includes('devos-frontend');
+  (frontendAvailable ? describe : describe.skip)('devos-frontend CD workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
@@ -166,7 +168,8 @@ function loadCDWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-orchestrator CD workflow', () => {
+  const orchestratorAvailable = AVAILABLE_REPOS.includes('devos-orchestrator');
+  (orchestratorAvailable ? describe : describe.skip)('devos-orchestrator CD workflow', () => {
     it('should exist and be valid YAML', () => {
       const workflowPath = path.join(
         DEVOS_ROOT,
@@ -183,7 +186,8 @@ function loadCDWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-websocket CD workflow', () => {
+  const websocketAvailable = AVAILABLE_REPOS.includes('devos-websocket');
+  (websocketAvailable ? describe : describe.skip)('devos-websocket CD workflow', () => {
     it('should exist and be valid YAML', () => {
       const workflowPath = path.join(
         DEVOS_ROOT,

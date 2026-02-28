@@ -25,7 +25,8 @@ function loadWorkflow(repo: string): any {
 }
 
 (shouldRun ? describe : describe.skip)('CI Workflow Validation', () => {
-  describe('devos-api CI workflow', () => {
+  const apiAvailable = AVAILABLE_REPOS.includes('devos-api');
+  (apiAvailable ? describe : describe.skip)('devos-api CI workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
@@ -105,7 +106,8 @@ function loadWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-frontend CI workflow', () => {
+  const frontendAvailable = AVAILABLE_REPOS.includes('devos-frontend');
+  (frontendAvailable ? describe : describe.skip)('devos-frontend CI workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
@@ -138,7 +140,8 @@ function loadWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-orchestrator CI workflow', () => {
+  const orchestratorAvailable = AVAILABLE_REPOS.includes('devos-orchestrator');
+  (orchestratorAvailable ? describe : describe.skip)('devos-orchestrator CI workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
@@ -158,7 +161,8 @@ function loadWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-websocket CI workflow', () => {
+  const websocketAvailable = AVAILABLE_REPOS.includes('devos-websocket');
+  (websocketAvailable ? describe : describe.skip)('devos-websocket CI workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
@@ -173,7 +177,8 @@ function loadWorkflow(repo: string): any {
     });
   });
 
-  describe('devos-shared CI workflow', () => {
+  const sharedAvailable = AVAILABLE_REPOS.includes('devos-shared');
+  (sharedAvailable ? describe : describe.skip)('devos-shared CI workflow', () => {
     let workflow: any;
 
     beforeAll(() => {
