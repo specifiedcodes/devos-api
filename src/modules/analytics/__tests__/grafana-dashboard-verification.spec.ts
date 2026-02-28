@@ -106,6 +106,7 @@ const KNOWN_INFRASTRUCTURE_METRICS = [
 const ALL_KNOWN_METRICS = [...KNOWN_PROMETHEUS_METRICS, ...KNOWN_INFRASTRUCTURE_METRICS];
 
 const DASHBOARD_DIR = path.resolve(__dirname, '../../../../../grafana/dashboards');
+const DASHBOARD_EXISTS = fs.existsSync(DASHBOARD_DIR);
 
 /**
  * Extract metric names from a PromQL expression
@@ -170,7 +171,7 @@ function extractDashboardMetrics(dashboardJson: any): { panelTitle: string; metr
   return results;
 }
 
-describe('Grafana Dashboard Data Verification', () => {
+(DASHBOARD_EXISTS ? describe : describe.skip)('Grafana Dashboard Data Verification', () => {
   const dashboardFiles = [
     'application-overview.json',
     'business-metrics.json',

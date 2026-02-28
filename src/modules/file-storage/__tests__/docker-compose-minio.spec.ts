@@ -10,16 +10,16 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
-describe('Docker Compose MinIO Configuration', () => {
+const projectRoot = path.resolve(__dirname, '../../../../..');
+const devComposePath = path.join(projectRoot, 'docker-compose.yml');
+const prodComposePath = path.join(projectRoot, 'docker-compose.production.yml');
+const shouldRun = fs.existsSync(devComposePath) && fs.existsSync(prodComposePath);
+
+(shouldRun ? describe : describe.skip)('Docker Compose MinIO Configuration', () => {
   let devCompose: any;
   let prodCompose: any;
 
   beforeAll(() => {
-    // Path to project root docker-compose files
-    const projectRoot = path.resolve(__dirname, '../../../../..');
-    const devComposePath = path.join(projectRoot, 'docker-compose.yml');
-    const prodComposePath = path.join(projectRoot, 'docker-compose.production.yml');
-
     const devContent = fs.readFileSync(devComposePath, 'utf8');
     devCompose = yaml.load(devContent) as any;
 

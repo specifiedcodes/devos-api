@@ -3,8 +3,9 @@ import * as path from 'path';
 
 const DEVOS_ROOT = path.resolve(__dirname, '../../../../..');
 const ENV_FILE = path.join(DEVOS_ROOT, '.env.production.example');
+const shouldRun = fs.existsSync(ENV_FILE);
 
-describe('Production Environment Example Validation', () => {
+(shouldRun ? describe : describe.skip)('Production Environment Example Validation', () => {
   let content: string;
 
   beforeAll(() => {

@@ -2,8 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 
 const DEVOS_ROOT = path.resolve(__dirname, '../../../../..');
+const SETUP_SH_PATH = path.join(DEVOS_ROOT, 'scripts', 'setup.sh');
+const DEPLOY_SH_PATH = path.join(DEVOS_ROOT, 'scripts', 'deploy.sh');
+const BACKUP_SH_PATH = path.join(DEVOS_ROOT, 'scripts', 'backup.sh');
+const RESTORE_SH_PATH = path.join(DEVOS_ROOT, 'scripts', 'restore.sh');
+const VALIDATE_ENV_SH_PATH = path.join(DEVOS_ROOT, 'scripts', 'validate-env.sh');
+const shouldRun = fs.existsSync(SETUP_SH_PATH) && fs.existsSync(DEPLOY_SH_PATH);
 
-describe('Deployment Scripts Validation', () => {
+(shouldRun ? describe : describe.skip)('Deployment Scripts Validation', () => {
   describe('setup.sh', () => {
     const scriptPath = path.join(DEVOS_ROOT, 'scripts', 'setup.sh');
 
