@@ -17,6 +17,7 @@ import { IpAllowlistEntry } from '../../../database/entities/ip-allowlist-entry.
 import { IpAllowlistConfig } from '../../../database/entities/ip-allowlist-config.entity';
 import { RedisService } from '../../redis/redis.service';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { PermissionAuditService } from '../../permission-audit/services/permission-audit.service';
 
 describe('IpAllowlistService', () => {
   let service: IpAllowlistService;
@@ -103,6 +104,12 @@ describe('IpAllowlistService', () => {
           provide: DataSource,
           useValue: {
             transaction: jest.fn(),
+          },
+        },
+        {
+          provide: PermissionAuditService,
+          useValue: {
+            record: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

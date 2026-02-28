@@ -5,6 +5,7 @@ import { ChatService } from './chat.service';
 import { ConversationService } from './services/conversation.service';
 import { ChatSearchService } from './services/chat-search.service';
 import { ChatExportService } from './services/chat-export.service';
+import { MessageReadTrackingService } from './services/message-read-tracking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
 import { ChatRateLimitGuard } from './guards/chat-rate-limit.guard';
@@ -76,6 +77,13 @@ describe('ChatController', () => {
           provide: ChatExportService,
           useValue: {
             exportConversation: jest.fn(),
+          },
+        },
+        {
+          provide: MessageReadTrackingService,
+          useValue: {
+            trackRead: jest.fn(),
+            getReadStatus: jest.fn(),
           },
         },
       ],

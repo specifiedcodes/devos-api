@@ -13,6 +13,7 @@ import { SsoAuditService } from '../sso-audit.service';
 import { AuthService } from '../../auth/auth.service';
 import { RedisService } from '../../redis/redis.service';
 import { JitProvisioningService } from '../jit/jit-provisioning.service';
+import { SessionFederationService } from '../session/session-federation.service';
 import { SsoAuditEventType } from '../../../database/entities/sso-audit-event.entity';
 import { OidcProviderType } from '../../../database/entities/oidc-configuration.entity';
 
@@ -140,6 +141,19 @@ describe('OidcService', () => {
     resolveRole: jest.fn(),
   };
 
+  const mockSessionFederationService = {
+    getWorkspaceTimeoutConfig: jest.fn().mockResolvedValue({
+      sessionTimeoutMinutes: 1440,
+      idleTimeoutMinutes: 60,
+    }),
+    createFederatedSession: jest.fn().mockResolvedValue({
+      id: 'federated-session-id',
+      userId: 'new-user-id',
+      workspaceId,
+      providerType: 'oidc',
+    }),
+  };
+
   beforeEach(async () => {
     jest.clearAllMocks();
 
@@ -154,6 +168,7 @@ describe('OidcService', () => {
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: JitProvisioningService, useValue: mockJitProvisioningService },
+        { provide: SessionFederationService, useValue: mockSessionFederationService },
       ],
     }).compile();
 

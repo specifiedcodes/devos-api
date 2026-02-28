@@ -6,6 +6,7 @@ import { Workspace } from '../../../database/entities/workspace.entity';
 import { SecurityEvent, SecurityEventType } from '../../../database/entities/security-event.entity';
 import { User } from '../../../database/entities/user.entity';
 import { WorkspaceInvitation } from '../../../database/entities/workspace-invitation.entity';
+import { CustomRole } from '../../../database/entities/custom-role.entity';
 import { NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { DataSource } from 'typeorm';
@@ -41,6 +42,13 @@ describe('Workspace Member Management', () => {
 
   const mockInvitationRepository = {
     findOne: jest.fn(),
+  };
+
+  const mockCustomRoleRepository = {
+    find: jest.fn(),
+    findOne: jest.fn(),
+    save: jest.fn(),
+    create: jest.fn(),
   };
 
   const mockDataSource = {
@@ -83,6 +91,10 @@ describe('Workspace Member Management', () => {
         {
           provide: getRepositoryToken(WorkspaceInvitation),
           useValue: mockInvitationRepository,
+        },
+        {
+          provide: getRepositoryToken(CustomRole),
+          useValue: mockCustomRoleRepository,
         },
         {
           provide: DataSource,
@@ -163,7 +175,7 @@ describe('Workspace Member Management', () => {
       });
       expect(memberRepository.find).toHaveBeenCalledWith({
         where: { workspaceId: 'workspace-1' },
-        relations: ['user'],
+        relations: ['user', 'customRole'],
         order: { createdAt: 'ASC' },
       });
     });

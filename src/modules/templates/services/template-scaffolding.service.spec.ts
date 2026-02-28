@@ -279,7 +279,7 @@ describe('TemplateScaffoldingService', () => {
       const mockJob = {
         id: 'job-123',
         data: {},
-        progress: 50,
+        progress: jest.fn().mockReturnValue(50),
         getState: jest.fn().mockResolvedValue('active'),
         timestamp: Date.now(),
         processedOn: null,

@@ -115,6 +115,20 @@ describe('TemplateReviewService', () => {
           provide: DataSource,
           useValue: {
             query: jest.fn().mockResolvedValue([{ count: '0' }]),
+            transaction: jest.fn((cb) => {
+              const mockManager = {
+                create: jest.fn().mockReturnValue(mockReview),
+                save: jest.fn().mockResolvedValue(mockReview),
+                createQueryBuilder: jest.fn().mockReturnValue({
+                  select: jest.fn().mockReturnThis(),
+                  addSelect: jest.fn().mockReturnThis(),
+                  where: jest.fn().mockReturnThis(),
+                  getRawOne: jest.fn().mockResolvedValue({ avgRating: '5.00', ratingCount: '1' }),
+                }),
+                update: jest.fn().mockResolvedValue({ affected: 1 }),
+              };
+              return cb(mockManager);
+            }),
           },
         },
       ],
@@ -247,9 +261,10 @@ describe('TemplateReviewService', () => {
 
   describe('markHelpful', () => {
     it('should increment helpful count', async () => {
+      jest.spyOn(reviewRepository, 'findOne').mockResolvedValue(mockReview as TemplateReview);
       jest.spyOn(reviewRepository, 'increment').mockResolvedValue({ affected: 1, generatedMaps: [], raw: [] });
 
-      await service.markHelpful(mockReviewId, mockUserId);
+      await service.markHelpful(mockReviewId, 'other-user-id');
 
       expect(reviewRepository.increment).toHaveBeenCalledWith(
         { id: mockReviewId },

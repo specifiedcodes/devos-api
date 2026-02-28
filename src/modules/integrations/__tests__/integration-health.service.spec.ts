@@ -62,6 +62,7 @@ function createMockHttpService() {
 function createMockEncryptionService() {
   return {
     decrypt: jest.fn().mockResolvedValue('decrypted-token'),
+    decryptWithWorkspaceKey: jest.fn().mockResolvedValue('decrypted-token'),
   };
 }
 

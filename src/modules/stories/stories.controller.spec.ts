@@ -3,8 +3,8 @@ import { StoriesController } from './stories.controller';
 import { StoriesService } from './stories.service';
 import { NotFoundException } from '@nestjs/common';
 import { StoryStatus, StoryPriority } from '../../database/entities/story.entity';
+import { Reflector } from '@nestjs/core';
 
-// Mock guards
 jest.mock('../auth/guards/jwt-auth.guard', () => ({
   JwtAuthGuard: jest.fn().mockImplementation(() => ({
     canActivate: jest.fn().mockReturnValue(true),
@@ -16,6 +16,12 @@ jest.mock('../../common/guards/role.guard', () => ({
     canActivate: jest.fn().mockReturnValue(true),
   })),
   RequireRole: (..._roles: string[]) => jest.fn(),
+}));
+
+jest.mock('../../common/guards/permission.guard', () => ({
+  PermissionGuard: jest.fn().mockImplementation(() => ({
+    canActivate: jest.fn().mockReturnValue(true),
+  })),
 }));
 
 describe('StoriesController', () => {
@@ -67,6 +73,7 @@ describe('StoriesController', () => {
           provide: StoriesService,
           useValue: mockService,
         },
+        Reflector,
       ],
     }).compile();
 

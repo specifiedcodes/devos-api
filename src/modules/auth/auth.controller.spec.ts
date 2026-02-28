@@ -8,8 +8,10 @@ import { LoginDto } from './dto/login.dto';
 import { AuthResponseDto } from './dto/auth-response.dto';
 import { EmailAlreadyExistsException } from './exceptions/email-already-exists.exception';
 import { LoginThrottlerGuard } from './guards/login-throttler.guard';
+import { SsoEnforcementGuard } from '../sso/enforcement/sso-enforcement.guard';
+import { SsoEnforcementService } from '../sso/enforcement/sso-enforcement.service';
+import { DomainVerificationService } from '../sso/domain/domain-verification.service';
 
-// Mock Response object
 const mockResponse = () => {
   const res: Partial<Response> = {};
   res.cookie = jest.fn().mockReturnValue(res);
@@ -26,6 +28,15 @@ describe('AuthController', () => {
     login: jest.fn(),
   };
 
+  const mockSsoEnforcementService = {
+    isSsoEnforced: jest.fn().mockResolvedValue(false),
+    isWorkspaceSsoEnforced: jest.fn().mockResolvedValue(false),
+  };
+
+  const mockDomainVerificationService = {
+    isDomainVerified: jest.fn().mockResolvedValue(true),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
@@ -34,9 +45,19 @@ describe('AuthController', () => {
           provide: AuthService,
           useValue: mockAuthService,
         },
+        {
+          provide: SsoEnforcementService,
+          useValue: mockSsoEnforcementService,
+        },
+        {
+          provide: DomainVerificationService,
+          useValue: mockDomainVerificationService,
+        },
       ],
     })
       .overrideGuard(LoginThrottlerGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .overrideGuard(SsoEnforcementGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .compile();
 

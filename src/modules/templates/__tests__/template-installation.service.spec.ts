@@ -16,6 +16,7 @@ import { TemplateScaffoldingService } from '../services/template-scaffolding.ser
 import { TemplateAuditService } from '../services/template-audit.service';
 import { TemplatesGateway } from '../gateways/templates.gateway';
 import { DataSource } from 'typeorm';
+import { TemplatePurchaseService } from '../../billing/services/template-purchase.service';
 
 describe('TemplateInstallationService', () => {
   let service: TemplateInstallationService;
@@ -125,6 +126,13 @@ describe('TemplateInstallationService', () => {
           useValue: {
             add: jest.fn(),
             getJob: jest.fn(),
+          },
+        },
+        {
+          provide: TemplatePurchaseService,
+          useValue: {
+            getPurchase: jest.fn(),
+            recordPurchase: jest.fn(),
           },
         },
       ],

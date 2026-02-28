@@ -8,18 +8,35 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { PostInstallService, PostInstallContext } from './post-install.service';
+import { EventEmitter } from 'events';
 
-// Mock child_process exec
+const createMockChildProcess = (stdout: string = '', stderr: string = '', exitCode: number = 0, delay: number = 10) => {
+  const cp = new EventEmitter() as any;
+  cp.stdout = new EventEmitter();
+  cp.stderr = new EventEmitter();
+  
+  setImmediate(() => {
+    if (stdout) cp.stdout.emit('data', Buffer.from(stdout));
+    if (stderr) cp.stderr.emit('data', Buffer.from(stderr));
+    setImmediate(() => {
+      cp.emit('close', exitCode);
+    });
+  });
+  
+  return cp;
+};
+
+const mockExec = jest.fn();
+const mockSpawn = jest.fn();
+
 jest.mock('child_process', () => ({
-  exec: jest.fn(),
+  exec: (...args: any[]) => mockExec(...args),
+  spawn: (...args: any[]) => mockSpawn(...args),
 }));
-
-import { exec } from 'child_process';
 
 describe('PostInstallService', () => {
   let service: PostInstallService;
   let mockConfigService: Partial<ConfigService>;
-  let mockExec: jest.Mock;
 
   beforeEach(async () => {
     mockConfigService = {
@@ -41,8 +58,8 @@ describe('PostInstallService', () => {
     }).compile();
 
     service = module.get<PostInstallService>(PostInstallService);
-    mockExec = exec as unknown as jest.Mock;
     mockExec.mockReset();
+    mockSpawn.mockReset();
   });
 
   it('should be defined', () => {
@@ -74,8 +91,8 @@ describe('PostInstallService', () => {
           callback(null, 'container-123', '');
         } else if (cmd.includes('docker start')) {
           callback(null, '', '');
-        } else if (cmd.includes('docker exec')) {
-          callback(null, 'success', '');
+        } else if (cmd.includes('docker cp')) {
+          callback(null, '', '');
         } else if (cmd.includes('docker rm')) {
           callback(null, '', '');
         } else {
@@ -83,6 +100,9 @@ describe('PostInstallService', () => {
         }
         return {} as any;
       });
+
+      // Mock spawn for script execution
+      mockSpawn.mockReturnValue(createMockChildProcess('success', '', 0));
 
       const context: PostInstallContext = {
         workspaceId: 'ws-123',
@@ -109,15 +129,20 @@ describe('PostInstallService', () => {
           callback(null, 'container-123', '');
         } else if (cmd.includes('docker start')) {
           callback(null, '', '');
-        } else if (cmd.includes('docker exec')) {
-          callback(null, 'done', '');
+        } else if (cmd.includes('docker cp')) {
+          callback(null, '', '');
         } else if (cmd.includes('docker rm')) {
           callback(null, '', '');
         } else {
-          // In direct mode, scripts are executed directly
-          callback(null, 'done', '');
+          callback(null, '', '');
         }
         return {} as any;
+      });
+
+      let scriptCount = 0;
+      mockSpawn.mockImplementation(() => {
+        scriptCount++;
+        return createMockChildProcess('done', '', 0);
       });
 
       const context: PostInstallContext = {
@@ -137,7 +162,7 @@ describe('PostInstallService', () => {
       expect(result.results).toHaveLength(2);
       expect(result.results[0].exitCode).toBe(0);
       expect(result.results[1].exitCode).toBe(0);
-    });
+    }, 10000);
 
     it('should stop execution on script failure', async () => {
       let scriptExecCount = 0;
@@ -150,33 +175,23 @@ describe('PostInstallService', () => {
           callback(null, 'container-123', '');
         } else if (cmd.includes('docker start')) {
           callback(null, '', '');
-        } else if (cmd.includes('docker exec') || cmd.includes('npm install') || cmd.includes('npm run')) {
-          scriptExecCount++;
-          if (scriptExecCount === 1) {
-            const error = new Error('npm failed') as any;
-            error.code = 1;
-            callback(error, '', 'npm error');
-          } else {
-            callback(null, 'done', '');
-          }
+        } else if (cmd.includes('docker cp')) {
+          callback(null, '', '');
         } else if (cmd.includes('docker rm')) {
           callback(null, '', '');
         } else {
-          // Direct execution mode scripts
-          if (cmd.includes('npm')) {
-            scriptExecCount++;
-            if (scriptExecCount === 1) {
-              const error = new Error('npm failed') as any;
-              error.code = 1;
-              callback(error, '', 'npm error');
-            } else {
-              callback(null, 'done', '');
-            }
-          } else {
-            callback(null, '', '');
-          }
+          callback(null, '', '');
         }
         return {} as any;
+      });
+
+      // Mock spawn for script execution - first script fails
+      mockSpawn.mockImplementation(() => {
+        scriptExecCount++;
+        if (scriptExecCount === 1) {
+          return createMockChildProcess('', 'npm error', 1);
+        }
+        return createMockChildProcess('done', '', 0);
       });
 
       const context: PostInstallContext = {
@@ -228,10 +243,7 @@ describe('PostInstallService', () => {
   // ==================== RunScript Tests ====================
   describe('runScript', () => {
     it('should execute script in container', async () => {
-      mockExec.mockImplementation((cmd: string, options: any, callback: any) => {
-        callback(null, 'script output', '');
-        return {} as any;
-      });
+      mockSpawn.mockReturnValue(createMockChildProcess('script output', '', 0));
 
       const result = await service.runScript('container-123', 'npm install', 300000);
 
@@ -240,10 +252,7 @@ describe('PostInstallService', () => {
     });
 
     it('should capture stderr', async () => {
-      mockExec.mockImplementation((cmd: string, options: any, callback: any) => {
-        callback(null, 'output', 'warning: deprecated');
-        return {} as any;
-      });
+      mockSpawn.mockReturnValue(createMockChildProcess('output', 'warning: deprecated', 0));
 
       const result = await service.runScript('container-123', 'npm install', 300000);
 
@@ -251,12 +260,7 @@ describe('PostInstallService', () => {
     });
 
     it('should return non-zero exit code on failure', async () => {
-      mockExec.mockImplementation((cmd: string, options: any, callback: any) => {
-        const error = new Error('exit code 1') as any;
-        error.code = 1;
-        callback(error, '', 'error');
-        return {} as any;
-      });
+      mockSpawn.mockReturnValue(createMockChildProcess('', '', 1));
 
       const result = await service.runScript('container-123', 'npm install', 300000);
 
@@ -266,12 +270,10 @@ describe('PostInstallService', () => {
     it('should handle timeout', async () => {
       jest.useFakeTimers();
 
-      // Mock that never calls callback
-      let callbackRef: Function | null = null;
-      mockExec.mockImplementation((_cmd: string, _options: any, callback: Function) => {
-        callbackRef = callback;
-        return {} as any;
-      });
+      const cp = new EventEmitter() as any;
+      cp.stdout = new EventEmitter();
+      cp.stderr = new EventEmitter();
+      mockSpawn.mockReturnValue(cp);
 
       const resultPromise = service.runScript('container-123', 'npm install', 1000);
 
@@ -317,7 +319,7 @@ describe('PostInstallService', () => {
           callback(null, 'container-123', '');
         } else if (cmd.includes('docker start')) {
           callback(null, '', '');
-        } else if (cmd.includes('docker exec')) {
+        } else if (cmd.includes('docker cp')) {
           callback(null, '', '');
         } else if (cmd.includes('docker rm')) {
           callback(null, '', '');
@@ -326,6 +328,8 @@ describe('PostInstallService', () => {
         }
         return {} as any;
       });
+
+      mockSpawn.mockReturnValue(createMockChildProcess('', '', 0));
 
       const context: PostInstallContext = {
         workspaceId: 'ws-123',
@@ -355,10 +359,8 @@ describe('PostInstallService', () => {
           callback(null, 'container-123', '');
         } else if (cmd.includes('docker start')) {
           callback(null, '', '');
-        } else if (cmd.includes('docker exec')) {
-          const error = new Error('failed') as any;
-          error.code = 1;
-          callback(error, '', 'error');
+        } else if (cmd.includes('docker cp')) {
+          callback(null, '', '');
         } else if (cmd.includes('docker rm')) {
           callback(null, '', '');
         } else {
@@ -366,6 +368,9 @@ describe('PostInstallService', () => {
         }
         return {} as any;
       });
+
+      // First script fails
+      mockSpawn.mockReturnValue(createMockChildProcess('', 'error', 1));
 
       const context: PostInstallContext = {
         workspaceId: 'ws-123',

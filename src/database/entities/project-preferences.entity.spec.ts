@@ -6,6 +6,7 @@ import {
   GitWorkflow,
   TestingStrategy,
   AiProvider,
+  DeploymentApprovalMode,
   DEFAULT_AI_PROVIDER,
   DEFAULT_AI_MODEL,
 } from './project-preferences.entity';
@@ -92,6 +93,7 @@ describe('ProjectPreferences Entity', () => {
     preferences.testingStrategy = TestingStrategy.BALANCED;
     preferences.aiProvider = AiProvider.ANTHROPIC;
     preferences.aiModel = DEFAULT_AI_MODEL;
+    preferences.deploymentApprovalMode = DeploymentApprovalMode.AUTOMATIC;
 
     const errors = await validate(preferences);
     expect(errors.length).toBe(0);

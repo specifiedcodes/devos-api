@@ -22,6 +22,7 @@ const mockTemplateCreationService = {
   applyTemplatization: jest.fn(),
   getFileTreePreview: jest.fn(),
   getFileContents: jest.fn(),
+  validateWorkspaceAccess: jest.fn().mockResolvedValue(undefined),
 };
 
 // Mock the service module

@@ -8,6 +8,7 @@ import { SsoAuditService } from '../sso-audit.service';
 import { AuthService } from '../../auth/auth.service';
 import { RedisService } from '../../redis/redis.service';
 import { JitProvisioningService } from '../jit/jit-provisioning.service';
+import { SessionFederationService } from '../session/session-federation.service';
 import { SsoAuditEventType } from '../../../database/entities/sso-audit-event.entity';
 
 // Mock @node-saml/node-saml
@@ -68,6 +69,20 @@ describe('SamlService', () => {
     resolveRole: jest.fn(),
   };
 
+  const mockSessionFederationService = {
+    getWorkspaceTimeoutConfig: jest.fn().mockResolvedValue({
+      sessionTimeoutMinutes: 1440,
+      idleTimeoutMinutes: 60,
+    }),
+    createFederatedSession: jest.fn().mockResolvedValue({
+      id: 'federated-session-id',
+      userId: 'user-123',
+      workspaceId: '550e8400-e29b-41d4-a716-446655440000',
+      providerType: 'saml',
+    }),
+    handleIdpLogout: jest.fn().mockResolvedValue(undefined),
+  };
+
   const mockWorkspaceId = '550e8400-e29b-41d4-a716-446655440000';
   const mockConfigId = '550e8400-e29b-41d4-a716-446655440002';
   const mockActorId = '550e8400-e29b-41d4-a716-446655440001';
@@ -85,6 +100,7 @@ describe('SamlService', () => {
         { provide: RedisService, useValue: mockRedisService },
         { provide: ConfigService, useValue: mockConfigService },
         { provide: JitProvisioningService, useValue: mockJitProvisioningService },
+        { provide: SessionFederationService, useValue: mockSessionFederationService },
       ],
     }).compile();
 

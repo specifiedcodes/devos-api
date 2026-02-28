@@ -6,6 +6,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TemplateInstallationController } from '../controllers/template-installation.controller';
 import { TemplateInstallationService } from '../services/template-installation.service';
+import { TemplateAnalyticsService } from '../services/template-analytics.service';
 import { InstallationStatus, InstallationStep } from '../../../database/entities/template-installation.entity';
 import { WorkspaceAccessGuard } from '../../../shared/guards/workspace-access.guard';
 
@@ -45,6 +46,12 @@ describe('TemplateInstallationController', () => {
             cancelInstallation: jest.fn(),
             listInstallations: jest.fn(),
             deleteInstallation: jest.fn(),
+          },
+        },
+        {
+          provide: TemplateAnalyticsService,
+          useValue: {
+            trackEvent: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

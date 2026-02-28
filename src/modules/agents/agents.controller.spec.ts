@@ -6,6 +6,7 @@ import { AgentQueueService } from '../agent-queue/services/agent-queue.service';
 import { FailureRecoveryService } from './failure-recovery.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { WorkspaceAccessGuard } from '../../shared/guards/workspace-access.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
 import {
   Agent,
   AgentType,
@@ -28,7 +29,7 @@ describe('AgentsController', () => {
   const mockProjectId = '44444444-4444-4444-4444-444444444444';
 
   const mockReq = {
-    user: { sub: mockUserId },
+    user: { sub: mockUserId, userId: mockUserId, id: mockUserId },
   };
 
   const createMockAgent = (overrides: Partial<Agent> = {}): Partial<Agent> => ({
@@ -94,6 +95,8 @@ describe('AgentsController', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .overrideGuard(WorkspaceAccessGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .overrideGuard(PermissionGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .compile();
 

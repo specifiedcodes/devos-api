@@ -20,6 +20,7 @@ import {
 } from '../../database/entities/project-preferences.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RoleGuard } from '../../common/guards/role.guard';
+import { PermissionGuard } from '../../common/guards/permission.guard';
 
 describe('ProjectsController', () => {
   let controller: ProjectsController;
@@ -80,6 +81,8 @@ describe('ProjectsController', () => {
       .overrideGuard(JwtAuthGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .overrideGuard(RoleGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .overrideGuard(PermissionGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .compile();
 

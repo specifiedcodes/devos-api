@@ -145,7 +145,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "node_modules/(?!(uuid)/)"
+      "node_modules/(?!(uuid|@octokit|universal-user-agent|before-after-hook|@octokit|bottleneck)/)"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"

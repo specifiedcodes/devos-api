@@ -8,6 +8,7 @@ import { TemplatesController } from './templates.controller';
 import { TemplatesService } from '../services/templates.service';
 import { TemplateRegistryService } from '../services/template-registry.service';
 import { TemplateScaffoldingService } from '../services/template-scaffolding.service';
+import { TemplateAnalyticsService } from '../services/template-analytics.service';
 import { TemplateCategory, TemplateSourceType } from '../../../database/entities/template.entity';
 import { CreateTemplateDto } from '../dto/create-template.dto';
 import { TemplateListResult } from '../interfaces/template.interfaces';
@@ -128,6 +129,14 @@ describe('TemplatesController', () => {
             validateVariables: jest.fn(),
             getJobStatus: jest.fn(),
             cancelJob: jest.fn(),
+          },
+        },
+        {
+          provide: TemplateAnalyticsService,
+          useValue: {
+            trackTemplateView: jest.fn().mockResolvedValue(undefined),
+            trackTemplateUsage: jest.fn().mockResolvedValue(undefined),
+            trackEvent: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

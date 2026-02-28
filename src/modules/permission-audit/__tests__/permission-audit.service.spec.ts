@@ -31,6 +31,7 @@ function createMockQb() {
     getRawMany: jest.fn().mockResolvedValue([]),
     delete: jest.fn().mockReturnThis(),
     from: jest.fn().mockReturnThis(),
+    whereInIds: jest.fn().mockReturnThis(),
     execute: jest.fn().mockResolvedValue({ affected: 0 }),
   };
 }
@@ -437,33 +438,40 @@ describe('PermissionAuditService', () => {
 
   describe('cleanupExpiredEvents()', () => {
     it('should delete events in batches', async () => {
+      mockQb.getMany.mockResolvedValueOnce([{ id: '1' }, { id: '2' }]);
       mockQb.execute.mockResolvedValueOnce({ affected: 500 });
-      mockQb.execute.mockResolvedValueOnce({ affected: 0 });
+      mockQb.getMany.mockResolvedValueOnce([]);
 
       const deleted = await service.cleanupExpiredEvents();
       expect(deleted).toBe(500);
     });
 
     it('should return 0 when nothing to delete', async () => {
-      mockQb.execute.mockResolvedValueOnce({ affected: 0 });
+      mockQb.getMany.mockResolvedValueOnce([]);
       const deleted = await service.cleanupExpiredEvents();
       expect(deleted).toBe(0);
     });
 
     it('should accept custom retention days', async () => {
-      mockQb.execute.mockResolvedValueOnce({ affected: 0 });
+      mockQb.getMany.mockResolvedValueOnce([]);
       await service.cleanupExpiredEvents(30);
       expect(mockQb.where).toHaveBeenCalledWith(
-        'created_at < :cutoffDate',
+        'pae.created_at < :cutoffDate',
         expect.objectContaining({ cutoffDate: expect.any(Date) }),
       );
     });
 
     it('should continue deleting until batch is not full', async () => {
-      mockQb.execute
-        .mockResolvedValueOnce({ affected: 1000 })
-        .mockResolvedValueOnce({ affected: 1000 })
-        .mockResolvedValueOnce({ affected: 300 });
+      mockQb.getMany
+        .mockResolvedValueOnce(Array(1000).fill(null).map((_, i) => ({ id: `id-${i}` })));
+      mockQb.execute.mockResolvedValueOnce({ affected: 1000 });
+      mockQb.getMany
+        .mockResolvedValueOnce(Array(1000).fill(null).map((_, i) => ({ id: `id-${i}` })));
+      mockQb.execute.mockResolvedValueOnce({ affected: 1000 });
+      mockQb.getMany
+        .mockResolvedValueOnce(Array(300).fill(null).map((_, i) => ({ id: `id-${i}` })));
+      mockQb.execute.mockResolvedValueOnce({ affected: 300 });
+      mockQb.getMany.mockResolvedValueOnce([]);
 
       const deleted = await service.cleanupExpiredEvents();
       expect(deleted).toBe(2300);
