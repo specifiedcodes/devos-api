@@ -7,6 +7,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
+import { DataSource } from 'typeorm';
 import { WhiteLabelModule } from '../white-label.module';
 import { WhiteLabelService } from '../white-label.service';
 import { WhiteLabelConfig, BackgroundMode, DomainStatus } from '../../../database/entities/white-label-config.entity';
@@ -53,6 +54,19 @@ describe('WhiteLabelModule', () => {
         {
           provide: ConfigService,
           useValue: { get: jest.fn().mockReturnValue('custom.devos.com') },
+        },
+        {
+          provide: DataSource,
+          useValue: {
+            transaction: jest.fn((callback) => {
+              const mockManager = {
+                findOne: jest.fn(),
+                create: jest.fn(),
+                save: jest.fn(),
+              };
+              return callback(mockManager);
+            }),
+          },
         },
       ],
     }).compile();

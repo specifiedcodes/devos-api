@@ -23,7 +23,9 @@ import {
   ParseUUIDPipe,
   UploadedFile,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
+import { Throttle } from '@nestjs/throttler';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
@@ -38,8 +40,11 @@ import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { WhiteLabelService } from './white-label.service';
 import { UpdateWhiteLabelConfigDto } from './dto/update-white-label-config.dto';
+import { UpdateLoginPageConfigDto } from './dto/update-login-page-config.dto';
 import { SetCustomDomainDto } from './dto/set-custom-domain.dto';
 import { WhiteLabelConfigResponseDto } from './dto/white-label-config-response.dto';
+import { LoginPageConfigResponseDto } from './dto/login-page-config-response.dto';
+import { Public } from '../auth/decorators/public.decorator';
 
 @ApiTags('White-Label')
 @ApiBearerAuth('JWT-auth')
@@ -80,6 +85,26 @@ export class WhiteLabelController {
     @Req() req: any,
   ): Promise<WhiteLabelConfigResponseDto> {
     const config = await this.whiteLabelService.upsertConfig(workspaceId, dto, req.user.id);
+    return WhiteLabelConfigResponseDto.fromEntity(config);
+  }
+
+  /**
+   * PUT /api/workspaces/:workspaceId/white-label/login-page
+   * Update login page configuration.
+   * Requires: workspace owner or admin role
+   * Story 22-3: White-Label Login Page
+   */
+  @Put('login-page')
+  @RequireRole(WorkspaceRole.OWNER, WorkspaceRole.ADMIN)
+  @ApiOperation({ summary: 'Update login page configuration' })
+  @ApiResponse({ status: 200, description: 'Login page config updated', type: WhiteLabelConfigResponseDto })
+  @ApiResponse({ status: 403, description: 'Forbidden - Owner or Admin required' })
+  async updateLoginPageConfig(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Body() dto: UpdateLoginPageConfigDto,
+    @Req() req: any,
+  ): Promise<WhiteLabelConfigResponseDto> {
+    const config = await this.whiteLabelService.updateLoginPageConfig(workspaceId, dto, req.user.id);
     return WhiteLabelConfigResponseDto.fromEntity(config);
   }
 
@@ -214,6 +239,8 @@ export class WhiteLabelController {
 @ApiTags('White-Label')
 @Controller('api/white-label')
 export class WhiteLabelPublicController {
+  private readonly logger = new Logger(WhiteLabelPublicController.name);
+
   constructor(private readonly whiteLabelService: WhiteLabelService) {}
 
   /**
@@ -229,5 +256,31 @@ export class WhiteLabelPublicController {
   ): Promise<WhiteLabelConfigResponseDto | null> {
     const config = await this.whiteLabelService.getConfigByDomain(domain);
     return config ? WhiteLabelConfigResponseDto.fromEntity(config) : null;
+  }
+
+  /**
+   * GET /api/white-label/login-config/:identifier
+   * Public endpoint: Get login page config by custom domain or workspace ID
+   * Rate limited: 20 requests per minute per IP
+   */
+  @Get('login-config/:identifier')
+  @Public()
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
+  @ApiOperation({ summary: 'Get login page configuration by domain or workspace ID' })
+  @ApiResponse({ status: 200, description: 'Login page configuration', type: LoginPageConfigResponseDto })
+  @ApiResponse({ status: 404, description: 'Configuration not found' })
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  async getLoginPageConfig(
+    @Param('identifier') identifier: string,
+  ): Promise<LoginPageConfigResponseDto | null> {
+    this.logger.debug(`Fetching login page config for identifier: ${identifier}`);
+
+    const { config, ssoProviders } = await this.whiteLabelService.getLoginPageConfig(identifier);
+
+    if (!config) {
+      return null;
+    }
+
+    return LoginPageConfigResponseDto.fromEntity(config, ssoProviders);
   }
 }

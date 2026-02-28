@@ -26,6 +26,12 @@ export enum BackgroundMode {
   SYSTEM = 'system',
 }
 
+export enum BackgroundType {
+  COLOR = 'color',
+  GRADIENT = 'gradient',
+  IMAGE = 'image',
+}
+
 export enum DomainStatus {
   PENDING = 'pending',
   VERIFYING = 'verifying',
@@ -101,6 +107,35 @@ export class WhiteLabelConfig {
 
   @Column({ type: 'boolean', name: 'is_active', default: false })
   isActive!: boolean;
+
+  @Column({ type: 'boolean', name: 'show_devos_branding', default: false })
+  showDevosBranding!: boolean;
+
+  @Column({
+    type: 'enum',
+    enum: BackgroundType,
+    name: 'background_type',
+    default: BackgroundType.COLOR,
+  })
+  backgroundType!: BackgroundType;
+
+  @Column({ type: 'varchar', length: 1024, name: 'background_value', default: '#f3f4f6' })
+  backgroundValue!: string;
+
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'hero_text' })
+  heroText?: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true, name: 'hero_subtext' })
+  heroSubtext?: string | null;
+
+  @Column({ type: 'jsonb', name: 'custom_links', default: [] })
+  customLinks!: Array<{ text: string; url: string }>;
+
+  @Column({ type: 'boolean', name: 'show_signup', default: false })
+  showSignup!: boolean;
+
+  @Column({ type: 'text', nullable: true, name: 'login_page_css' })
+  loginPageCss?: string | null;
 
   @Column({ type: 'uuid', nullable: true, name: 'created_by' })
   createdBy?: string | null;

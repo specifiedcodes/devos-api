@@ -14,6 +14,7 @@ import {
   WhiteLabelConfig,
   BackgroundMode,
   DomainStatus,
+  BackgroundType,
 } from '../../database/entities/white-label-config.entity';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RoleGuard } from '../../common/guards/role.guard';
@@ -40,6 +41,14 @@ function createMockConfig(overrides: Partial<WhiteLabelConfig> = {}): WhiteLabel
     domainVerifiedAt: null,
     sslProvisioned: false,
     isActive: false,
+    showDevosBranding: false,
+    backgroundType: BackgroundType.COLOR,
+    backgroundValue: '#f3f4f6',
+    heroText: null,
+    heroSubtext: null,
+    customLinks: [],
+    showSignup: false,
+    loginPageCss: null,
     createdBy: mockUserId,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -241,6 +250,7 @@ describe('WhiteLabelPublicController', () => {
           provide: WhiteLabelService,
           useValue: {
             getConfigByDomain: jest.fn(),
+            getLoginPageConfig: jest.fn(),
           },
         },
       ],
@@ -269,6 +279,130 @@ describe('WhiteLabelPublicController', () => {
 
       const result = await controller.resolveDomain('unknown.example.com');
       expect(result).toBeNull();
+    });
+  });
+
+  describe('GET /login-config/:identifier', () => {
+    it('should return null for non-existent identifier', async () => {
+      service.getLoginPageConfig.mockResolvedValue({ config: null, ssoProviders: [] });
+
+      const result = await controller.getLoginPageConfig('nonexistent');
+
+      expect(result).toBeNull();
+    });
+
+    it('should return config for valid workspace UUID', async () => {
+      const config = createMockConfig();
+      service.getLoginPageConfig.mockResolvedValue({ config, ssoProviders: [] });
+
+      const result = await controller.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result).toBeDefined();
+      expect(result?.appName).toBe('TestApp');
+      expect(service.getLoginPageConfig).toHaveBeenCalledWith(mockWorkspaceId);
+    });
+
+    it('should return config for custom domain', async () => {
+      const config = createMockConfig({
+        customDomain: 'custom.example.com',
+        domainStatus: DomainStatus.VERIFIED,
+      });
+      service.getLoginPageConfig.mockResolvedValue({ config, ssoProviders: [] });
+
+      const result = await controller.getLoginPageConfig('custom.example.com');
+
+      expect(result).toBeDefined();
+      expect(result?.appName).toBe('TestApp');
+      expect(service.getLoginPageConfig).toHaveBeenCalledWith('custom.example.com');
+    });
+
+    it('should include ssoProviders array', async () => {
+      const config = createMockConfig();
+      service.getLoginPageConfig.mockResolvedValue({
+        config,
+        ssoProviders: ['saml', 'oidc'],
+      });
+
+      const result = await controller.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result).toBeDefined();
+      expect(result?.ssoProviders).toEqual(['saml', 'oidc']);
+    });
+
+    it('should include SAML in ssoProviders when SAML is configured', async () => {
+      const config = createMockConfig();
+      service.getLoginPageConfig.mockResolvedValue({
+        config,
+        ssoProviders: ['saml'],
+      });
+
+      const result = await controller.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result?.ssoProviders).toContain('saml');
+    });
+
+    it('should include OIDC in ssoProviders when OIDC is configured', async () => {
+      const config = createMockConfig();
+      service.getLoginPageConfig.mockResolvedValue({
+        config,
+        ssoProviders: ['oidc'],
+      });
+
+      const result = await controller.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result?.ssoProviders).toContain('oidc');
+    });
+
+    it('should return empty array when no SSO configured', async () => {
+      const config = createMockConfig();
+      service.getLoginPageConfig.mockResolvedValue({ config, ssoProviders: [] });
+
+      const result = await controller.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result?.ssoProviders).toEqual([]);
+    });
+
+    it('should map all config fields to response DTO', async () => {
+      const config = createMockConfig({
+        appName: 'CustomApp',
+        logoUrl: 'https://example.com/logo.png',
+        logoDarkUrl: 'https://example.com/logo-dark.png',
+        primaryColor: '#FF0000',
+        secondaryColor: '#00FF00',
+        fontFamily: 'Roboto',
+        showDevosBranding: true,
+        backgroundType: BackgroundType.GRADIENT,
+        backgroundValue: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        heroText: 'Welcome',
+        heroSubtext: 'Sign in to continue',
+        customLinks: [{ text: 'Privacy', url: 'https://example.com/privacy' }],
+        showSignup: true,
+        loginPageCss: 'body { background: red; }',
+      });
+      service.getLoginPageConfig.mockResolvedValue({
+        config,
+        ssoProviders: ['saml'],
+      });
+
+      const result = await controller.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result).toMatchObject({
+        appName: 'CustomApp',
+        logoUrl: 'https://example.com/logo.png',
+        logoDarkUrl: 'https://example.com/logo-dark.png',
+        primaryColor: '#FF0000',
+        secondaryColor: '#00FF00',
+        fontFamily: 'Roboto',
+        showDevosBranding: true,
+        backgroundType: BackgroundType.GRADIENT,
+        backgroundValue: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        heroText: 'Welcome',
+        heroSubtext: 'Sign in to continue',
+        customLinks: [{ text: 'Privacy', url: 'https://example.com/privacy' }],
+        showSignup: true,
+        loginPageCss: 'body { background: red; }',
+        ssoProviders: ['saml'],
+      });
     });
   });
 });

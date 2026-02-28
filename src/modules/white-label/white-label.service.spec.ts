@@ -7,7 +7,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { ConfigService } from '@nestjs/config';
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { WhiteLabelService } from './white-label.service';
@@ -15,6 +15,7 @@ import {
   WhiteLabelConfig,
   BackgroundMode,
   DomainStatus,
+  BackgroundType,
 } from '../../database/entities/white-label-config.entity';
 import { WorkspaceMember } from '../../database/entities/workspace-member.entity';
 import { RedisService } from '../redis/redis.service';
@@ -51,6 +52,17 @@ const mockConfigService = {
   get: jest.fn().mockReturnValue('custom.devos.com'),
 };
 
+const mockDataSource = {
+  transaction: jest.fn((callback) => {
+    const mockManager = {
+      findOne: jest.fn(),
+      create: jest.fn((entityClass, data) => data),
+      save: jest.fn((entity) => Promise.resolve(entity)),
+    };
+    return callback(mockManager);
+  }),
+};
+
 const mockWorkspaceId = '11111111-1111-1111-1111-111111111111';
 const mockUserId = '22222222-2222-2222-2222-222222222222';
 
@@ -73,6 +85,14 @@ function createMockConfig(overrides: Partial<WhiteLabelConfig> = {}): WhiteLabel
     domainVerifiedAt: null,
     sslProvisioned: false,
     isActive: false,
+    showDevosBranding: false,
+    backgroundType: BackgroundType.COLOR,
+    backgroundValue: '#f3f4f6',
+    heroText: null,
+    heroSubtext: null,
+    customLinks: [],
+    showSignup: false,
+    loginPageCss: null,
     createdBy: mockUserId,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -107,6 +127,7 @@ describe('WhiteLabelService', () => {
         { provide: FileStorageService, useValue: mockFileStorageService },
         { provide: AuditService, useValue: mockAuditService },
         { provide: ConfigService, useValue: mockConfigService },
+        { provide: DataSource, useValue: mockDataSource },
       ],
     }).compile();
 
@@ -540,6 +561,266 @@ describe('WhiteLabelService', () => {
       const longCss = 'a'.repeat(15000);
       const result = service.sanitizeCustomCss(longCss);
       expect(result.length).toBe(10000);
+    });
+  });
+
+  describe('updateLoginPageConfig', () => {
+    it('should update all login page fields', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue({
+        ...mockConfig,
+        showDevosBranding: true,
+        backgroundType: BackgroundType.GRADIENT,
+        backgroundValue: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        heroText: 'Welcome',
+        heroSubtext: 'Sign in to continue',
+        customLinks: [{ text: 'Privacy', url: 'https://example.com/privacy' }],
+        showSignup: true,
+        loginPageCss: 'body { background: red; }',
+      });
+
+      const dto = {
+        showDevosBranding: true,
+        backgroundType: BackgroundType.GRADIENT,
+        backgroundValue: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        heroText: 'Welcome',
+        heroSubtext: 'Sign in to continue',
+        customLinks: [{ text: 'Privacy', url: 'https://example.com/privacy' }],
+        showSignup: true,
+        loginPageCss: 'body { background: red; }',
+      };
+
+      const result = await service.updateLoginPageConfig(mockWorkspaceId, dto, mockUserId);
+
+      expect(result.showDevosBranding).toBe(true);
+      expect(result.backgroundType).toBe(BackgroundType.GRADIENT);
+      expect(result.heroText).toBe('Welcome');
+      expect(result.showSignup).toBe(true);
+      expect(mockRedisService.del).toHaveBeenCalled();
+    });
+
+    it('should validate background value against type', async () => {
+      const dto = {
+        backgroundType: BackgroundType.COLOR,
+        backgroundValue: 'invalid-color',
+      };
+
+      await expect(
+        service.updateLoginPageConfig(mockWorkspaceId, dto, mockUserId)
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should sanitize loginPageCss before storage', async () => {
+      const mockConfig = createMockConfig();
+      const sanitizedCss = 'body { color: red; }'; // After sanitization removes script tag
+      
+      const mockManager = {
+        findOne: jest.fn().mockResolvedValue(mockConfig),
+        create: jest.fn((entityClass, data) => data),
+        save: jest.fn().mockResolvedValue({
+          ...mockConfig,
+          loginPageCss: sanitizedCss,
+        }),
+      };
+      
+      mockDataSource.transaction.mockImplementationOnce((callback) => callback(mockManager));
+
+      const dto = {
+        loginPageCss: '<script>alert("xss")</script>body { color: red; }',
+      };
+
+      await service.updateLoginPageConfig(mockWorkspaceId, dto, mockUserId);
+
+      const savedCall = mockManager.save.mock.calls[0][0];
+      expect(savedCall.loginPageCss).not.toContain('<script>');
+    });
+
+    it('should invalidate cache after update', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue(mockConfig);
+
+      await service.updateLoginPageConfig(mockWorkspaceId, { showDevosBranding: true }, mockUserId);
+
+      expect(mockRedisService.del).toHaveBeenCalledWith(`wl:config:${mockWorkspaceId}`);
+    });
+
+    it('should log audit event', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue(mockConfig);
+
+      await service.updateLoginPageConfig(mockWorkspaceId, { showDevosBranding: true }, mockUserId);
+
+      expect(mockAuditService.log).toHaveBeenCalled();
+    });
+  });
+
+  describe('validateBackgroundValue', () => {
+    it('should accept valid hex colors for type=color', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue({
+        ...mockConfig,
+        backgroundType: BackgroundType.COLOR,
+        backgroundValue: '#FF5733',
+      });
+
+      const result = await service.updateLoginPageConfig(
+        mockWorkspaceId,
+        { backgroundType: BackgroundType.COLOR, backgroundValue: '#FF5733' },
+        mockUserId
+      );
+
+      expect(result.backgroundValue).toBe('#FF5733');
+    });
+
+    it('should reject invalid hex colors for type=color', async () => {
+      await expect(
+        service.updateLoginPageConfig(
+          mockWorkspaceId,
+          { backgroundType: BackgroundType.COLOR, backgroundValue: 'FF5733' },
+          mockUserId
+        )
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should accept valid linear-gradient for type=gradient', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue({
+        ...mockConfig,
+        backgroundType: BackgroundType.GRADIENT,
+        backgroundValue: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+      });
+
+      const result = await service.updateLoginPageConfig(
+        mockWorkspaceId,
+        {
+          backgroundType: BackgroundType.GRADIENT,
+          backgroundValue: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+        },
+        mockUserId
+      );
+
+      expect(result.backgroundValue).toContain('linear-gradient');
+    });
+
+    it('should accept valid radial-gradient for type=gradient', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue({
+        ...mockConfig,
+        backgroundType: BackgroundType.GRADIENT,
+        backgroundValue: 'radial-gradient(circle, #667eea, #764ba2)',
+      });
+
+      const result = await service.updateLoginPageConfig(
+        mockWorkspaceId,
+        {
+          backgroundType: BackgroundType.GRADIENT,
+          backgroundValue: 'radial-gradient(circle, #667eea, #764ba2)',
+        },
+        mockUserId
+      );
+
+      expect(result.backgroundValue).toContain('radial-gradient');
+    });
+
+    it('should reject url() in gradients', async () => {
+      await expect(
+        service.updateLoginPageConfig(
+          mockWorkspaceId,
+          {
+            backgroundType: BackgroundType.GRADIENT,
+            backgroundValue: 'linear-gradient(url(evil.com), #667eea)',
+          },
+          mockUserId
+        )
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should accept valid image URLs for type=image', async () => {
+      const mockConfig = createMockConfig();
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+      whiteLabelRepo.save.mockResolvedValue({
+        ...mockConfig,
+        backgroundType: BackgroundType.IMAGE,
+        backgroundValue: 'https://example.com/image.jpg',
+      });
+
+      const result = await service.updateLoginPageConfig(
+        mockWorkspaceId,
+        {
+          backgroundType: BackgroundType.IMAGE,
+          backgroundValue: 'https://example.com/image.jpg',
+        },
+        mockUserId
+      );
+
+      expect(result.backgroundValue).toBe('https://example.com/image.jpg');
+    });
+
+    it('should reject javascript: URLs for type=image', async () => {
+      await expect(
+        service.updateLoginPageConfig(
+          mockWorkspaceId,
+          {
+            backgroundType: BackgroundType.IMAGE,
+            backgroundValue: 'javascript:alert(1)',
+          },
+          mockUserId
+        )
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should reject data:text/html URLs for type=image', async () => {
+      await expect(
+        service.updateLoginPageConfig(
+          mockWorkspaceId,
+          {
+            backgroundType: BackgroundType.IMAGE,
+            backgroundValue: 'data:text/html,<script>alert(1)</script>',
+          },
+          mockUserId
+        )
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe('getLoginPageConfig', () => {
+    it('should return null when no config exists', async () => {
+      whiteLabelRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result.config).toBeNull();
+      expect(result.ssoProviders).toEqual([]);
+    });
+
+    it('should return config with ssoProviders by workspace UUID', async () => {
+      const mockConfig = createMockConfig({ isActive: true });
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+
+      const result = await service.getLoginPageConfig(mockWorkspaceId);
+
+      expect(result.config).toBeDefined();
+      expect(result.config?.workspaceId).toBe(mockWorkspaceId);
+    });
+
+    it('should return config by custom domain', async () => {
+      const mockConfig = createMockConfig({
+        customDomain: 'custom.example.com',
+        domainStatus: DomainStatus.VERIFIED,
+        isActive: true,
+      });
+      whiteLabelRepo.findOne.mockResolvedValue(mockConfig);
+
+      const result = await service.getLoginPageConfig('custom.example.com');
+
+      expect(result.config).toBeDefined();
+      expect(result.config?.customDomain).toBe('custom.example.com');
     });
   });
 });
