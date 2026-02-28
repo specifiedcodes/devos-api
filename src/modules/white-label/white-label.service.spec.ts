@@ -531,6 +531,11 @@ describe('WhiteLabelService', () => {
       expect(result).not.toContain('-moz-binding');
     });
 
+    it('should strip @import with bare string URLs (without url() wrapper)', () => {
+      const result = service.sanitizeCustomCss('@import "https://evil.com/inject.css";');
+      expect(result).not.toContain('https://evil.com');
+    });
+
     it('should limit to 10000 characters', () => {
       const longCss = 'a'.repeat(15000);
       const result = service.sanitizeCustomCss(longCss);

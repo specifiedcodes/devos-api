@@ -189,7 +189,7 @@ export class WhiteLabelService {
 
     const url = await this.fileStorageService.getSignedUrl(WHITE_LABEL_BUCKET, key, 3600);
 
-    // Update config with logo URL
+    // Update config with logo URL (store the signed URL, not the raw S3 key)
     let config = await this.whiteLabelRepo.findOne({ where: { workspaceId } });
     if (!config) {
       config = this.whiteLabelRepo.create({
@@ -198,9 +198,9 @@ export class WhiteLabelService {
       });
     }
     if (variant === 'primary') {
-      config.logoUrl = key;
+      config.logoUrl = url;
     } else {
-      config.logoDarkUrl = key;
+      config.logoDarkUrl = url;
     }
     await this.whiteLabelRepo.save(config);
     await this.invalidateCache(workspaceId);
@@ -251,7 +251,7 @@ export class WhiteLabelService {
 
     const url = await this.fileStorageService.getSignedUrl(WHITE_LABEL_BUCKET, key, 3600);
 
-    // Update config with favicon URL
+    // Update config with favicon URL (store the signed URL, not the raw S3 key)
     let config = await this.whiteLabelRepo.findOne({ where: { workspaceId } });
     if (!config) {
       config = this.whiteLabelRepo.create({
@@ -259,7 +259,7 @@ export class WhiteLabelService {
         createdBy: actorId,
       });
     }
-    config.faviconUrl = key;
+    config.faviconUrl = url;
     await this.whiteLabelRepo.save(config);
     await this.invalidateCache(workspaceId);
 
@@ -593,8 +593,9 @@ export class WhiteLabelService {
     // Strip -moz-binding (Firefox XBL binding)
     sanitized = sanitized.replace(/-moz-binding\s*:/gi, '');
 
-    // Strip @import with external URLs (only allow relative paths)
+    // Strip @import with external URLs (both url() and bare string forms)
     sanitized = sanitized.replace(/@import\s+url\s*\(\s*['"]?https?:\/\//gi, '/* blocked @import */ ');
+    sanitized = sanitized.replace(/@import\s+['"]https?:\/\//gi, '/* blocked @import */ ');
 
     // Limit to 10,000 characters after sanitization
     if (sanitized.length > 10000) {
