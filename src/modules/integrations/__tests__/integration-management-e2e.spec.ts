@@ -131,7 +131,7 @@ describe('Integration Management E2E', () => {
     const slackStatus = result.find((r: any) => r.type === 'slack');
 
     expect(slackStatus).toBeDefined();
-    expect(slackStatus.type).toBe('slack');
+    expect(slackStatus!.type).toBe('slack');
     expect(slackStatus).toHaveProperty('connected');
     expect(slackStatus).toHaveProperty('status');
   });
@@ -180,9 +180,9 @@ describe('Integration Management E2E', () => {
     const slackStatus = result.find((r: any) => r.type === 'slack');
 
     expect(slackStatus).toBeDefined();
-    expect(slackStatus.connected).toBe(true);
-    expect(slackStatus.status).toBe('active');
-    expect(slackStatus.accountLabel).toBe('Test Team');
+    expect(slackStatus!.connected).toBe(true);
+    expect(slackStatus!.status).toBe('active');
+    expect(slackStatus!.accountLabel).toBe('Test Team');
   });
 
   it('should show expired token status for provider', async () => {
@@ -199,7 +199,7 @@ describe('Integration Management E2E', () => {
 
     expect(slackStatus).toBeDefined();
     // Service may normalize error states - verify it is not 'active' and has error-like status
-    expect(['error', 'expired', 'disconnected']).toContain(slackStatus.status);
+    expect(['error', 'expired', 'disconnected']).toContain(slackStatus!.status);
   });
 
   it('should return real webhook status with active/total counts (not coming-soon)', async () => {
@@ -213,8 +213,8 @@ describe('Integration Management E2E', () => {
     const webhookStatus = result.find((r: any) => r.type === 'webhooks');
 
     expect(webhookStatus).toBeDefined();
-    expect(webhookStatus.status).not.toBe('coming-soon');
-    expect(webhookStatus.available).toBe(true);
+    expect(webhookStatus!.status).not.toBe('coming-soon');
+    expect(webhookStatus!.available).toBe(true);
   });
 
   it('should include events from all provider types in recent activity', async () => {

@@ -367,7 +367,11 @@ export class IntegrationHealthService {
         };
       }
 
-      const token = await this.encryptionService.decrypt(slack.botToken, slack.botTokenIV);
+      const token = await this.encryptionService.decryptWithWorkspaceKey(
+        slack.workspaceId,
+        slack.botToken,
+        slack.botTokenIV,
+      );
       const response = await this.httpService.axiosRef.post(
         'https://slack.com/api/auth.test',
         null,
@@ -424,7 +428,8 @@ export class IntegrationHealthService {
         };
       }
 
-      const webhookUrl = await this.encryptionService.decrypt(
+      const webhookUrl = await this.encryptionService.decryptWithWorkspaceKey(
+        discord.workspaceId,
         discord.defaultWebhookUrl,
         discord.defaultWebhookUrlIv,
       );
@@ -479,7 +484,11 @@ export class IntegrationHealthService {
         };
       }
 
-      const token = await this.encryptionService.decrypt(linear.accessToken, linear.accessTokenIv);
+      const token = await this.encryptionService.decryptWithWorkspaceKey(
+        linear.workspaceId,
+        linear.accessToken,
+        linear.accessTokenIv,
+      );
       const response = await this.httpService.axiosRef.post(
         'https://api.linear.app/graphql',
         { query: '{ viewer { id } }' },
@@ -551,7 +560,11 @@ export class IntegrationHealthService {
         };
       }
 
-      const token = await this.encryptionService.decrypt(jira.accessToken, jira.accessTokenIv);
+      const token = await this.encryptionService.decryptWithWorkspaceKey(
+        jira.workspaceId,
+        jira.accessToken,
+        jira.accessTokenIv,
+      );
       const response = await this.httpService.axiosRef.get(
         `https://api.atlassian.com/ex/jira/${jira.cloudId}/rest/api/3/myself`,
         {
