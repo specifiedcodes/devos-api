@@ -23,39 +23,19 @@ function readDockerfile(service: string): string {
 }
 
 (shouldRun ? describe : describe.skip)('Dockerfile Validation', () => {
-  it('should verify devos-api Dockerfile has 3 stages', () => {
-    const content = readDockerfile('devos-api');
-    expect(content).toMatch(/FROM\s+\S+\s+AS\s+deps/i);
-    expect(content).toMatch(/FROM\s+\S+\s+AS\s+builder/i);
-    expect(content).toMatch(/FROM\s+\S+\s+AS\s+production/i);
-  });
-
-  it('should verify devos-frontend Dockerfile has 3 stages', () => {
-    const content = readDockerfile('devos-frontend');
-    const fromCount = (content.match(/^FROM\s+/gm) || []).length;
-    expect(fromCount).toBeGreaterThanOrEqual(3);
-    expect(content).toMatch(/AS\s+deps/i);
-    expect(content).toMatch(/AS\s+builder/i);
-    expect(content).toMatch(/AS\s+production/i);
-  });
-
-  it('should verify devos-websocket Dockerfile has 3 stages', () => {
-    const content = readDockerfile('devos-websocket');
-    const fromCount = (content.match(/^FROM\s+/gm) || []).length;
-    expect(fromCount).toBeGreaterThanOrEqual(3);
-    expect(content).toMatch(/AS\s+deps/i);
-    expect(content).toMatch(/AS\s+builder/i);
-    expect(content).toMatch(/AS\s+production/i);
-  });
-
-  it('should verify devos-orchestrator Dockerfile has 3 stages', () => {
-    const content = readDockerfile('devos-orchestrator');
-    const fromCount = (content.match(/^FROM\s+/gm) || []).length;
-    expect(fromCount).toBeGreaterThanOrEqual(3);
-    expect(content).toMatch(/AS\s+deps/i);
-    expect(content).toMatch(/AS\s+builder/i);
-    expect(content).toMatch(/AS\s+production/i);
-  });
+  // Dynamically create tests for each available service
+  for (const service of AVAILABLE_SERVICES) {
+    describe(`${service} Dockerfile`, () => {
+      it('should have 3 stages (deps, builder, production)', () => {
+        const content = readDockerfile(service);
+        const fromCount = (content.match(/^FROM\s+/gm) || []).length;
+        expect(fromCount).toBeGreaterThanOrEqual(3);
+        expect(content).toMatch(/AS\s+deps/i);
+        expect(content).toMatch(/AS\s+builder/i);
+        expect(content).toMatch(/AS\s+production/i);
+      });
+    });
+  }
 
   it('should verify all Dockerfiles set NODE_ENV=production', () => {
     for (const service of AVAILABLE_SERVICES) {
