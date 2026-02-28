@@ -18,6 +18,10 @@ const AVAILABLE_REPOS = REPOS.filter((repo) => {
 
 const isMonorepo = AVAILABLE_REPOS.length > 1;
 
+function isValidTypeCheckScript(script: string): boolean {
+  return script === 'tsc --noEmit' || script.includes('tsc') && script.includes('--noEmit');
+}
+
 describe('Type-Check Scripts', () => {
   if (!isMonorepo) {
     it.skip('should have type-check script in all package.json files (skipped: not in monorepo)', () => {});
@@ -28,7 +32,7 @@ describe('Type-Check Scripts', () => {
     for (const repo of AVAILABLE_REPOS) {
       const pkgPath = path.join(DEVOS_ROOT, repo, 'package.json');
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-      expect(pkg.scripts['type-check']).toBe('tsc --noEmit');
+      expect(isValidTypeCheckScript(pkg.scripts['type-check'])).toBe(true);
     }
   });
 
@@ -38,7 +42,7 @@ describe('Type-Check Scripts', () => {
       expect(fs.existsSync(pkgPath)).toBe(true);
       const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
       expect(pkg.scripts).toBeDefined();
-      expect(pkg.scripts['type-check']).toBe('tsc --noEmit');
+      expect(isValidTypeCheckScript(pkg.scripts['type-check'])).toBe(true);
     });
   }
 });

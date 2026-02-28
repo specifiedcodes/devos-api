@@ -177,7 +177,6 @@ describe('AgentsService', () => {
       expect(result).toEqual(mockAgent);
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockAgentId, workspaceId: mockWorkspaceId },
-        relations: ['workspace', 'project', 'creator'],
       });
     });
 
@@ -199,7 +198,6 @@ describe('AgentsService', () => {
 
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockAgentId, workspaceId: differentWorkspaceId },
-        relations: ['workspace', 'project', 'creator'],
       });
     });
   });
@@ -536,7 +534,6 @@ describe('AgentsService', () => {
 
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockAgentId, workspaceId: mockWorkspaceId },
-        relations: ['workspace', 'project', 'creator'],
       });
       expect(mockRepository.update).toHaveBeenCalledWith(
         { id: mockAgentId, workspaceId: mockWorkspaceId },
@@ -568,7 +565,6 @@ describe('AgentsService', () => {
 
       expect(mockRepository.findOne).toHaveBeenCalledWith({
         where: { id: mockAgentId, workspaceId: mockWorkspaceId },
-        relations: ['workspace', 'project', 'creator'],
       });
       expect(mockRepository.update).toHaveBeenCalledWith(
         { id: mockAgentId, workspaceId: mockWorkspaceId },

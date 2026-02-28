@@ -13,9 +13,11 @@ jest.mock('uuid', () => ({
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
+import { forwardRef } from '@nestjs/common';
 import { MemoryQueryService } from './memory-query.service';
 import { GraphitiService } from './graphiti.service';
 import { Neo4jService } from './neo4j.service';
+import { CrossProjectLearningService } from './cross-project-learning.service';
 import {
   MemoryEpisode,
   MemoryEpisodeType,
@@ -103,7 +105,7 @@ describe('MemoryQueryService', () => {
         { provide: GraphitiService, useValue: mockGraphitiService },
         { provide: Neo4jService, useValue: mockNeo4jService },
         { provide: ConfigService, useValue: mockConfigService },
-        { provide: 'CrossProjectLearningService', useValue: mockCrossProjectLearningService },
+        { provide: CrossProjectLearningService, useValue: mockCrossProjectLearningService },
       ],
     }).compile();
 
