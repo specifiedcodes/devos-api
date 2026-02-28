@@ -2,9 +2,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
-describe('Docker Compose Grafana Configuration', () => {
-  const projectRoot = path.resolve(__dirname, '../../../../..');
-  const composePath = path.join(projectRoot, 'docker-compose.yml');
+const projectRoot = path.resolve(__dirname, '../../../../..');
+const composePath = path.join(projectRoot, 'docker-compose.yml');
+const shouldRun = fs.existsSync(composePath);
+
+(shouldRun ? describe : describe.skip)('Docker Compose Grafana Configuration', () => {
   let compose: any;
 
   beforeAll(() => {

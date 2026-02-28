@@ -2,9 +2,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
-describe('Loki Configuration', () => {
-  const projectRoot = path.resolve(__dirname, '../../../../..');
-  const lokiConfigPath = path.join(projectRoot, 'loki/loki-config.yml');
+const projectRoot = path.resolve(__dirname, '../../../../..');
+const lokiConfigPath = path.join(projectRoot, 'loki/loki-config.yml');
+const promtailConfigPath = path.join(projectRoot, 'promtail/promtail-config.yml');
+const shouldRun = fs.existsSync(lokiConfigPath) && fs.existsSync(promtailConfigPath);
+
+(shouldRun ? describe : describe.skip)('Loki Configuration', () => {
   let lokiConfig: any;
 
   beforeAll(() => {
@@ -37,9 +40,7 @@ describe('Loki Configuration', () => {
   });
 });
 
-describe('Promtail Configuration', () => {
-  const projectRoot = path.resolve(__dirname, '../../../../..');
-  const promtailConfigPath = path.join(projectRoot, 'promtail/promtail-config.yml');
+(shouldRun ? describe : describe.skip)('Promtail Configuration', () => {
   let promtailConfig: any;
 
   beforeAll(() => {

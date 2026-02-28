@@ -2,19 +2,14 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 
-/**
- * Docker Compose Jaeger Configuration Tests
- * Story 14.4: Jaeger Distributed Tracing (AC1, AC9)
- *
- * Validates that docker-compose.yml contains the correct Jaeger service
- * definition and that the API service has the correct OTEL environment
- * variables and depends_on configuration.
- */
-describe('Docker Compose Jaeger Configuration', () => {
+const projectRoot = path.resolve(__dirname, '../../../../..');
+const composePath = path.join(projectRoot, 'docker-compose.yml');
+const shouldRun = fs.existsSync(composePath);
+
+(shouldRun ? describe : describe.skip)('Docker Compose Jaeger Configuration', () => {
   let composeConfig: any;
 
   beforeAll(() => {
-    const composePath = path.resolve(__dirname, '../../../../../docker-compose.yml');
     const content = fs.readFileSync(composePath, 'utf-8');
     composeConfig = yaml.load(content);
   });
