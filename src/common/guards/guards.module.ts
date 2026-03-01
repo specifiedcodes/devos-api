@@ -5,12 +5,14 @@ import { SecurityEvent } from '../../database/entities/security-event.entity';
 import { RoleGuard } from './role.guard';
 import { PermissionGuard } from './permission.guard';
 import { PermissionAuditModule } from '../../modules/permission-audit/permission-audit.module';
+import { CustomRolesModule } from '../../modules/custom-roles/custom-roles.module';
 
 @Global()
 @Module({
   imports: [
     TypeOrmModule.forFeature([WorkspaceMember, SecurityEvent]),
     PermissionAuditModule,
+    CustomRolesModule,
   ],
   providers: [RoleGuard, PermissionGuard],
   exports: [RoleGuard, PermissionGuard, TypeOrmModule],
