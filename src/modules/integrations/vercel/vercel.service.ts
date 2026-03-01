@@ -13,7 +13,13 @@ import {
   VercelDeploymentListResponseDto,
 } from './dto/vercel.dto';
 
+// DEPRECATED: Scheduled for removal. See Epic 28.
+// TODO(epic-28-cleanup): Remove after sunset period
+
 /**
+ * @deprecated Vercel deployment integration is deprecated. Use Railway instead. See Epic 28.
+ * Scheduled for removal after sunset period (90 days from 2026-03-01).
+ *
  * VercelService
  * Story 6.6: Vercel Deployment Integration (Alternative)
  *
@@ -115,6 +121,9 @@ export class VercelService {
   }
 
   /**
+   * @deprecated Use Railway service provisioning instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Create a Vercel project
    */
   async createProject(
@@ -174,6 +183,9 @@ export class VercelService {
   }
 
   /**
+   * @deprecated Use Railway deployment via CLI instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Trigger a deployment on Vercel
    */
   async triggerDeployment(
@@ -226,6 +238,9 @@ export class VercelService {
   }
 
   /**
+   * @deprecated Use Railway deployment history instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Get deployment details
    * Returns null for not-found errors
    */
@@ -264,6 +279,9 @@ export class VercelService {
   }
 
   /**
+   * @deprecated Use Railway deployment history instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * List deployments for a Vercel project
    */
   async listDeployments(
@@ -319,6 +337,9 @@ export class VercelService {
   }
 
   /**
+   * @deprecated Use Railway deployment rollback instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Redeploy a specific Vercel deployment (used for rollback)
    * Story 6.10: Deployment Rollback
    *
@@ -370,6 +391,9 @@ export class VercelService {
   }
 
   /**
+   * @deprecated Use Railway environment variable management instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Upsert environment variables for a Vercel project
    */
   async upsertEnvironmentVariables(

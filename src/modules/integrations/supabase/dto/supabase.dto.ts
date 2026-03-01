@@ -9,7 +9,12 @@ import {
   Matches,
 } from 'class-validator';
 
+// DEPRECATED: Scheduled for removal. See Epic 28.
+// TODO(epic-28-cleanup): Remove after sunset period
+
 /**
+ * @deprecated Supabase database provisioning is deprecated. Use Railway instead. See Epic 28.
+ *
  * Supabase DTOs
  * Story 6.7: Supabase Database Provisioning
  */

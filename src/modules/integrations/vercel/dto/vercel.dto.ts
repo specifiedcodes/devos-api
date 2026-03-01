@@ -16,7 +16,12 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
+// DEPRECATED: Scheduled for removal. See Epic 28.
+// TODO(epic-28-cleanup): Remove after sunset period
+
 /**
+ * @deprecated Vercel deployment integration is deprecated. Use Railway instead. See Epic 28.
+ *
  * Vercel DTOs
  * Story 6.6: Vercel Deployment Integration (Alternative)
  */

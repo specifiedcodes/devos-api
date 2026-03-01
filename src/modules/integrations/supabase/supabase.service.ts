@@ -12,7 +12,13 @@ import {
   SupabaseOrganizationListResponseDto,
 } from './dto/supabase.dto';
 
+// DEPRECATED: Scheduled for removal. See Epic 28.
+// TODO(epic-28-cleanup): Remove after sunset period
+
 /**
+ * @deprecated Supabase database provisioning is deprecated. Use Railway instead. See Epic 28.
+ * Scheduled for removal after sunset period (90 days from 2026-03-01).
+ *
  * SupabaseService
  * Story 6.7: Supabase Database Provisioning
  *
@@ -123,6 +129,9 @@ export class SupabaseService {
   }
 
   /**
+   * @deprecated Use Railway database provisioning instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Create a Supabase project (provisions a Postgres database)
    */
   async createProject(
@@ -166,6 +175,9 @@ export class SupabaseService {
   }
 
   /**
+   * @deprecated Use Railway service status instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Get Supabase project details and status
    * Returns null for not-found errors
    */
@@ -205,6 +217,9 @@ export class SupabaseService {
   }
 
   /**
+   * @deprecated Use Railway connection info instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Get API keys for a Supabase project
    */
   async getProjectApiKeys(
@@ -230,6 +245,9 @@ export class SupabaseService {
   }
 
   /**
+   * @deprecated Use Railway project management instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * List organizations the authenticated user belongs to
    */
   async listOrganizations(
@@ -256,6 +274,9 @@ export class SupabaseService {
   }
 
   /**
+   * @deprecated Use Railway service management instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Pause a Supabase project (free tier)
    */
   async pauseProject(token: string, projectRef: string): Promise<void> {
@@ -269,6 +290,9 @@ export class SupabaseService {
   }
 
   /**
+   * @deprecated Use Railway service management instead. See Epic 28.
+   * TODO(epic-28-cleanup): Remove after sunset period
+   *
    * Resume a paused Supabase project
    */
   async resumeProject(token: string, projectRef: string): Promise<void> {

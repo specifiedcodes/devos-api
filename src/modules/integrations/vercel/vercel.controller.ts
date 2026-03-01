@@ -7,6 +7,7 @@ import {
   Param,
   Query,
   UseGuards,
+  UseInterceptors,
   Req,
   Logger,
   ForbiddenException,
@@ -37,13 +38,20 @@ import {
   VercelDeploymentListResponseDto,
   SetVercelVariablesResponseDto,
 } from './dto/vercel.dto';
+import { DeprecationInterceptor } from './deprecation.interceptor';
 
 /**
+ * @deprecated Vercel deployment integration is deprecated. Use Railway instead. See Epic 28.
+ * Scheduled for removal after sunset period (90 days from 2026-03-01).
+ *
  * VercelController
  * Story 6.6: Vercel Deployment Integration (Alternative)
  *
  * Handles Vercel project creation, deployment triggering, status polling,
  * and environment variable management for project-linked Vercel deployments.
+ *
+ * DEPRECATED: All endpoints return `Deprecation: true` and `Sunset` headers.
+ * TODO(epic-28-cleanup): Remove after sunset period
  */
 @ApiTags('Deployments')
 @ApiBearerAuth('JWT-auth')
@@ -51,6 +59,7 @@ import {
   'api/v1/workspaces/:workspaceId/projects/:projectId/vercel',
 )
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
+@UseInterceptors(new DeprecationInterceptor('vercel'))
 export class VercelController {
   private readonly logger = new Logger(VercelController.name);
 

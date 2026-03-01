@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   UseGuards,
+  UseInterceptors,
   Req,
   Logger,
   ForbiddenException,
@@ -32,13 +33,20 @@ import {
   SupabaseOrganizationListResponseDto,
   SupabasePauseResumeResponseDto,
 } from './dto/supabase.dto';
+import { DeprecationInterceptor } from '../vercel/deprecation.interceptor';
 
 /**
+ * @deprecated Supabase database provisioning is deprecated. Use Railway instead. See Epic 28.
+ * Scheduled for removal after sunset period (90 days from 2026-03-01).
+ *
  * SupabaseController
  * Story 6.7: Supabase Database Provisioning
  *
  * Handles Supabase project creation, database provisioning, status polling,
  * connection string retrieval, and project lifecycle management (pause/resume).
+ *
+ * DEPRECATED: All endpoints return `Deprecation: true` and `Sunset` headers.
+ * TODO(epic-28-cleanup): Remove after sunset period
  */
 @ApiTags('Deployments')
 @ApiBearerAuth('JWT-auth')
@@ -46,6 +54,7 @@ import {
   'api/v1/workspaces/:workspaceId/projects/:projectId/supabase',
 )
 @UseGuards(JwtAuthGuard, WorkspaceAccessGuard)
+@UseInterceptors(new DeprecationInterceptor('supabase'))
 export class SupabaseController {
   private readonly logger = new Logger(SupabaseController.name);
 

@@ -1,7 +1,19 @@
-import { Injectable, NotFoundException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { WorkspaceSettings } from '../../../database/entities/workspace-settings.entity';
+
+/**
+ * Allowed values for defaultDeploymentPlatform.
+ * Story 28.3: Only 'railway' is accepted for new updates.
+ * Existing 'vercel' or 'supabase' values in the database are tolerated but cannot be set via API.
+ */
+const ALLOWED_DEPLOYMENT_PLATFORMS = ['railway'];
+
+/**
+ * Deprecated values that return a warning but are rejected for new updates.
+ */
+const DEPRECATED_DEPLOYMENT_PLATFORMS = ['vercel', 'supabase'];
 
 export interface UpdateWorkspaceSettingsDto {
   workspaceType?: string;
@@ -35,10 +47,12 @@ export class WorkspaceSettingsService {
 
     if (!settings) {
       // Create default settings
+      // Story 28.3: New workspaces default to 'railway'
       settings = this.settingsRepository.create({
         workspaceId,
         workspaceType: 'internal',
         tags: [],
+        defaultDeploymentPlatform: 'railway',
         projectPreferences: {},
         notificationPreferences: {
           emailNotifications: true,
@@ -54,11 +68,30 @@ export class WorkspaceSettingsService {
 
   /**
    * Update workspace settings
+   *
+   * Story 28.3: Validates defaultDeploymentPlatform - only 'railway' is accepted.
+   * Setting to 'vercel' or 'supabase' returns a BadRequestException with deprecation notice.
    */
   async updateSettings(
     workspaceId: string,
     dto: UpdateWorkspaceSettingsDto,
   ): Promise<WorkspaceSettings> {
+    // Story 28.3: Validate defaultDeploymentPlatform
+    if (dto.defaultDeploymentPlatform !== undefined) {
+      if (DEPRECATED_DEPLOYMENT_PLATFORMS.includes(dto.defaultDeploymentPlatform)) {
+        throw new BadRequestException(
+          `'${dto.defaultDeploymentPlatform}' is deprecated as a deployment platform. ` +
+            `Only 'railway' is supported. Please use Railway for deployments.`,
+        );
+      }
+      if (!ALLOWED_DEPLOYMENT_PLATFORMS.includes(dto.defaultDeploymentPlatform)) {
+        throw new BadRequestException(
+          `Invalid deployment platform '${dto.defaultDeploymentPlatform}'. ` +
+            `Only 'railway' is supported.`,
+        );
+      }
+    }
+
     let settings = await this.settingsRepository.findOne({
       where: { workspaceId },
     });

@@ -51,6 +51,10 @@ import { RailwayServiceEntity } from '../../database/entities/railway-service.en
 import { RailwayDeployment } from '../../database/entities/railway-deployment.entity';
 // Story 25-1: Deployment Event Publisher for Redis pub/sub streaming
 import { DeploymentEventPublisher } from './railway/deployment-event-publisher.service';
+// Story 28-2: Migration guidance for deprecated platforms
+import { MigrationController } from './migration/migration.controller';
+import { MigrationService } from './migration/migration.service';
+import { WorkspaceSettings } from '../../database/entities/workspace-settings.entity';
 
 /**
  * IntegrationsModule
@@ -94,6 +98,7 @@ import { DeploymentEventPublisher } from './railway/deployment-event-publisher.s
       IntegrationHealthCheck, // Story 21-9: Integration Health Monitoring
       RailwayServiceEntity, // Story 24-1: Railway Service Provisioning
       RailwayDeployment, // Story 24-2: Railway Deployment History
+      WorkspaceSettings, // Story 28-2: Migration guidance
     ]),
     HttpModule.register({
       timeout: 15000, // 15 second timeout for external API calls (GitHub, Railway, Vercel)
@@ -116,8 +121,9 @@ import { DeploymentEventPublisher } from './railway/deployment-event-publisher.s
     DeploymentApprovalController,
     DeploymentRollbackController,
     IntegrationManagementController, // Story 21-7
+    MigrationController, // Story 28-2: Migration guidance
   ],
-  providers: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, DeploymentEventPublisher, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
-  exports: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, DeploymentEventPublisher, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
+  providers: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, DeploymentEventPublisher, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService, MigrationService],
+  exports: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, DeploymentEventPublisher, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService, MigrationService],
 })
 export class IntegrationsModule {}

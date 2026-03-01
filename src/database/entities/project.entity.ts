@@ -55,10 +55,20 @@ export class Project {
   @IsOptional()
   railwayProjectId?: string;
 
+  /**
+   * @deprecated Vercel project ID - scheduled for removal after sunset period.
+   * See Epic 28 (Multi-Provider Deprecation).
+   * TODO(epic-28-cleanup): Set to NULL via migration, then remove column.
+   */
   @Column({ type: 'varchar', length: 100, nullable: true, name: 'vercel_project_id' })
   @IsOptional()
   vercelProjectId?: string;
 
+  /**
+   * @deprecated Supabase project ref - scheduled for removal after sunset period.
+   * See Epic 28 (Multi-Provider Deprecation).
+   * TODO(epic-28-cleanup): Set to NULL via migration, then remove column.
+   */
   @Column({ type: 'varchar', length: 100, nullable: true, name: 'supabase_project_ref' })
   @IsOptional()
   supabaseProjectRef?: string;

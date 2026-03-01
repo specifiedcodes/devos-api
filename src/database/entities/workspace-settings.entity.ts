@@ -34,7 +34,7 @@ export class WorkspaceSettings {
 
   @Column({ type: 'varchar', length: 50, nullable: true, name: 'default_deployment_platform' })
   @IsOptional()
-  defaultDeploymentPlatform?: string; // 'railway', 'vercel'
+  defaultDeploymentPlatform?: string; // 'railway' (default). 'vercel' and 'supabase' are deprecated - see Epic 28.
 
   @Column({ type: 'jsonb', nullable: true, name: 'project_preferences' })
   @IsJSON()
