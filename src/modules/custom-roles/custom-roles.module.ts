@@ -10,10 +10,12 @@ import { RoleTemplateService } from './services/role-template.service';
 import { CustomRoleController } from './controllers/custom-role.controller';
 import { PermissionMatrixController } from './controllers/permission-matrix.controller';
 import { PermissionAuditModule } from '../permission-audit/permission-audit.module';
+import { RedisModule } from '../redis/redis.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CustomRole, RolePermission, WorkspaceMember]),
+    RedisModule,
     PermissionAuditModule,
   ],
   controllers: [CustomRoleController, PermissionMatrixController],
