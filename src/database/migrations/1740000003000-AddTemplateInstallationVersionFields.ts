@@ -7,7 +7,7 @@
  */
 import { MigrationInterface, QueryRunner, TableColumn, TableForeignKey } from 'typeorm';
 
-export class AddTemplateInstallationVersionFields1740000003 implements MigrationInterface {
+export class AddTemplateInstallationVersionFields1740000003000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Add installed_version column
     await queryRunner.addColumn(
