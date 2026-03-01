@@ -3,6 +3,7 @@ import {
   Post,
   Get,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -36,7 +37,21 @@ import {
   DeploymentResponseDto,
   DeploymentListResponseDto,
   SetVariablesResponseDto,
+  ProvisionServiceDto,
+  BulkDeployDto,
+  RailwayServiceEntityDto,
+  ServiceConnectionInfoDto,
+  BulkDeploymentResponseDto,
+  SetServiceVariablesDto,
+  AddDomainDto,
+  DomainResponseDto,
+  GetLogsQueryDto,
+  DeploymentHistoryQueryDto,
+  DeploymentHistoryResponseDto,
+  ServiceLogsResponseDto,
+  HealthCheckResponseDto,
 } from './dto/railway.dto';
+import { RailwayServiceType } from '../../../database/entities/railway-service.entity';
 
 /**
  * RailwayController
@@ -453,5 +468,645 @@ export class RailwayController {
       variableCount: keys.length,
       environmentId,
     };
+  }
+
+  // ============================================================
+  // Story 24-1: Railway Database & Resource Provisioning Endpoints
+  // ============================================================
+
+  /**
+   * Provision a database or cache service on Railway
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/provision
+   */
+  @Post('services/provision')
+  @HttpCode(HttpStatus.CREATED)
+  async provisionService(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Body() dto: ProvisionServiceDto,
+    @Req() req: any,
+  ): Promise<RailwayServiceEntityDto> {
+    const userId = req.user.userId;
+
+    this.logger.log(
+      `Provisioning ${dto.serviceType} service "${dto.name}" for project ${projectId.substring(0, 8)}...`,
+    );
+
+    const { token, project } = await this.getRailwayContext(
+      workspaceId,
+      projectId,
+    );
+
+    if (!project.railwayProjectId) {
+      throw new BadRequestException(
+        'No Railway project linked to this project',
+      );
+    }
+
+    return this.railwayService.provisionDatabase(token, {
+      workspaceId,
+      projectId,
+      railwayProjectId: project.railwayProjectId,
+      userId,
+      name: dto.name,
+      serviceType: dto.serviceType,
+      databaseType: dto.databaseType || this.inferDatabaseType(dto.serviceType),
+    });
+  }
+
+  /**
+   * Get connection info for a Railway service (masked)
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/connection
+   */
+  @Get('services/:serviceId/connection')
+  async getServiceConnection(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Req() req: any,
+  ): Promise<ServiceConnectionInfoDto> {
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.getServiceConnectionInfo(token, serviceEntity);
+  }
+
+  /**
+   * List all Railway services for a project
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services
+   *
+   * NOTE: Must be declared AFTER the :serviceId routes to prevent NestJS route shadowing
+   */
+  @Get('services')
+  async listServices(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ): Promise<RailwayServiceEntityDto[]> {
+    // Validate project exists (reuses helper, but we only need the project check)
+    const project = await this.projectRepository.findOne({
+      where: { id: projectId, workspaceId },
+    });
+
+    if (!project) {
+      throw new NotFoundException('Project not found in this workspace');
+    }
+
+    return this.railwayService.listServices(projectId, workspaceId);
+  }
+
+  // ============================================================
+  // Story 24-2: Railway Service Deployment via CLI Endpoints
+  // ============================================================
+
+  /**
+   * Bulk deploy all services in dependency order
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/deploy
+   */
+  @Post('deploy')
+  @HttpCode(HttpStatus.ACCEPTED)
+  async bulkDeploy(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Body() dto: BulkDeployDto,
+    @Req() req: any,
+  ): Promise<BulkDeploymentResponseDto> {
+    const userId = req.user.userId;
+
+    this.logger.log(
+      `Bulk deploying all services for project ${projectId.substring(0, 8)}...`,
+    );
+
+    const { token, project } = await this.getRailwayContext(
+      workspaceId,
+      projectId,
+    );
+
+    if (!project.railwayProjectId) {
+      throw new BadRequestException(
+        'No Railway project linked to this project',
+      );
+    }
+
+    return this.railwayService.deployAllServices(token, {
+      projectId,
+      workspaceId,
+      userId,
+      environment: dto.environment,
+    });
+  }
+
+  /**
+   * Deploy a single service
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/deploy
+   */
+  @Post('services/:serviceId/deploy')
+  @HttpCode(HttpStatus.CREATED)
+  async deploySingleService(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Body() dto: BulkDeployDto,
+    @Req() req: any,
+  ): Promise<any> {
+    const userId = req.user.userId;
+
+    this.logger.log(
+      `Deploying service ${serviceId.substring(0, 8)}... for project ${projectId.substring(0, 8)}...`,
+    );
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.deployService(token, serviceEntity, {
+      workspaceId,
+      userId,
+      environment: dto.environment,
+    });
+  }
+
+  /**
+   * Redeploy a service
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/redeploy
+   */
+  @Post('services/:serviceId/redeploy')
+  @HttpCode(HttpStatus.OK)
+  async redeployServiceEndpoint(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Req() req: any,
+  ): Promise<any> {
+    const userId = req.user.userId;
+
+    this.logger.log(
+      `Redeploying service ${serviceId.substring(0, 8)}... for project ${projectId.substring(0, 8)}...`,
+    );
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.redeployService(token, serviceEntity, {
+      workspaceId,
+      userId,
+    });
+  }
+
+  /**
+   * Restart a service without rebuild
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/restart
+   */
+  @Post('services/:serviceId/restart')
+  @HttpCode(HttpStatus.OK)
+  async restartServiceEndpoint(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Req() req: any,
+  ): Promise<any> {
+    const userId = req.user.userId;
+
+    this.logger.log(
+      `Restarting service ${serviceId.substring(0, 8)}... for project ${projectId.substring(0, 8)}...`,
+    );
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.restartService(token, serviceEntity, {
+      workspaceId,
+      userId,
+    });
+  }
+
+  // ============================================================
+  // Story 24-3: Railway Environment Variable Management Endpoints
+  // ============================================================
+
+  /**
+   * List environment variables for a service (names only, masked)
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/variables
+   */
+  @Get('services/:serviceId/variables')
+  async listServiceVariables(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Req() req: any,
+  ): Promise<Array<{ name: string; masked: boolean; present: boolean }>> {
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.listServiceVariables(token, serviceEntity);
+  }
+
+  /**
+   * Set environment variables on a service
+   * PUT /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/variables
+   */
+  @Put('services/:serviceId/variables')
+  async setServiceVariablesEndpoint(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Body() dto: SetServiceVariablesDto,
+    @Req() req: any,
+  ): Promise<{ success: boolean; variableCount: number }> {
+    const userId = req.user.userId;
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    await this.railwayService.setServiceVariables(
+      token,
+      serviceEntity,
+      dto.variables,
+      {
+        workspaceId,
+        userId,
+      },
+    );
+
+    return {
+      success: true,
+      variableCount: Object.keys(dto.variables).length,
+    };
+  }
+
+  /**
+   * Delete an environment variable from a service
+   * DELETE /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/variables/:variableName
+   */
+  @Delete('services/:serviceId/variables/:variableName')
+  async deleteServiceVariableEndpoint(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Param('variableName') variableName: string,
+    @Req() req: any,
+  ): Promise<{ success: boolean; variableName: string }> {
+    const userId = req.user.userId;
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    await this.railwayService.deleteServiceVariable(
+      token,
+      serviceEntity,
+      variableName,
+      {
+        workspaceId,
+        userId,
+      },
+    );
+
+    return {
+      success: true,
+      variableName,
+    };
+  }
+
+  // ============================================================
+  // Story 24-4: Railway Domain Management Endpoints
+  // ============================================================
+
+  /**
+   * Add a domain to a Railway service (custom or generate Railway domain)
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/domains
+   */
+  @Post('services/:serviceId/domains')
+  @HttpCode(HttpStatus.CREATED)
+  async addDomain(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Body() dto: AddDomainDto,
+    @Req() req: any,
+  ): Promise<DomainResponseDto> {
+    const userId = req.user.userId;
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.addDomain(token, serviceEntity, {
+      workspaceId,
+      userId,
+      customDomain: dto.customDomain,
+    });
+  }
+
+  /**
+   * Get all domains for a Railway service
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/domains
+   */
+  @Get('services/:serviceId/domains')
+  async getDomains(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+  ): Promise<DomainResponseDto[]> {
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.getDomains(token, serviceEntity);
+  }
+
+  /**
+   * Remove a domain from a Railway service
+   * DELETE /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/domains/:domain
+   */
+  @Delete('services/:serviceId/domains/:domain')
+  async removeDomain(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Param('domain') domain: string,
+    @Req() req: any,
+  ): Promise<{ success: boolean }> {
+    const userId = req.user.userId;
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    await this.railwayService.removeDomain(token, serviceEntity, {
+      workspaceId,
+      userId,
+      domain,
+    });
+
+    return { success: true };
+  }
+
+  // ============================================================
+  // Story 24-5: Log Streaming & Deployment History Endpoints
+  // ============================================================
+
+  /**
+   * Get recent logs for a Railway service
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/logs
+   */
+  @Get('services/:serviceId/logs')
+  async getServiceLogs(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Query() query: GetLogsQueryDto,
+  ): Promise<ServiceLogsResponseDto> {
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    const logs = await this.railwayService.streamLogs(token, serviceEntity, {
+      buildLogs: query.buildLogs,
+      lines: query.lines,
+    });
+
+    return {
+      logs,
+      serviceId: serviceEntity.id,
+      serviceName: serviceEntity.name,
+    };
+  }
+
+  /**
+   * List deployment history for a Railway service
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/deployments
+   */
+  @Get('services/:serviceId/deployments')
+  async getServiceDeployments(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Query() query: DeploymentHistoryQueryDto,
+  ): Promise<DeploymentHistoryResponseDto> {
+    // Verify project exists
+    await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    const result = await this.railwayService.getDeploymentHistory(
+      serviceEntity.id,
+      {
+        page: query.page,
+        limit: query.limit,
+        status: query.status,
+      },
+    );
+
+    return {
+      deployments: result.deployments.map((d) => ({
+        id: d.id,
+        railwayDeploymentId: d.railwayDeploymentId,
+        status: d.status,
+        deploymentUrl: d.deploymentUrl,
+        commitSha: d.commitSha,
+        branch: d.branch,
+        triggeredBy: d.triggeredBy,
+        triggerType: d.triggerType,
+        buildDurationSeconds: d.buildDurationSeconds,
+        deployDurationSeconds: d.deployDurationSeconds,
+        errorMessage: d.errorMessage,
+        startedAt: d.startedAt instanceof Date ? d.startedAt.toISOString() : d.startedAt,
+        completedAt: d.completedAt instanceof Date ? d.completedAt.toISOString() : d.completedAt,
+        createdAt: d.createdAt instanceof Date ? d.createdAt.toISOString() : String(d.createdAt),
+      })),
+      total: result.total,
+      page: result.page,
+      limit: result.limit,
+    };
+  }
+
+  /**
+   * Get details of a specific deployment
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/deployments/:deploymentId
+   */
+  @Get('services/:serviceId/deployments/:deploymentId')
+  async getDeploymentDetails(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Param('deploymentId', ParseUUIDPipe) deploymentId: string,
+  ): Promise<any> {
+    await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    const deployment = await this.railwayService.getDeploymentById(
+      deploymentId,
+      workspaceId,
+    );
+
+    if (!deployment) {
+      throw new NotFoundException('Deployment not found');
+    }
+
+    return deployment;
+  }
+
+  /**
+   * Rollback a service to a specific deployment
+   * POST /api/v1/workspaces/:workspaceId/projects/:projectId/railway/services/:serviceId/deployments/:deploymentId/rollback
+   */
+  @Post('services/:serviceId/deployments/:deploymentId/rollback')
+  @HttpCode(HttpStatus.CREATED)
+  async rollbackDeploymentEndpoint(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('serviceId', ParseUUIDPipe) serviceId: string,
+    @Param('deploymentId', ParseUUIDPipe) deploymentId: string,
+    @Req() req: any,
+  ): Promise<any> {
+    const userId = req.user.userId;
+
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    const serviceEntity = await this.railwayService.findServiceEntity(
+      serviceId,
+      workspaceId,
+    );
+
+    if (!serviceEntity) {
+      throw new NotFoundException('Railway service not found');
+    }
+
+    return this.railwayService.rollbackDeployment(
+      token,
+      serviceEntity,
+      deploymentId,
+      {
+        workspaceId,
+        userId,
+      },
+    );
+  }
+
+  /**
+   * Check Railway connection health
+   * GET /api/v1/workspaces/:workspaceId/projects/:projectId/railway/health
+   */
+  @Get('health')
+  async checkHealthEndpoint(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+  ): Promise<HealthCheckResponseDto> {
+    const { token } = await this.getRailwayContext(workspaceId, projectId);
+
+    return this.railwayService.checkHealth(token);
+  }
+
+  // ---- Private Helpers ----
+
+  /**
+   * Infer a default database type from service type if not explicitly provided.
+   */
+  private inferDatabaseType(serviceType: RailwayServiceType): string {
+    switch (serviceType) {
+      case RailwayServiceType.DATABASE:
+        return 'postgres';
+      case RailwayServiceType.CACHE:
+        return 'redis';
+      default:
+        return 'postgres';
+    }
   }
 }

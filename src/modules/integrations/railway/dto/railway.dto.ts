@@ -350,3 +350,89 @@ export class ServiceConnectionInfoDto {
     present: boolean;
   }>;
 }
+
+// ============================================================
+// Story 24-5: Log Streaming & Deployment History DTOs
+// ============================================================
+
+/**
+ * Query DTO for getting service logs.
+ */
+export class GetLogsQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1000)
+  lines?: number = 50;
+
+  @IsOptional()
+  @IsBoolean()
+  @Type(() => Boolean)
+  buildLogs?: boolean = false;
+}
+
+/**
+ * Query DTO for deployment history pagination.
+ */
+export class DeploymentHistoryQueryDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  limit?: number = 10;
+
+  @IsOptional()
+  @IsEnum(DeploymentStatus)
+  status?: DeploymentStatus;
+}
+
+/**
+ * Response DTO for paginated deployment history.
+ */
+export class DeploymentHistoryResponseDto {
+  deployments!: Array<{
+    id: string;
+    railwayDeploymentId: string;
+    status: DeploymentStatus;
+    deploymentUrl?: string;
+    commitSha?: string;
+    branch?: string;
+    triggeredBy?: string;
+    triggerType?: string;
+    buildDurationSeconds?: number;
+    deployDurationSeconds?: number;
+    errorMessage?: string;
+    startedAt?: string;
+    completedAt?: string;
+    createdAt: string;
+  }>;
+  total!: number;
+  page!: number;
+  limit!: number;
+}
+
+/**
+ * Response DTO for service logs.
+ */
+export class ServiceLogsResponseDto {
+  logs!: string[];
+  serviceId!: string;
+  serviceName!: string;
+}
+
+/**
+ * Response DTO for Railway health check.
+ */
+export class HealthCheckResponseDto {
+  connected!: boolean;
+  username?: string;
+  error?: string;
+}

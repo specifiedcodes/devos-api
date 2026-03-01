@@ -45,6 +45,10 @@ import { OutgoingWebhook } from '../../database/entities/outgoing-webhook.entity
 // Story 21-9: Integration Health Monitoring
 import { IntegrationHealthCheck } from '../../database/entities/integration-health-check.entity';
 import { IntegrationHealthService } from './services/integration-health.service';
+// Story 24-1: Railway Service Entity for provisioning tracking
+import { RailwayServiceEntity } from '../../database/entities/railway-service.entity';
+// Story 24-2: Railway Deployment Entity for deployment history tracking
+import { RailwayDeployment } from '../../database/entities/railway-deployment.entity';
 
 /**
  * IntegrationsModule
@@ -86,6 +90,8 @@ import { IntegrationHealthService } from './services/integration-health.service'
       JiraSyncItem,
       OutgoingWebhook, // Story 21-8: Webhook Management
       IntegrationHealthCheck, // Story 21-9: Integration Health Monitoring
+      RailwayServiceEntity, // Story 24-1: Railway Service Provisioning
+      RailwayDeployment, // Story 24-2: Railway Deployment History
     ]),
     HttpModule.register({
       timeout: 15000, // 15 second timeout for external API calls (GitHub, Railway, Vercel)

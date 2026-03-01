@@ -1,8 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
+import { getRepositoryToken } from '@nestjs/typeorm';
 import { of, throwError } from 'rxjs';
 import { BadGatewayException } from '@nestjs/common';
 import { RailwayService } from '../railway/railway.service';
+import { RailwayCliExecutor } from '../railway/railway-cli-executor.service';
+import { RailwayServiceEntity } from '../../../database/entities/railway-service.entity';
+import { AuditService } from '../../../shared/audit/audit.service';
 import {
   MOCK_RAILWAY_PROJECT_ID,
   createAxiosResponse,
@@ -30,6 +34,9 @@ describe('Railway E2E - API Deployment Operations', () => {
       providers: [
         RailwayService,
         { provide: HttpService, useValue: mockHttpService },
+        { provide: RailwayCliExecutor, useValue: { execute: jest.fn() } },
+        { provide: getRepositoryToken(RailwayServiceEntity), useValue: { create: jest.fn(), save: jest.fn(), findOne: jest.fn(), find: jest.fn() } },
+        { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
