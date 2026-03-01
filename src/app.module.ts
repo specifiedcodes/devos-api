@@ -117,6 +117,7 @@ import { ScimGroupMembership } from './database/entities/scim-group-membership.e
 import { ScimSyncLog } from './database/entities/scim-sync-log.entity';
 import { SsoModule } from './modules/sso/sso.module';
 import { AgentDefinition } from './database/entities/agent-definition.entity';
+import { AgentVersion } from './database/entities/agent-version.entity';
 import { AgentDefinitionAuditEvent } from './database/entities/agent-definition-audit-event.entity';
 import { CustomAgentsModule } from './modules/custom-agents/custom-agents.module';
 import { MarketplaceAgent } from './database/entities/marketplace-agent.entity';
@@ -236,6 +237,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
         ScimGroupMembership,
         ScimSyncLog,
         AgentDefinition,
+        AgentVersion,
         AgentDefinitionAuditEvent,
         MarketplaceAgent,
         MarketplaceReview,
