@@ -36,7 +36,7 @@ export class CreateScheduledReportDto {
   @IsString({ each: true })
   sections!: string[];
 
-  @ApiPropertyOptional({ description: 'Filters to apply', type: 'object' })
+  @ApiPropertyOptional({ description: 'Filters to apply' })
   @IsOptional()
   @IsObject()
   filters?: Record<string, any>;
@@ -84,7 +84,7 @@ export class UpdateScheduledReportDto {
   @IsString({ each: true })
   sections?: string[];
 
-  @ApiPropertyOptional({ description: 'Filters to apply', type: 'object' })
+  @ApiPropertyOptional({ description: 'Filters to apply' })
   @IsOptional()
   @IsObject()
   filters?: Record<string, any>;
@@ -126,7 +126,7 @@ export class ScheduledReportResponseDto {
   @ApiProperty({ description: 'Analytics sections', type: [String] })
   sections!: string[];
 
-  @ApiProperty({ description: 'Filters', type: 'object' })
+  @ApiProperty({ description: 'Filters' })
   filters!: Record<string, any>;
 
   @ApiProperty({ description: 'Email recipients', type: [String] })

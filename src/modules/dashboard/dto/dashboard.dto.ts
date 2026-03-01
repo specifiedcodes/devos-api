@@ -1,18 +1,18 @@
 import { IsString, IsNumber, IsOptional, IsEnum, IsObject, Min, Max, IsUUID } from 'class-validator';
-import { AgentType, AgentStatus } from '../../agents/enums/agent.enums';
+import { AgentType, AgentStatus } from '../../../database/entities/agent.entity';
 
 export class AgentStatusDto {
   @IsUUID()
-  id: string;
+  id!: string;
 
   @IsString()
-  name: string;
+  name!: string;
 
   @IsEnum(AgentType)
-  type: AgentType;
+  type!: AgentType;
 
   @IsEnum(AgentStatus)
-  status: AgentStatus;
+  status!: AgentStatus;
 
   @IsOptional()
   @IsString()
@@ -22,52 +22,52 @@ export class AgentStatusDto {
 export class QuickStatsDto {
   @IsNumber()
   @Min(0)
-  storiesCompletedToday: number;
+  storiesCompletedToday!: number;
 
   @IsNumber()
   @Min(0)
-  deployments: number;
+  deployments!: number;
 
   @IsNumber()
   @Min(0)
-  costs: number;
+  costs!: number;
 }
 
 export class ActiveProjectDto {
   @IsUUID()
-  id: string;
+  id!: string;
 
   @IsString()
-  name: string;
+  name!: string;
 
   @IsNumber()
   @Min(0)
   @Max(100)
-  sprintProgress: number;
+  sprintProgress!: number;
 }
 
 export class DashboardStatsDto {
-  activeProject: ActiveProjectDto | null;
+  activeProject!: ActiveProjectDto | null;
 
   @IsObject({ each: true })
-  agentStats: AgentStatusDto[];
+  agentStats!: AgentStatusDto[];
 
-  quickStats: QuickStatsDto;
+  quickStats!: QuickStatsDto;
 }
 
 export class ActivityFeedItemDto {
   @IsString()
-  id: string;
+  id!: string;
 
   @IsString()
-  type: string;
+  type!: string;
 
   @IsString()
-  message: string;
+  message!: string;
 
   @IsString()
-  timestamp: string;
+  timestamp!: string;
 
   @IsObject()
-  metadata: Record<string, any>;
+  metadata!: Record<string, any>;
 }

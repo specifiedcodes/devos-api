@@ -64,6 +64,7 @@ describe('Sprint Metrics Integration Tests', () => {
     trackScopeChange: jest.fn(),
     getBurndownData: jest.fn(),
     snapshotDailyMetrics: jest.fn(),
+    getSprintMetricsSummary: jest.fn(),
   });
 
   const createMockVelocityMetricsService = () => ({
@@ -170,8 +171,8 @@ describe('Sprint Metrics Integration Tests', () => {
         ],
       };
 
-      const sprintMetricsService = app.get(SprintMetricsService);
-      sprintMetricsService.getBurndownData.mockResolvedValue(mockBurndownData);
+      const sprintMetricsService = app.get(SprintMetricsService) as jest.Mocked<SprintMetricsService>;
+      (sprintMetricsService.getBurndownData as jest.Mock).mockResolvedValue(mockBurndownData);
 
       const response = await request(app.getHttpServer())
         .get(`/api/v1/workspaces/${mockWorkspaceId}/projects/${mockProjectId}/sprints/${mockSprintId}/burndown`)
@@ -190,8 +191,8 @@ describe('Sprint Metrics Integration Tests', () => {
         dataPoints: [],
       };
 
-      const sprintMetricsService = app.get(SprintMetricsService);
-      sprintMetricsService.getBurndownData.mockResolvedValue(mockBurndownData);
+      const sprintMetricsService = app.get(SprintMetricsService) as jest.Mocked<SprintMetricsService>;
+      (sprintMetricsService.getBurndownData as jest.Mock).mockResolvedValue(mockBurndownData);
 
       await request(app.getHttpServer())
         .get(`/api/v1/workspaces/${mockWorkspaceId}/projects/${mockProjectId}/sprints/${mockSprintId}/burndown`)
@@ -218,8 +219,8 @@ describe('Sprint Metrics Integration Tests', () => {
         endDate: '2024-01-14',
       };
 
-      const velocityMetricsService = app.get(VelocityMetricsService);
-      velocityMetricsService.getSprintMetricsSummary.mockResolvedValue(mockSummary);
+      const velocityMetricsService = app.get(VelocityMetricsService) as jest.Mocked<VelocityMetricsService>;
+      (velocityMetricsService.getSprintMetricsSummary as jest.Mock).mockResolvedValue(mockSummary);
 
       const response = await request(app.getHttpServer())
         .get(`/api/v1/workspaces/${mockWorkspaceId}/projects/${mockProjectId}/sprints/${mockSprintId}/metrics`)
@@ -253,8 +254,8 @@ describe('Sprint Metrics Integration Tests', () => {
         averageVelocity: 18,
       };
 
-      const velocityMetricsService = app.get(VelocityMetricsService);
-      velocityMetricsService.getVelocityData.mockResolvedValue(mockVelocityData);
+      const velocityMetricsService = app.get(VelocityMetricsService) as jest.Mocked<VelocityMetricsService>;
+      (velocityMetricsService.getVelocityData as jest.Mock).mockResolvedValue(mockVelocityData);
 
       const response = await request(app.getHttpServer())
         .get(`/api/v1/workspaces/${mockWorkspaceId}/projects/${mockProjectId}/velocity`)
@@ -272,8 +273,8 @@ describe('Sprint Metrics Integration Tests', () => {
         averageVelocity: 0,
       };
 
-      const velocityMetricsService = app.get(VelocityMetricsService);
-      velocityMetricsService.getVelocityData.mockResolvedValue(mockVelocityData);
+      const velocityMetricsService = app.get(VelocityMetricsService) as jest.Mocked<VelocityMetricsService>;
+      (velocityMetricsService.getVelocityData as jest.Mock).mockResolvedValue(mockVelocityData);
 
       await request(app.getHttpServer())
         .get(`/api/v1/workspaces/${mockWorkspaceId}/projects/${mockProjectId}/velocity`)

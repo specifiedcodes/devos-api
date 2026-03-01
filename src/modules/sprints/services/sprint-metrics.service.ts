@@ -4,7 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository, InjectDataSource } from '@nestjs/typeorm';
-import { Repository, Between, MoreThanOrEqual, LessThanOrEqual, DataSource, QueryRunner } from 'typeorm';
+import { Repository, Between, MoreThanOrEqual, LessThanOrEqual, DataSource, EntityManager, FindOptionsWhere } from 'typeorm';
 import { SprintMetric } from '../../../database/entities/sprint-metric.entity';
 import { VelocityMetric } from '../../../database/entities/velocity-metric.entity';
 import { Sprint, SprintStatus } from '../../../database/entities/sprint.entity';
@@ -78,10 +78,10 @@ export class SprintMetricsService {
         where: { sprintId },
       });
 
-      const totalPoints = stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const totalPoints = stories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
       const storiesTotal = stories.length;
-      const completedStories = stories.filter(s => s.status === StoryStatus.DONE);
-      const completedPoints = completedStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const completedStories = stories.filter((s: Story) => s.status === StoryStatus.DONE);
+      const completedPoints = completedStories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
 
       const metric = transactionalEntityManager.create(SprintMetric, {
         workspaceId,
@@ -138,10 +138,10 @@ export class SprintMetricsService {
         where: { sprintId },
       });
 
-      const totalPoints = stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const totalPoints = stories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
       const storiesTotal = stories.length;
-      const completedStories = stories.filter(s => s.status === StoryStatus.DONE);
-      const completedPoints = completedStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const completedStories = stories.filter((s: Story) => s.status === StoryStatus.DONE);
+      const completedPoints = completedStories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
 
       const daysElapsed = this.getDaysElapsed(sprint);
 
@@ -170,7 +170,7 @@ export class SprintMetricsService {
   }
 
   private async updateExistingMetricInTransaction(
-    transactionalEntityManager: ReturnType<QueryRunner['manager']>,
+    transactionalEntityManager: EntityManager,
     metric: SprintMetric,
     sprint: Sprint,
   ): Promise<void> {
@@ -178,10 +178,10 @@ export class SprintMetricsService {
       where: { sprintId: sprint.id },
     });
 
-    const totalPoints = stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+    const totalPoints = stories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
     const storiesTotal = stories.length;
-    const completedStories = stories.filter(s => s.status === StoryStatus.DONE);
-    const completedPoints = completedStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+    const completedStories = stories.filter((s: Story) => s.status === StoryStatus.DONE);
+    const completedPoints = completedStories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
 
     const daysElapsed = this.getDaysElapsed(sprint);
 
@@ -222,10 +222,10 @@ export class SprintMetricsService {
         where: { sprintId },
       });
 
-      const totalPoints = stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const totalPoints = stories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
       const storiesTotal = stories.length;
-      const completedStories = stories.filter(s => s.status === StoryStatus.DONE);
-      const completedPoints = completedStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+      const completedStories = stories.filter((s: Story) => s.status === StoryStatus.DONE);
+      const completedPoints = completedStories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
 
       const daysElapsed = this.getDaysElapsed(sprint);
 
@@ -292,10 +292,10 @@ export class SprintMetricsService {
           where: { sprintId },
         });
 
-        const totalPoints = stories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+        const totalPoints = stories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
         const storiesTotal = stories.length;
-        const completedStories = stories.filter(s => s.status === StoryStatus.DONE);
-        const completedPoints = completedStories.reduce((sum, s) => sum + (s.storyPoints || 0), 0);
+        const completedStories = stories.filter((s: Story) => s.status === StoryStatus.DONE);
+        const completedPoints = completedStories.reduce((sum: number, s: Story) => sum + (s.storyPoints || 0), 0);
 
         metric = transactionalEntityManager.create(SprintMetric, {
           workspaceId: sprint.project.workspaceId,
@@ -346,18 +346,13 @@ export class SprintMetricsService {
       throw new NotFoundException('Sprint not found');
     }
 
-    type SprintMetricWhereCondition = {
-      sprintId: string;
-      date?: typeof Between | typeof MoreThanOrEqual | typeof LessThanOrEqual extends (x: any) => any ? ReturnType<typeof Between> : never;
-    };
-
-    const whereCondition: SprintMetricWhereCondition = { sprintId };
+    const whereCondition: FindOptionsWhere<SprintMetric> = { sprintId };
     if (dateFrom && dateTo) {
-      whereCondition.date = Between(dateFrom, dateTo);
+      whereCondition.date = Between(dateFrom, dateTo) as any;
     } else if (dateFrom) {
-      whereCondition.date = MoreThanOrEqual(dateFrom);
+      whereCondition.date = MoreThanOrEqual(dateFrom) as any;
     } else if (dateTo) {
-      whereCondition.date = LessThanOrEqual(dateTo);
+      whereCondition.date = LessThanOrEqual(dateTo) as any;
     }
 
     const metrics = await this.sprintMetricRepository.find({

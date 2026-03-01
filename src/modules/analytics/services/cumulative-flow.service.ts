@@ -178,7 +178,7 @@ export class CumulativeFlowService {
     return bottlenecks;
   }
 
-  private estimateAvgTimeInStatus(dataPoints: CumulativeFlowDataPointDto[], status: keyof Omit<CumulativeFlowDataPointDto, 'date'>): number {
+  private estimateAvgTimeInStatus(dataPoints: CumulativeFlowDataPointDto[], status: 'backlog' | 'inProgress' | 'review' | 'done'): number {
     if (dataPoints.length < 2) return 0;
 
     let totalTime = 0;

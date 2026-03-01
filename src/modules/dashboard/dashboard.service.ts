@@ -2,9 +2,9 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between } from 'typeorm';
 import { Agent } from '../../database/entities/agent.entity';
-import { Project } from '../../database/entities/project.entity';
+import { Project, ProjectStatus } from '../../database/entities/project.entity';
 import { Story } from '../../database/entities/story.entity';
-import { IntegrationConnection } from '../../database/entities/integration-connection.entity';
+import { IntegrationConnection, IntegrationStatus } from '../../database/entities/integration-connection.entity';
 import {
   DashboardStatsDto,
   ActivityFeedItemDto,
@@ -74,7 +74,7 @@ export class DashboardService {
 
   private async getActiveProject(workspaceId: string): Promise<ActiveProjectDto | null> {
     const project = await this.projectRepository.findOne({
-      where: { workspaceId, status: 'active' },
+      where: { workspaceId, status: ProjectStatus.ACTIVE },
       order: { updatedAt: 'DESC' },
     });
 
@@ -114,8 +114,8 @@ export class DashboardService {
       name: agent.name,
       type: agent.type,
       status: agent.status,
-      currentTask: agent.currentTaskId 
-        ? `Task ${agent.currentTaskId}` 
+      currentTask: agent.currentTask 
+        ? `Task ${agent.currentTask}` 
         : undefined,
     }));
   }
@@ -133,7 +133,7 @@ export class DashboardService {
       .getCount();
 
     const deployments = await this.integrationRepository.count({
-      where: { workspaceId, status: 'active' },
+      where: { workspaceId, status: IntegrationStatus.ACTIVE },
     });
 
     const costs = await this.calculateCosts(workspaceId);

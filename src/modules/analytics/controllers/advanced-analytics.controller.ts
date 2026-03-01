@@ -219,33 +219,4 @@ export class AdvancedAnalyticsController {
   ): Promise<void> {
     return this.scheduledReportsService.remove(workspaceId, id);
   }
-
-  @Put('scheduled-reports/:id')
-  @RequireRole(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
-  @ApiOperation({ summary: 'Update a scheduled report' })
-  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
-  @ApiParam({ name: 'id', description: 'Scheduled report ID' })
-  @ApiResponse({ status: 200, description: 'Scheduled report updated', type: ScheduledReportResponseDto })
-  @ApiResponse({ status: 404, description: 'Scheduled report not found' })
-  async updateScheduledReport(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: UpdateScheduledReportDto,
-  ): Promise<ScheduledReportResponseDto> {
-    return this.scheduledReportsService.update(workspaceId, id, dto);
-  }
-
-  @Delete('scheduled-reports/:id')
-  @RequireRole(WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
-  @ApiOperation({ summary: 'Delete a scheduled report' })
-  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
-  @ApiParam({ name: 'id', description: 'Scheduled report ID' })
-  @ApiResponse({ status: 204, description: 'Scheduled report deleted' })
-  @ApiResponse({ status: 404, description: 'Scheduled report not found' })
-  async deleteScheduledReport(
-    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
-    @Param('id', ParseUUIDPipe) id: string,
-  ): Promise<void> {
-    return this.scheduledReportsService.remove(workspaceId, id);
-  }
 }
