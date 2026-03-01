@@ -27,8 +27,6 @@ import { AnalyticsModule } from './modules/analytics/analytics.module';
 import { AgentQueueModule } from './modules/agent-queue/agent-queue.module';
 import { AgentsModule } from './modules/agents/agents.module';
 import { AgentStatusModule } from './modules/agents/agent-status.module';
-import { AgentStatusUpdate } from './database/entities/agent-status-update.entity';
-import { ApiUsage } from './database/entities/api-usage.entity';
 import { IntegrationsModule } from './modules/integrations/integrations.module';
 import { StoriesModule } from './modules/stories/stories.module';
 import { SprintsModule } from './modules/sprints/sprints.module';
@@ -38,49 +36,6 @@ import { ChatModule } from './modules/chat/chat.module';
 import { PushModule } from './modules/push/push.module';
 import { ChatRoomModule } from './modules/chat-room/chat-room.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
-import { User } from './database/entities/user.entity';
-import { Workspace } from './database/entities/workspace.entity';
-import { WorkspaceMember } from './database/entities/workspace-member.entity';
-import { BackupCode } from './database/entities/backup-code.entity';
-import { AccountDeletion } from './database/entities/account-deletion.entity';
-import { SecurityEvent } from './database/entities/security-event.entity';
-import { Project } from './database/entities/project.entity';
-import { ProjectPreferences } from './database/entities/project-preferences.entity';
-import { WorkspaceInvitation } from './database/entities/workspace-invitation.entity';
-import { BYOKKey } from './database/entities/byok-key.entity';
-import { UsageRecord } from './database/entities/usage-record.entity';
-import { WorkspaceSettings } from './database/entities/workspace-settings.entity';
-import { Notification } from './database/entities/notification.entity';
-import { SharedLink } from './database/entities/shared-link.entity';
-import { OnboardingStatus } from './database/entities/onboarding-status.entity';
-import { ProvisioningStatus } from './database/entities/provisioning-status.entity';
-import { AnalyticsEvent } from './modules/analytics/entities/analytics-event.entity';
-import { AnalyticsAggregate } from './modules/analytics/entities/analytics-aggregate.entity';
-import { AgentJob } from './modules/agent-queue/entities/agent-job.entity';
-import { Agent } from './database/entities/agent.entity';
-import { IntegrationConnection } from './database/entities/integration-connection.entity';
-import { DeploymentApproval } from './database/entities/deployment-approval.entity';
-import { Story } from './database/entities/story.entity';
-import { Sprint } from './database/entities/sprint.entity';
-import { UserKanbanPreferences } from './database/entities/user-kanban-preferences.entity';
-import { CliSession } from './database/entities/cli-session.entity';
-import { ChatMessage } from './database/entities/chat-message.entity';
-import { ConversationThread } from './database/entities/conversation-thread.entity';
-import { ChatRoom } from './database/entities/chat-room.entity';
-import { ChatRoomMember } from './database/entities/chat-room-member.entity';
-import { ChatRoomInvitation } from './database/entities/chat-room-invitation.entity';
-import { UserRoomRestriction } from './database/entities/user-room-restriction.entity';
-import { ModerationLog } from './database/entities/moderation-log.entity';
-import { PinnedMessage } from './database/entities/pinned-message.entity';
-import { NotificationPreferences } from './database/entities/notification-preferences.entity';
-import { DeploymentRollback } from './database/entities/deployment-rollback.entity';
-import { ContextSnapshot } from './database/entities/context-snapshot.entity';
-import { AuditLog } from './database/entities/audit-log.entity';
-import { PushSubscription } from './database/entities/push-subscription.entity';
-import { PipelineStateHistory } from './modules/orchestrator/entities/pipeline-state-history.entity';
-import { HandoffHistory } from './modules/orchestrator/entities/handoff-history.entity';
-import { FailureRecoveryHistory } from './modules/orchestrator/entities/failure-recovery-history.entity';
-import { ModelDefinition } from './database/entities/model-definition.entity';
 import { OrchestratorModule } from './modules/orchestrator/orchestrator.module';
 import { MemoryModule } from './modules/memory/memory.module';
 import { ContextModule } from './modules/context/context.module';
@@ -95,63 +50,24 @@ import { HealthModule } from './modules/health/health.module';
 import { AdminModule } from './modules/admin/admin.module';
 import { CorrelationIdMiddleware } from './modules/logging/middleware/correlation-id.middleware';
 import { RequestLoggingInterceptor } from './modules/logging/interceptors/request-logging.interceptor';
-import { ModelPerformance } from './database/entities/model-performance.entity';
 import { WorkspaceContextMiddleware } from './common/middleware/workspace-context.middleware';
 import { WorkspaceContextInterceptor } from './common/interceptors/workspace-context.interceptor';
 import { WebSocketSecurityModule } from './modules/websocket-security/ws-security.module';
 import { FileStorageModule } from './modules/file-storage/file-storage.module';
 import { ProjectFilesModule } from './modules/project-files/project-files.module';
-import { ProjectFile } from './database/entities/project-file.entity';
-import { SlackIntegration } from './database/entities/slack-integration.entity';
-import { SlackUserMapping } from './database/entities/slack-user-mapping.entity';
-import { DiscordIntegration } from './database/entities/discord-integration.entity';
-import { SamlConfiguration } from './database/entities/saml-configuration.entity';
-import { OidcConfiguration } from './database/entities/oidc-configuration.entity';
-import { SsoDomain } from './database/entities/sso-domain.entity';
-import { SsoAuditEvent } from './database/entities/sso-audit-event.entity';
-import { JitProvisioningConfig } from './database/entities/jit-provisioning-config.entity';
-import { ScimConfiguration } from './database/entities/scim-configuration.entity';
-import { ScimToken } from './database/entities/scim-token.entity';
-import { ScimGroup } from './database/entities/scim-group.entity';
-import { ScimGroupMembership } from './database/entities/scim-group-membership.entity';
-import { ScimSyncLog } from './database/entities/scim-sync-log.entity';
 import { SsoModule } from './modules/sso/sso.module';
-import { AgentDefinition } from './database/entities/agent-definition.entity';
-import { AgentVersion } from './database/entities/agent-version.entity';
-import { AgentDefinitionAuditEvent } from './database/entities/agent-definition-audit-event.entity';
 import { CustomAgentsModule } from './modules/custom-agents/custom-agents.module';
-import { MarketplaceAgent } from './database/entities/marketplace-agent.entity';
-import { MarketplaceReview } from './database/entities/marketplace-review.entity';
-import { InstalledAgent } from './database/entities/installed-agent.entity';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { BillingModule } from './modules/billing/billing.module';
-import { CreatorPayoutAccount } from './database/entities/creator-payout-account.entity';
-import { AgentPurchase } from './database/entities/agent-purchase.entity';
-import { PayoutTransaction } from './database/entities/payout-transaction.entity';
-import { AgentSubscription } from './database/entities/agent-subscription.entity';
-import { CustomRole } from './database/entities/custom-role.entity';
-import { RolePermission } from './database/entities/role-permission.entity';
 import { CustomRolesModule } from './modules/custom-roles/custom-roles.module';
-import { IpAllowlistEntry } from './database/entities/ip-allowlist-entry.entity';
-import { IpAllowlistConfig } from './database/entities/ip-allowlist-config.entity';
 import { IpAllowlistModule } from './modules/ip-allowlist/ip-allowlist.module';
-import { GeoRestriction } from './database/entities/geo-restriction.entity';
 import { GeoRestrictionModule } from './modules/geo-restriction/geo-restriction.module';
-import { PermissionAuditEvent } from './database/entities/permission-audit-event.entity';
 import { PermissionAuditModule } from './modules/permission-audit/permission-audit.module';
-import { ApiToken } from './database/entities/api-token.entity';
-import { PermissionWebhook } from './database/entities/permission-webhook.entity';
 import { PermissionAnalyticsModule } from './modules/permission-analytics/permission-analytics.module';
 import { SlackIntegrationModule } from './modules/integrations/slack/slack-integration.module';
 import { DiscordIntegrationModule } from './modules/integrations/discord/discord-integration.module';
-import { DiscordNotificationConfig } from './database/entities/discord-notification-config.entity';
 import { LinearIntegrationModule } from './modules/integrations/linear/linear-integration.module';
-import { LinearIntegration } from './database/entities/linear-integration.entity';
-import { LinearSyncItem } from './database/entities/linear-sync-item.entity';
 import { JiraIntegrationModule } from './modules/integrations/jira/jira-integration.module';
-import { JiraIntegration } from './database/entities/jira-integration.entity';
-import { JiraSyncItem } from './database/entities/jira-sync-item.entity';
-import { WhiteLabelConfig } from './database/entities/white-label-config.entity';
 import { WhiteLabelModule } from './modules/white-label/white-label.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 
@@ -175,92 +91,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
       username: process.env.DATABASE_USER || 'devos',
       password: process.env.DATABASE_PASSWORD || 'devos_password',
       database: process.env.DATABASE_NAME || 'devos_db',
-      entities: [
-        User,
-        Workspace,
-        WorkspaceMember,
-        BackupCode,
-        AccountDeletion,
-        SecurityEvent,
-        WorkspaceInvitation,
-        Project,
-        ProjectPreferences,
-        BYOKKey,
-        UsageRecord,
-        WorkspaceSettings,
-        Notification,
-        SharedLink,
-        OnboardingStatus,
-        ProvisioningStatus,
-        AnalyticsEvent,
-        AnalyticsAggregate,
-        AgentJob,
-        Agent,
-        IntegrationConnection,
-        DeploymentApproval,
-        Story,
-        Sprint,
-        UserKanbanPreferences,
-        CliSession,
-        ChatMessage,
-        ConversationThread,
-        ChatRoom,
-        ChatRoomMember,
-        ChatRoomInvitation,
-        UserRoomRestriction,
-        ModerationLog,
-        PinnedMessage,
-        NotificationPreferences,
-        DeploymentRollback,
-        ContextSnapshot,
-        AuditLog,
-        AgentStatusUpdate,
-        PushSubscription,
-        ApiUsage,
-        PipelineStateHistory,
-        HandoffHistory,
-        FailureRecoveryHistory,
-        ModelDefinition,
-        ModelPerformance,
-        ProjectFile,
-        SlackIntegration,
-        SlackUserMapping,
-        DiscordIntegration,
-        SamlConfiguration,
-        OidcConfiguration,
-        SsoDomain,
-        SsoAuditEvent,
-        JitProvisioningConfig,
-        ScimConfiguration,
-        ScimToken,
-        ScimGroup,
-        ScimGroupMembership,
-        ScimSyncLog,
-        AgentDefinition,
-        AgentVersion,
-        AgentDefinitionAuditEvent,
-        MarketplaceAgent,
-        MarketplaceReview,
-        InstalledAgent,
-        CreatorPayoutAccount,
-        AgentPurchase,
-        PayoutTransaction,
-        AgentSubscription,
-        CustomRole,
-        RolePermission,
-        IpAllowlistEntry,
-        IpAllowlistConfig,
-        GeoRestriction,
-        PermissionAuditEvent,
-        ApiToken,
-        PermissionWebhook,
-        DiscordNotificationConfig,
-        LinearIntegration,
-        LinearSyncItem,
-        JiraIntegration,
-        JiraSyncItem,
-        WhiteLabelConfig,
-      ],
+      autoLoadEntities: true,
       synchronize: false, // Always false - use migrations
       logging: process.env.NODE_ENV === 'development',
       poolSize: 100, // Max 100 connections per AC
