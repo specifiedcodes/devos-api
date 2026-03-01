@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
-import { AddLoginPageConfigToWhiteLabel1775000000000 } from './1775000000000-AddLoginPageConfigToWhiteLabel';
-import { WhiteLabelConfig, BackgroundType } from '../entities/white-label-config.entity';
+import { AddLoginPageConfigToWhiteLabel1775000000000 } from '../1775000000000-AddLoginPageConfigToWhiteLabel';
+import { WhiteLabelConfig, BackgroundType } from '../../entities/white-label-config.entity';
 
 const describeIf = (condition: boolean) => condition ? describe : describe.skip;
 const hasDb = !!process.env.DB_HOST;
