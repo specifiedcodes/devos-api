@@ -11,8 +11,8 @@
 
 import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey } from 'typeorm';
 
-export class AddAgentSandboxTables1740000000000 implements MigrationInterface {
-  name = 'AddAgentSandboxTables1740000000000';
+export class AddAgentSandboxTables1741600000001 implements MigrationInterface {
+  name = 'AddAgentSandboxTables1741600000001';
 
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create agent_sandbox_sessions table
