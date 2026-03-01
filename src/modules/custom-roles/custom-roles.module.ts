@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Global } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CustomRole } from '../../database/entities/custom-role.entity';
 import { RolePermission } from '../../database/entities/role-permission.entity';
@@ -13,6 +13,7 @@ import { PermissionAuditModule } from '../permission-audit/permission-audit.modu
 import { RedisModule } from '../redis/redis.module';
 import { AuditModule } from '../../shared/audit/audit.module';
 
+@Global()
 @Module({
   imports: [
     TypeOrmModule.forFeature([CustomRole, RolePermission, WorkspaceMember]),
