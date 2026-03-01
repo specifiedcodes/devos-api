@@ -14,6 +14,7 @@ import { GitHubBranchController } from './github/github-branch.controller';
 import { GitHubPullRequestController } from './github/github-pr.controller';
 import { RailwayService } from './railway/railway.service';
 import { RailwayController } from './railway/railway.controller';
+import { RailwayCliExecutor } from './railway/railway-cli-executor.service';
 import { VercelService } from './vercel/vercel.service';
 import { VercelController } from './vercel/vercel.controller';
 import { SupabaseService } from './supabase/supabase.service';
@@ -108,7 +109,7 @@ import { IntegrationHealthService } from './services/integration-health.service'
     DeploymentRollbackController,
     IntegrationManagementController, // Story 21-7
   ],
-  providers: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
-  exports: [IntegrationConnectionService, GitHubService, RailwayService, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
+  providers: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
+  exports: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
 })
 export class IntegrationsModule {}

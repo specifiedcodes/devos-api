@@ -117,6 +117,19 @@ export enum AuditAction {
   SESSION_ARCHIVED = 'session.archived',
   SESSION_ARCHIVE_DELETED = 'session.archive_deleted',
   SESSION_ARCHIVE_CLEANUP = 'session.archive_cleanup',
+
+  // Railway CLI audit actions (Story 23-6)
+  // Security: NEVER log token values, env var values, or connection strings in audit payloads
+  RAILWAY_CLI_EXECUTED = 'railway_cli_executed',
+  RAILWAY_SERVICE_PROVISIONED = 'railway_service_provisioned',
+  RAILWAY_SERVICE_DEPLOYED = 'railway_service_deployed',
+  RAILWAY_BULK_DEPLOY_STARTED = 'railway_bulk_deploy_started',
+  RAILWAY_BULK_DEPLOY_COMPLETED = 'railway_bulk_deploy_completed',
+  RAILWAY_ENV_VAR_SET = 'railway_env_var_set',
+  RAILWAY_ENV_VAR_DELETED = 'railway_env_var_deleted',
+  RAILWAY_DOMAIN_ADDED = 'railway_domain_added',
+  RAILWAY_DOMAIN_REMOVED = 'railway_domain_removed',
+  RAILWAY_DEPLOYMENT_ROLLED_BACK = 'railway_deployment_rolled_back',
 }
 
 /**
@@ -130,6 +143,67 @@ export const BYOK_AUDIT_ACTIONS: AuditAction[] = [
   AuditAction.BYOK_KEY_USED,
   AuditAction.BYOK_KEY_VALIDATION_FAILED,
 ];
+
+/**
+ * All Railway CLI audit actions for filtering (Story 23-6)
+ */
+export const RAILWAY_AUDIT_ACTIONS: AuditAction[] = [
+  AuditAction.RAILWAY_CLI_EXECUTED,
+  AuditAction.RAILWAY_SERVICE_PROVISIONED,
+  AuditAction.RAILWAY_SERVICE_DEPLOYED,
+  AuditAction.RAILWAY_BULK_DEPLOY_STARTED,
+  AuditAction.RAILWAY_BULK_DEPLOY_COMPLETED,
+  AuditAction.RAILWAY_ENV_VAR_SET,
+  AuditAction.RAILWAY_ENV_VAR_DELETED,
+  AuditAction.RAILWAY_DOMAIN_ADDED,
+  AuditAction.RAILWAY_DOMAIN_REMOVED,
+  AuditAction.RAILWAY_DEPLOYMENT_ROLLED_BACK,
+];
+
+/**
+ * Fields that must NEVER appear in Railway audit payloads.
+ *
+ * Security rules:
+ * - NEVER log token values, env var values, or connection strings
+ * - Only log: action type, workspace ID, user ID, resource IDs, timestamps, command name (not args)
+ */
+const RAILWAY_SENSITIVE_FIELDS = new Set([
+  'token',
+  'tokenValue',
+  'railwayToken',
+  'envVarValue',
+  'connectionString',
+  'output',
+  'stdout',
+  'stderr',
+  'variables',
+]);
+
+/**
+ * Sanitize a Railway audit payload by stripping all sensitive fields.
+ *
+ * Use this before passing metadata to AuditService.log() for any Railway CLI audit event.
+ *
+ * @param payload - Raw metadata object
+ * @returns New object with sensitive fields removed (does not mutate the original)
+ */
+export function sanitizeRailwayAuditPayload(
+  payload: Record<string, any> | null | undefined,
+): Record<string, any> {
+  if (!payload || typeof payload !== 'object') {
+    return {};
+  }
+
+  const sanitized: Record<string, any> = {};
+
+  for (const [key, value] of Object.entries(payload)) {
+    if (!RAILWAY_SENSITIVE_FIELDS.has(key)) {
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
 
 export interface AuditMetadata {
   [key: string]: any;
