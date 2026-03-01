@@ -8,7 +8,7 @@
 
 import { MigrationInterface, QueryRunner } from 'typeorm';
 
-export class CreateJiraIntegrationTables1708800000000 implements MigrationInterface {
+export class CreateJiraIntegrationTables1739000000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Jira integration configuration per workspace
     await queryRunner.query(`
