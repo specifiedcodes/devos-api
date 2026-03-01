@@ -126,7 +126,7 @@ export class BusinessMetricsService {
     try {
       // Count users who have been active in the last 24 hours
       const result = await this.dataSource.query(
-        `SELECT COUNT(*) as count FROM "user" WHERE "lastLoginAt" > NOW() - INTERVAL '24 hours'`,
+        `SELECT COUNT(*) as count FROM "users" WHERE "lastLoginAt" > NOW() - INTERVAL '24 hours'`,
       );
       const count = parseInt(result?.[0]?.count || '0', 10);
       this.activeUsers.set(count);
@@ -139,7 +139,7 @@ export class BusinessMetricsService {
   private async updateWorkspaceCount(): Promise<void> {
     try {
       const result = await this.dataSource.query(
-        `SELECT COUNT(*) as count FROM "workspace"`,
+        `SELECT COUNT(*) as count FROM "workspaces"`,
       );
       const count = parseInt(result?.[0]?.count || '0', 10);
       this.workspacesTotal.set(count);
