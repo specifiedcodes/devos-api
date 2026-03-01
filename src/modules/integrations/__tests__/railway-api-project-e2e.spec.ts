@@ -6,7 +6,9 @@ import { ConflictException, BadGatewayException } from '@nestjs/common';
 import { RailwayService } from '../railway/railway.service';
 import { RailwayCliExecutor } from '../railway/railway-cli-executor.service';
 import { RailwayServiceEntity } from '../../../database/entities/railway-service.entity';
+import { RailwayDeployment } from '../../../database/entities/railway-deployment.entity';
 import { AuditService } from '../../../shared/audit/audit.service';
+import { DeploymentEventPublisher } from '../railway/deployment-event-publisher.service';
 import {
   MOCK_RAILWAY_PROJECT_ID,
   createAxiosResponse,
@@ -33,7 +35,9 @@ describe('Railway E2E - API Project Operations', () => {
         { provide: HttpService, useValue: mockHttpService },
         { provide: RailwayCliExecutor, useValue: { execute: jest.fn() } },
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: { create: jest.fn(), save: jest.fn(), findOne: jest.fn(), find: jest.fn() } },
+        { provide: getRepositoryToken(RailwayDeployment), useValue: { create: jest.fn(), save: jest.fn(), find: jest.fn(), findOne: jest.fn() } },
         { provide: AuditService, useValue: { log: jest.fn().mockResolvedValue(undefined) } },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 

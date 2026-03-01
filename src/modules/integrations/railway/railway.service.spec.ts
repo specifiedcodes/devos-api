@@ -9,6 +9,7 @@ import { RailwayCliExecutor } from './railway-cli-executor.service';
 import { RailwayServiceEntity, RailwayServiceType, RailwayServiceStatus } from '../../../database/entities/railway-service.entity';
 import { RailwayDeployment, DeploymentStatus } from '../../../database/entities/railway-deployment.entity';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { DeploymentEventPublisher } from './deployment-event-publisher.service';
 
 describe('RailwayService', () => {
   let service: RailwayService;
@@ -61,6 +62,7 @@ describe('RailwayService', () => {
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: mockServiceRepo },
         { provide: getRepositoryToken(RailwayDeployment), useValue: mockDeploymentRepo },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -797,6 +799,7 @@ describe('RailwayService - CLI Provisioning Methods (Story 24-1)', () => {
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: mockServiceRepo },
         { provide: getRepositoryToken(RailwayDeployment), useValue: mockDeploymentRepo },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -1314,6 +1317,7 @@ describe('RailwayService - CLI Deployment Methods (Story 24-2)', () => {
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: mockServiceRepo },
         { provide: getRepositoryToken(RailwayDeployment), useValue: mockDeploymentRepo },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -2018,6 +2022,7 @@ describe('RailwayService - Environment Variable Management (Story 24-3)', () => 
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: mockServiceRepo },
         { provide: getRepositoryToken(RailwayDeployment), useValue: mockDeploymentRepo },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -2428,6 +2433,7 @@ describe('RailwayService - Domain Management Methods (Story 24-4)', () => {
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: mockServiceRepo },
         { provide: getRepositoryToken(RailwayDeployment), useValue: mockDeploymentRepo },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
@@ -3029,6 +3035,7 @@ describe('RailwayService - Log Streaming & Deployment History (Story 24-5)', () 
         { provide: getRepositoryToken(RailwayServiceEntity), useValue: mockServiceRepo },
         { provide: getRepositoryToken(RailwayDeployment), useValue: mockDeploymentRepo },
         { provide: AuditService, useValue: mockAuditService },
+        { provide: DeploymentEventPublisher, useValue: { publish: jest.fn().mockResolvedValue(undefined), publishLog: jest.fn().mockResolvedValue(undefined), publishDeploymentStarted: jest.fn().mockResolvedValue(undefined), publishDeploymentStatus: jest.fn().mockResolvedValue(undefined), publishDeploymentCompleted: jest.fn().mockResolvedValue(undefined), publishDeploymentLog: jest.fn().mockResolvedValue(undefined), publishEnvChanged: jest.fn().mockResolvedValue(undefined), publishServiceProvisioned: jest.fn().mockResolvedValue(undefined), publishDomainUpdated: jest.fn().mockResolvedValue(undefined) } },
       ],
     }).compile();
 
