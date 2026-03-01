@@ -11,11 +11,13 @@ import { CustomRoleController } from './controllers/custom-role.controller';
 import { PermissionMatrixController } from './controllers/permission-matrix.controller';
 import { PermissionAuditModule } from '../permission-audit/permission-audit.module';
 import { RedisModule } from '../redis/redis.module';
+import { AuditModule } from '../../shared/audit/audit.module';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CustomRole, RolePermission, WorkspaceMember]),
     RedisModule,
+    AuditModule,
     PermissionAuditModule,
   ],
   controllers: [CustomRoleController, PermissionMatrixController],
