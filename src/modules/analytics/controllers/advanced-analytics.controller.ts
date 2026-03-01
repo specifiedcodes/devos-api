@@ -22,8 +22,8 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
-import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
-import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
+import { RoleGuard, RequireRole } from '../../../common/guards/role.guard';
+import { WorkspaceRole } from '../../../database/entities/workspace-member.entity';
 import { AgentPerformanceService } from '../services/agent-performance.service';
 import { CostAnalyticsService } from '../services/cost-analytics.service';
 import { CumulativeFlowService } from '../services/cumulative-flow.service';
