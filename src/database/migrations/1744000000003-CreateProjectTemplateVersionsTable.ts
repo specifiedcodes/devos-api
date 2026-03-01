@@ -8,7 +8,7 @@
  */
 import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey } from 'typeorm';
 
-export class CreateProjectTemplateVersionsTable1740000002000 implements MigrationInterface {
+export class CreateProjectTemplateVersionsTable1744000000003 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.createTable(
       new Table({

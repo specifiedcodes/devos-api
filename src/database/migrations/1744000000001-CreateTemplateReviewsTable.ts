@@ -5,7 +5,7 @@
  */
 import { MigrationInterface, QueryRunner, Table, TableIndex, TableForeignKey, TableUnique } from 'typeorm';
 
-export class CreateTemplateReviewsTable1740000000000 implements MigrationInterface {
+export class CreateTemplateReviewsTable1744000000001 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     // Create template_reviews table
     await queryRunner.createTable(
