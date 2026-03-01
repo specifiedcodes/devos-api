@@ -4,6 +4,7 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -19,6 +20,16 @@ import {
   SprintListResponseDto,
 } from './dto/sprint.dto';
 
+export type SprintMetricsServiceInterface = {
+  initializeSprintMetrics(workspaceId: string, projectId: string, sprintId: string): Promise<void>;
+  updateTodayMetrics(workspaceId: string, projectId: string, sprintId: string): Promise<void>;
+  trackScopeChange(workspaceId: string, sprintId: string, pointsDelta: number): Promise<void>;
+};
+
+export type VelocityMetricsServiceInterface = {
+  calculateFinalVelocity(workspaceId: string, projectId: string, sprintId: string): Promise<void>;
+};
+
 @Injectable()
 export class SprintsService {
   private readonly logger = new Logger(SprintsService.name);
@@ -31,6 +42,8 @@ export class SprintsService {
     @InjectRepository(Project)
     private readonly projectRepository: Repository<Project>,
     private readonly redisService: RedisService,
+    @Optional() private readonly sprintMetricsService: SprintMetricsServiceInterface | null,
+    @Optional() private readonly velocityMetricsService: VelocityMetricsServiceInterface | null,
   ) {}
 
   /**
@@ -294,6 +307,14 @@ export class SprintsService {
       endDate: updatedSprint.endDate,
     });
 
+    if (this.sprintMetricsService) {
+      try {
+        await this.sprintMetricsService.initializeSprintMetrics(workspaceId, projectId, sprintId);
+      } catch (error) {
+        this.logger.error('Failed to initialize sprint metrics', error instanceof Error ? error.stack : String(error));
+      }
+    }
+
     return this.mapToResponseDto(updatedSprint);
   }
 
@@ -334,6 +355,14 @@ export class SprintsService {
       name: updatedSprint.name,
       status: updatedSprint.status,
     });
+
+    if (this.velocityMetricsService) {
+      try {
+        await this.velocityMetricsService.calculateFinalVelocity(workspaceId, projectId, sprintId);
+      } catch (error) {
+        this.logger.error('Failed to calculate final velocity', error instanceof Error ? error.stack : String(error));
+      }
+    }
 
     return this.mapToResponseDto(updatedSprint);
   }
@@ -394,6 +423,8 @@ export class SprintsService {
       throw new NotFoundException('Story not found');
     }
 
+    const pointsDelta = story.storyPoints || 0;
+
     story.sprintId = sprintId;
     await this.storyRepository.save(story);
     this.logger.log(`Story ${storyId} added to sprint ${sprintId}`);
@@ -402,6 +433,15 @@ export class SprintsService {
       sprintId,
       storyId,
     });
+
+    if (this.sprintMetricsService && sprint.status === SprintStatus.ACTIVE) {
+      try {
+        await this.sprintMetricsService.trackScopeChange(workspaceId, sprintId, pointsDelta);
+        await this.sprintMetricsService.updateTodayMetrics(workspaceId, projectId, sprintId);
+      } catch (error) {
+        this.logger.error('Failed to track scope change', error instanceof Error ? error.stack : String(error));
+      }
+    }
 
     return this.mapToResponseDto(sprint);
   }
@@ -428,6 +468,8 @@ export class SprintsService {
       throw new NotFoundException('Story not found in this sprint');
     }
 
+    const pointsDelta = -(story.storyPoints || 0);
+
     story.sprintId = undefined;
     await this.storyRepository.save(story);
     this.logger.log(`Story ${storyId} removed from sprint ${sprintId}`);
@@ -436,6 +478,15 @@ export class SprintsService {
       sprintId,
       storyId,
     });
+
+    if (this.sprintMetricsService && sprint.status === SprintStatus.ACTIVE) {
+      try {
+        await this.sprintMetricsService.trackScopeChange(workspaceId, sprintId, pointsDelta);
+        await this.sprintMetricsService.updateTodayMetrics(workspaceId, projectId, sprintId);
+      } catch (error) {
+        this.logger.error('Failed to track scope change', error instanceof Error ? error.stack : String(error));
+      }
+    }
 
     return this.mapToResponseDto(sprint);
   }

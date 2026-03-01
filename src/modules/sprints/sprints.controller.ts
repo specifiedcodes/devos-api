@@ -8,6 +8,7 @@ import {
   Param,
   UseGuards,
   ParseUUIDPipe,
+  Query,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -15,11 +16,14 @@ import {
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiQuery,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RoleGuard, RequireRole } from '../../common/guards/role.guard';
 import { WorkspaceRole } from '../../database/entities/workspace-member.entity';
 import { SprintsService } from './sprints.service';
+import { SprintMetricsService } from './services/sprint-metrics.service';
+import { VelocityMetricsService } from './services/velocity-metrics.service';
 import {
   CreateSprintDto,
   UpdateSprintDto,
@@ -28,13 +32,20 @@ import {
   SprintResponseDto,
   SprintListResponseDto,
 } from './dto/sprint.dto';
+import { BurndownQueryDto, BurndownResponseDto } from './dto/burndown.dto';
+import { VelocityQueryDto, VelocityResponseDto } from './dto/velocity.dto';
+import { SprintMetricsSummaryDto } from './dto/sprint-metrics-summary.dto';
 
 @Controller('api/v1/workspaces/:workspaceId/projects/:projectId/sprints')
 @UseGuards(JwtAuthGuard, RoleGuard)
 @ApiBearerAuth('JWT-auth')
 @ApiTags('Sprints')
 export class SprintsController {
-  constructor(private readonly sprintsService: SprintsService) {}
+  constructor(
+    private readonly sprintsService: SprintsService,
+    private readonly sprintMetricsService: SprintMetricsService,
+    private readonly velocityMetricsService: VelocityMetricsService,
+  ) {}
 
   /**
    * List all sprints for a project
@@ -223,6 +234,57 @@ export class SprintsController {
       projectId,
       sprintId,
       storyId,
+    );
+  }
+
+  /**
+   * Get burndown chart data for a sprint
+   */
+  @Get(':sprintId/burndown')
+  @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Get burndown chart data for a sprint' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
+  @ApiParam({ name: 'projectId', description: 'Project ID' })
+  @ApiParam({ name: 'sprintId', description: 'Sprint ID' })
+  @ApiQuery({ name: 'date_from', required: false, description: 'Start date filter (ISO8601)' })
+  @ApiQuery({ name: 'date_to', required: false, description: 'End date filter (ISO8601)' })
+  @ApiResponse({ status: 200, description: 'Burndown chart data' })
+  @ApiResponse({ status: 404, description: 'Sprint not found' })
+  async getBurndownData(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('sprintId', ParseUUIDPipe) sprintId: string,
+    @Query() query: BurndownQueryDto,
+  ): Promise<BurndownResponseDto> {
+    return this.sprintMetricsService.getBurndownData(
+      workspaceId,
+      projectId,
+      sprintId,
+      query.date_from,
+      query.date_to,
+    );
+  }
+
+  /**
+   * Get sprint metrics summary
+   */
+  @Get(':sprintId/metrics')
+  @RequireRole(WorkspaceRole.VIEWER, WorkspaceRole.DEVELOPER, WorkspaceRole.ADMIN, WorkspaceRole.OWNER)
+  @ApiOperation({ summary: 'Get sprint metrics summary' })
+  @ApiParam({ name: 'workspaceId', description: 'Workspace ID' })
+  @ApiParam({ name: 'projectId', description: 'Project ID' })
+  @ApiParam({ name: 'sprintId', description: 'Sprint ID' })
+  @ApiResponse({ status: 200, description: 'Sprint metrics summary' })
+  @ApiResponse({ status: 404, description: 'Sprint not found' })
+  async getSprintMetrics(
+    @Param('workspaceId', ParseUUIDPipe) workspaceId: string,
+    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('sprintId', ParseUUIDPipe) sprintId: string,
+  ): Promise<SprintMetricsSummaryDto> {
+    return this.velocityMetricsService.getSprintMetricsSummary(
+      workspaceId,
+      projectId,
+      sprintId,
     );
   }
 }

@@ -1,9 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SprintsController } from './sprints.controller';
 import { SprintsService } from './sprints.service';
+import { SprintMetricsService } from './services/sprint-metrics.service';
+import { VelocityMetricsService } from './services/velocity-metrics.service';
 import { SprintStatus } from '../../database/entities/sprint.entity';
 
-// Mock guards
 jest.mock('../auth/guards/jwt-auth.guard', () => ({
   JwtAuthGuard: jest.fn().mockImplementation(() => ({
     canActivate: jest.fn().mockReturnValue(true),
@@ -56,6 +57,23 @@ describe('SprintsController', () => {
             deleteSprint: jest.fn(),
             addStoryToSprint: jest.fn(),
             removeStoryFromSprint: jest.fn(),
+          },
+        },
+        {
+          provide: SprintMetricsService,
+          useValue: {
+            getBurndownData: jest.fn(),
+            updateTodayMetrics: jest.fn(),
+            trackScopeChange: jest.fn(),
+            initializeSprintMetrics: jest.fn(),
+          },
+        },
+        {
+          provide: VelocityMetricsService,
+          useValue: {
+            getVelocityData: jest.fn(),
+            getSprintMetricsSummary: jest.fn(),
+            calculateFinalVelocity: jest.fn(),
           },
         },
       ],
