@@ -49,6 +49,8 @@ import { IntegrationHealthService } from './services/integration-health.service'
 import { RailwayServiceEntity } from '../../database/entities/railway-service.entity';
 // Story 24-2: Railway Deployment Entity for deployment history tracking
 import { RailwayDeployment } from '../../database/entities/railway-deployment.entity';
+// Story 25-1: Deployment Event Publisher for Redis pub/sub streaming
+import { DeploymentEventPublisher } from './railway/deployment-event-publisher.service';
 
 /**
  * IntegrationsModule
@@ -115,7 +117,7 @@ import { RailwayDeployment } from '../../database/entities/railway-deployment.en
     DeploymentRollbackController,
     IntegrationManagementController, // Story 21-7
   ],
-  providers: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
-  exports: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
+  providers: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, DeploymentEventPublisher, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
+  exports: [IntegrationConnectionService, GitHubService, RailwayService, RailwayCliExecutor, DeploymentEventPublisher, VercelService, SupabaseService, DeploymentMonitoringService, DeploymentApprovalService, DeploymentRollbackService, IntegrationManagementService, IntegrationHealthService],
 })
 export class IntegrationsModule {}

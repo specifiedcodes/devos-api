@@ -30,6 +30,7 @@ import {
   DeploymentStatus,
 } from '../../../database/entities/railway-deployment.entity';
 import { AuditService, AuditAction } from '../../../shared/audit/audit.service';
+import { DeploymentEventPublisher } from './deployment-event-publisher.service';
 
 /**
  * RailwayService
@@ -52,6 +53,7 @@ export class RailwayService {
     @InjectRepository(RailwayDeployment)
     private readonly railwayDeploymentRepo: Repository<RailwayDeployment>,
     private readonly auditService: AuditService,
+    private readonly deploymentEventPublisher: DeploymentEventPublisher,
   ) {}
 
   /**
@@ -561,9 +563,29 @@ export class RailwayService {
 
     const savedEntity = await this.railwayServiceRepo.save(entity);
 
+    // 3b. Emit deployment:service_provisioned (provisioning) event
+    await this.deploymentEventPublisher.publishServiceProvisioned(
+      options.workspaceId,
+      options.projectId,
+      savedEntity.id,
+      options.name,
+      options.serviceType,
+      'provisioning',
+    );
+
     // 4. Update status to active (in production this would poll, but for MVP we set it directly)
     savedEntity.status = RailwayServiceStatus.ACTIVE;
     await this.railwayServiceRepo.save(savedEntity);
+
+    // 4b. Emit deployment:service_provisioned (active) event
+    await this.deploymentEventPublisher.publishServiceProvisioned(
+      options.workspaceId,
+      options.projectId,
+      savedEntity.id,
+      options.name,
+      options.serviceType,
+      'active',
+    );
 
     // 5. Emit audit event (non-blocking)
     try {
@@ -771,6 +793,16 @@ export class RailwayService {
     serviceEntity.status = RailwayServiceStatus.DEPLOYING;
     await this.railwayServiceRepo.save(serviceEntity);
 
+    // 2b. Emit deployment:status (building) event
+    await this.deploymentEventPublisher.publishDeploymentStatus(
+      options.workspaceId,
+      serviceEntity.projectId,
+      serviceEntity.id,
+      serviceEntity.name,
+      'building',
+      { progress: 0 },
+    );
+
     // 3. Execute CLI command: railway up -s <service>
     const cliResult = await this.cliExecutor.execute({
       command: 'up',
@@ -798,6 +830,16 @@ export class RailwayService {
       // Update service entity to active
       serviceEntity.status = RailwayServiceStatus.ACTIVE;
       await this.railwayServiceRepo.save(serviceEntity);
+
+      // 4b. Emit deployment:status (success) event
+      await this.deploymentEventPublisher.publishDeploymentStatus(
+        options.workspaceId,
+        serviceEntity.projectId,
+        serviceEntity.id,
+        serviceEntity.name,
+        'success',
+        { deploymentUrl: savedDeployment.deploymentUrl, progress: 100 },
+      );
     } else {
       savedDeployment.status = DeploymentStatus.FAILED;
       savedDeployment.errorMessage = cliResult.timedOut
@@ -809,6 +851,16 @@ export class RailwayService {
       // Update service entity to failed
       serviceEntity.status = RailwayServiceStatus.FAILED;
       await this.railwayServiceRepo.save(serviceEntity);
+
+      // 4c. Emit deployment:status (failed) event
+      await this.deploymentEventPublisher.publishDeploymentStatus(
+        options.workspaceId,
+        serviceEntity.projectId,
+        serviceEntity.id,
+        serviceEntity.name,
+        'failed',
+        { error: savedDeployment.errorMessage },
+      );
     }
 
     await this.railwayDeploymentRepo.save(savedDeployment);
@@ -875,7 +927,21 @@ export class RailwayService {
       order: { deployOrder: 'ASC' },
     });
 
-    // 2. Emit RAILWAY_BULK_DEPLOY_STARTED audit event
+    // 2. Emit deployment:started event
+    await this.deploymentEventPublisher.publishDeploymentStarted(
+      options.workspaceId,
+      options.projectId,
+      bulkDeploymentId,
+      services.map((s) => ({
+        serviceId: s.id,
+        serviceName: s.name,
+        serviceType: s.serviceType,
+      })),
+      options.userId,
+      options.environment || 'production',
+    );
+
+    // 2b. Emit RAILWAY_BULK_DEPLOY_STARTED audit event
     try {
       await this.auditService.log(
         options.workspaceId,
@@ -993,7 +1059,26 @@ export class RailwayService {
       overallStatus = 'success';
     }
 
-    // 6. Emit RAILWAY_BULK_DEPLOY_COMPLETED audit event
+    // 6. Calculate total duration and emit deployment:completed event
+    const totalDurationSeconds = Math.round(
+      (Date.now() - new Date(startedAt).getTime()) / 1000,
+    );
+
+    await this.deploymentEventPublisher.publishDeploymentCompleted(
+      options.workspaceId,
+      options.projectId,
+      bulkDeploymentId,
+      overallStatus,
+      serviceResults.map((s) => ({
+        serviceId: s.serviceId,
+        serviceName: s.serviceName,
+        status: s.status,
+        deploymentUrl: s.deploymentUrl,
+      })),
+      totalDurationSeconds,
+    );
+
+    // 6b. Emit RAILWAY_BULK_DEPLOY_COMPLETED audit event
     try {
       await this.auditService.log(
         options.workspaceId,
@@ -1257,6 +1342,17 @@ export class RailwayService {
       }
     }
 
+    // Emit deployment:env_changed event (names only, never values)
+    await this.deploymentEventPublisher.publishEnvChanged(
+      options.workspaceId,
+      serviceEntity.projectId,
+      serviceEntity.id,
+      serviceEntity.name,
+      variableNames.length > 1 ? 'bulk_update' : 'set',
+      variableNames,
+      options.autoRedeploy || false,
+    );
+
     // Emit audit event with variable NAMES only (never values)
     try {
       await this.auditService.log(
@@ -1326,6 +1422,17 @@ export class RailwayService {
       this.logger.error(errorMsg);
       throw new BadGatewayException(errorMsg);
     }
+
+    // Emit deployment:env_changed event (name only, never value)
+    await this.deploymentEventPublisher.publishEnvChanged(
+      options.workspaceId,
+      serviceEntity.projectId,
+      serviceEntity.id,
+      serviceEntity.name,
+      'delete',
+      [variableName],
+      false,
+    );
 
     // Emit audit event with variable name only
     try {
@@ -1427,7 +1534,18 @@ export class RailwayService {
       };
     }
 
-    // 6. Emit audit event (non-blocking)
+    // 6. Emit deployment:domain_updated event
+    await this.deploymentEventPublisher.publishDomainUpdated(
+      options.workspaceId,
+      serviceEntity.projectId,
+      serviceEntity.id,
+      serviceEntity.name,
+      domainResponse.domain,
+      'added',
+      domainResponse.status as 'active' | 'pending_dns' | 'pending_ssl' | 'error',
+    );
+
+    // 7. Emit audit event (non-blocking)
     try {
       await this.auditService.log(
         options.workspaceId,
@@ -1494,7 +1612,18 @@ export class RailwayService {
     }
     await this.railwayServiceRepo.save(serviceEntity);
 
-    // 3. Emit audit event (non-blocking)
+    // 3. Emit deployment:domain_updated (removed) event
+    await this.deploymentEventPublisher.publishDomainUpdated(
+      options.workspaceId,
+      serviceEntity.projectId,
+      serviceEntity.id,
+      serviceEntity.name,
+      options.domain,
+      'removed',
+      'active',
+    );
+
+    // 4. Emit audit event (non-blocking)
     try {
       await this.auditService.log(
         options.workspaceId,
