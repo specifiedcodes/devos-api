@@ -54,8 +54,15 @@ export class FileStorageService implements OnModuleInit {
       `Connecting to MinIO at ${this.config.endpoint}:${this.config.port} (SSL: ${this.config.useSSL})`,
     );
 
-    await this.ensureBucketsExist();
-    this.logger.log('FileStorageService initialized successfully');
+    try {
+      await this.ensureBucketsExist();
+      this.logger.log('FileStorageService initialized successfully');
+    } catch (error: any) {
+      this.logger.warn(
+        `FileStorageService initialization incomplete: ${error.message}. ` +
+        'File storage features will be limited. Ensure MinIO is running if file storage is needed.',
+      );
+    }
   }
 
   /**
