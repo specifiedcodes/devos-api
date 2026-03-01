@@ -124,6 +124,7 @@ import { BillingModule } from '../billing/billing.module';
   exports: [
     TemplatesService,
     TemplateRegistryService,
+    TemplateAuditService,
     TemplateValidatorService,
     TemplateCreationService,
     // Story 19-3 exports
