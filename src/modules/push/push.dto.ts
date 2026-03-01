@@ -328,3 +328,119 @@ export class PushStatsResponseDto {
   @ApiPropertyOptional({ description: 'Last cleanup result', type: CleanupResultDto })
   lastCleanup?: CleanupResultDto;
 }
+
+/**
+ * Mobile notification category enum
+ * Story 22.7: Mobile Push Notifications
+ */
+export enum MobileNotificationCategoryDto {
+  AGENT = 'agent',
+  DEPLOYMENT = 'deployment',
+  COST = 'cost',
+  SPRINT = 'sprint',
+}
+
+/**
+ * Register mobile push token request DTO
+ * Story 22.7: Mobile Push Notifications
+ */
+export class RegisterMobilePushTokenDto {
+  @ApiProperty({ description: 'Expo push token (ExponentPushToken[xxx])' })
+  @IsString()
+  expoPushToken!: string;
+
+  @ApiProperty({ description: 'Unique device identifier' })
+  @IsString()
+  deviceId!: string;
+
+  @ApiProperty({ description: 'Platform type', enum: ['ios', 'android'] })
+  @IsEnum(['ios', 'android'])
+  platform!: 'ios' | 'android';
+}
+
+/**
+ * Mobile push token registration response DTO
+ * Story 22.7: Mobile Push Notifications
+ */
+export class MobilePushTokenResponseDto {
+  @ApiProperty({ description: 'Whether registration was successful' })
+  success!: boolean;
+
+  @ApiProperty({ description: 'Device ID' })
+  deviceId!: string;
+}
+
+/**
+ * Registered device response DTO
+ * Story 22.7: Mobile Push Notifications
+ */
+export class RegisteredDeviceDto {
+  @ApiProperty({ description: 'Token record ID' })
+  id!: string;
+
+  @ApiProperty({ description: 'Unique device identifier' })
+  deviceId!: string;
+
+  @ApiProperty({ description: 'Platform type', enum: ['ios', 'android'] })
+  platform!: 'ios' | 'android';
+
+  @ApiPropertyOptional({ description: 'Last used timestamp' })
+  lastUsedAt?: Date;
+
+  @ApiProperty({ description: 'Whether device is active' })
+  isActive!: boolean;
+}
+
+/**
+ * User devices list response DTO
+ * Story 22.7: Mobile Push Notifications
+ */
+export class UserDevicesResponseDto {
+  @ApiProperty({ description: 'List of registered devices', type: [RegisteredDeviceDto] })
+  devices!: RegisteredDeviceDto[];
+}
+
+/**
+ * Mobile notification preferences response DTO
+ * Story 22.7: Mobile Push Notifications
+ */
+export class MobileNotificationPreferencesResponseDto {
+  @ApiPropertyOptional({ description: 'Quiet hours start time (HH:MM)', example: '22:00' })
+  quietHoursStart?: string;
+
+  @ApiPropertyOptional({ description: 'Quiet hours end time (HH:MM)', example: '08:00' })
+  quietHoursEnd?: string;
+
+  @ApiProperty({ description: 'Enabled notification categories', enum: MobileNotificationCategoryDto, isArray: true })
+  categoriesEnabled!: MobileNotificationCategoryDto[];
+
+  @ApiProperty({ description: 'Only send urgent notifications during quiet hours' })
+  urgentOnlyInQuiet!: boolean;
+}
+
+/**
+ * Update mobile notification preferences request DTO
+ * Story 22.7: Mobile Push Notifications
+ */
+export class UpdateMobileNotificationPreferencesDto {
+  @ApiPropertyOptional({ description: 'Quiet hours start time (HH:MM)', example: '22:00' })
+  @IsOptional()
+  @IsString()
+  quietHoursStart?: string;
+
+  @ApiPropertyOptional({ description: 'Quiet hours end time (HH:MM)', example: '08:00' })
+  @IsOptional()
+  @IsString()
+  quietHoursEnd?: string;
+
+  @ApiPropertyOptional({ description: 'Enabled notification categories', enum: MobileNotificationCategoryDto, isArray: true })
+  @IsOptional()
+  @IsArray()
+  @IsEnum(MobileNotificationCategoryDto, { each: true })
+  categoriesEnabled?: MobileNotificationCategoryDto[];
+
+  @ApiPropertyOptional({ description: 'Only send urgent notifications during quiet hours' })
+  @IsOptional()
+  @IsBoolean()
+  urgentOnlyInQuiet?: boolean;
+}

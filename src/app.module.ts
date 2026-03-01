@@ -152,6 +152,7 @@ import { JiraIntegration } from './database/entities/jira-integration.entity';
 import { JiraSyncItem } from './database/entities/jira-sync-item.entity';
 import { WhiteLabelConfig } from './database/entities/white-label-config.entity';
 import { WhiteLabelModule } from './modules/white-label/white-label.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -332,6 +333,7 @@ import { WhiteLabelModule } from './modules/white-label/white-label.module';
     LinearIntegrationModule,
     JiraIntegrationModule,
     WhiteLabelModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [
