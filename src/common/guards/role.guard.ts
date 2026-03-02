@@ -75,8 +75,12 @@ export class RoleGuard implements CanActivate {
       throw new ForbiddenException('You are not a member of this workspace');
     }
 
+    // OWNER role bypasses all role checks (role hierarchy)
+    // This matches PermissionMatrixService where OWNER always returns true
+    const isOwner = membership.role === WorkspaceRole.OWNER;
+
     // Check role permission
-    if (!requiredRoles.includes(membership.role)) {
+    if (!isOwner && !requiredRoles.includes(membership.role)) {
       // Log permission denial
       await this.securityEventRepository.save({
         user_id: userId,

@@ -72,7 +72,7 @@ export class AuthController {
   }
 
   @Post('register')
-  @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 1000 : 5, ttl: 3600000 } }) // 5 requests per hour (relaxed in test)
+  @Throttle({ default: { limit: process.env.NODE_ENV === 'test' ? 1000 : 10, ttl: 3600000 } }) // 10 requests per hour (relaxed in test)
   @ApiOperation({ summary: 'Register a new user account' })
   @ApiResponse({
     status: 201,
@@ -137,7 +137,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @UseGuards(SsoEnforcementGuard, LoginThrottlerGuard)
-  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 attempts per 15 minutes (900,000ms), tracked by email+IP
+  @Throttle({ default: { limit: 10, ttl: 300000 } }) // 10 attempts per 5 minutes (300,000ms), tracked by email+IP
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({
     status: 200,
@@ -151,7 +151,7 @@ export class AuthController {
   @ApiResponse({
     status: 429,
     description:
-      'Too Many Requests - Rate limit exceeded (5 attempts per 15 minutes)',
+      'Too Many Requests - Rate limit exceeded (10 attempts per 5 minutes)',
   })
   @ApiResponse({
     status: 500,
@@ -179,7 +179,7 @@ export class AuthController {
 
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 requests per 15 minutes (matches login security NFR-S17)
+  @Throttle({ default: { limit: 20, ttl: 60000 } }) // 20 requests per 1 minute
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
     status: 200,
@@ -361,7 +361,7 @@ export class AuthController {
   }
 
   @Post('2fa/verify')
-  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 attempts per 15 minutes
+  @Throttle({ default: { limit: 10, ttl: 300000 } }) // 10 attempts per 5 minutes
   @ApiOperation({ summary: 'Verify 2FA code during login' })
   @ApiResponse({
     status: 200,
@@ -383,7 +383,7 @@ export class AuthController {
   }
 
   @Post('2fa/verify-backup')
-  @Throttle({ default: { limit: 5, ttl: 900000 } }) // 5 attempts per 15 minutes
+  @Throttle({ default: { limit: 10, ttl: 300000 } }) // 10 attempts per 5 minutes
   @ApiOperation({ summary: 'Verify backup code during login (2FA recovery)' })
   @ApiResponse({
     status: 200,
@@ -425,7 +425,7 @@ export class AuthController {
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
-  @Throttle({ default: { limit: 3, ttl: 900000 } }) // 3 attempts per 15 minutes
+  @Throttle({ default: { limit: 5, ttl: 300000 } }) // 5 attempts per 5 minutes
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Change user password' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })
